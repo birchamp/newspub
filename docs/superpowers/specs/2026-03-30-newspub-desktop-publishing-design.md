@@ -357,9 +357,15 @@ assets/
 
 ### Image Handling
 
+### Supported Image Formats (v1)
+
+JPEG, PNG, and WebP. These cover the vast majority of newsletter content. SVG, GIF, and TIFF are out of scope for v1.
+
+### Image Storage
+
 Images are stored at original resolution in the zip. The canvas renderer generates display-resolution thumbnails for editing performance. Full resolution is used for PDF export.
 
-Zip compression is applied but already-compressed formats (JPEG, PNG) are stored without re-compression. `document.json` and `metadata.json` benefit from zip compression as text.
+Zip compression is applied but already-compressed formats (JPEG, PNG, WebP) are stored without re-compression. `document.json` and `metadata.json` benefit from zip compression as text.
 
 ---
 
@@ -383,8 +389,9 @@ Walk the same layout engine output that the canvas renderer uses, but write to `
 PDF requires fonts to be embedded. On export:
 
 - Scan all styled runs for unique font families.
-- Load TTF/OTF font files and embed via `pdf-lib`.
-- Fall back to standard PDF fonts (Helvetica, Times, Courier) if a system font can't be embedded.
+- Resolve CSS font family names to actual `.ttf`/`.otf` file paths on disk. This requires a font-file resolution layer that maps family names to system font locations (platform-specific: `~/Library/Fonts` and `/System/Library/Fonts` on macOS, `C:\Windows\Fonts` on Windows, `~/.fonts` and `/usr/share/fonts` on Linux).
+- Load the font files and embed via `pdf-lib`.
+- Fall back to standard PDF fonts (Helvetica, Times, Courier) if a system font can't be resolved or embedded.
 - Show a warning if a font can't be embedded.
 
 ### Measurement Consistency
@@ -469,5 +476,5 @@ pretext computes line breaks once using Canvas `measureText()`. Both the screen 
 | Document rendering | HTML5 Canvas 2D API |
 | PDF generation | pdf-lib |
 | File format | ZIP-based .newspub (via fflate or similar) |
-| State management | TBD (lightweight — React context or Zustand) |
-| Build tooling | TBD (Vite + electron-builder likely) |
+| State management | Zustand (lightweight, works well with Electron renderer) |
+| Build tooling | Vite + electron-builder |
