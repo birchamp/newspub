@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@model/*": ["src/renderer/model/*"],
+      "@engine/*": ["src/renderer/engine/*"],
+      "@canvas/*": ["src/renderer/canvas/*"],
+      "@input/*": ["src/renderer/input/*"],
+      "@history/*": ["src/renderer/history/*"],
+      "@file/*": ["src/renderer/file/*"],
+      "@template/*": ["src/renderer/template/*"],
+      "@export/*": ["src/renderer/export/*"],
+      "@ui/*": ["src/renderer/ui/*"]
+    }
+  },
+  "include": ["src/renderer/**/*", "tests/**/*"]
+}
