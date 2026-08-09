@@ -3,6 +3,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import type { Document, Page, TextFrame, ImageFrame } from '@model/types'
 import type { DocumentLayout, FrameLayout, LayoutLine } from '@engine/layout-types'
 import { resolveFont, resolveStandardFont } from './font-resolver'
+import { toArrayBuffer } from '@file/file-manager'
 
 interface ExportOptions {
   pageRange?: { start: number; end: number }
@@ -167,5 +168,5 @@ export async function exportToPdf(
   const uniqueWarnings = [...new Set(warnings)]
 
   const pdfBytes = await pdfDoc.save()
-  return { pdfBytes: pdfBytes.buffer, warnings: uniqueWarnings }
+  return { pdfBytes: toArrayBuffer(pdfBytes), warnings: uniqueWarnings }
 }

@@ -38,7 +38,13 @@ export async function packNewspub(doc: Document): Promise<ArrayBuffer> {
   }
 
   const zipped = zipSync(files, { level: 0 })
-  return zipped.buffer
+  return toArrayBuffer(zipped)
+}
+
+// Uint8Arrays from fflate can be subarray views over a larger buffer, so
+// `.buffer` alone may return unrelated surrounding bytes.
+export function toArrayBuffer(u8: Uint8Array): ArrayBuffer {
+  return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer
 }
 
 export async function unpackNewspub(buffer: ArrayBuffer): Promise<Document> {
@@ -79,7 +85,7 @@ export async function unpackNewspub(buffer: ArrayBuffer): Promise<Document> {
         id: manifestEntry.id,
         filename,
         mimeType,
-        data: fileData.buffer
+        data: toArrayBuffer(fileData)
       }
     }
   }
