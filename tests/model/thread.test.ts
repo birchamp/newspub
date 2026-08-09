@@ -77,7 +77,7 @@ describe('getRunAtOffset', () => {
   it('returns the run and local offset for a global offset', () => {
     let thread = createThread({ fontFamily: 'Inter', fontSize: 12 })
     thread = insertText(thread, 0, 'Hello ')
-    thread = insertText(thread, 6, 'world')
+    thread = insertText(thread, 6, 'world', { bold: true })
     const result = getRunAtOffset(thread, 8)
     expect(result.runIndex).toBe(1)
     expect(result.localOffset).toBe(2) // "wo|rld"

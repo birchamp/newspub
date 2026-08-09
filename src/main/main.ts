@@ -1,6 +1,8 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, Menu } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
+import { registerIpcHandlers } from './ipc-handlers'
+import { buildMenu } from './menu'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -21,6 +23,8 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.newspub')
+  registerIpcHandlers()
+  Menu.setApplicationMenu(buildMenu())
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
