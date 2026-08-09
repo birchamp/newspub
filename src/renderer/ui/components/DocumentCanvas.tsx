@@ -15,7 +15,7 @@ import { insertText, deleteText, applyStyle, getRunAtOffset, getPlainText, creat
 import { generateId } from '@model/document'
 import { expandToWord } from '@input/selection'
 import { parseHtmlToRuns, runsToHtml, runsToPlainText } from '@input/clipboard'
-import { pushCommand, makeCommand } from '@ui/actions'
+import { pushCommand, makeCommand, undo, redo, toggleStyleFlag, zoomStep } from '@ui/actions'
 import type { LayoutLine, DocumentLayout } from '@engine/layout-types'
 import type { Document, Frame, Page, Point, Rect, Thread, TextFrame } from '@model/types'
 
@@ -1218,7 +1218,33 @@ export default function DocumentCanvas() {
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      // Already handled (e.g. by the hidden textarea's handler earlier in
+      // this same dispatch — React can re-register this listener mid-event).
+      if (e.defaultPrevented) return
+
       const mod = e.metaKey || e.ctrlKey
+
+      // Ignore keystrokes aimed at real form fields (dialog inputs) — but not
+      // our own hidden textarea, whose events bubble here too.
+      const target = e.target as HTMLElement | null
+      const inFormField =
+        target && target !== textareaRef.current &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      if (inFormField) return
+
+      // App-level shortcuts. The native menu handles these too when its
+      // accelerators fire; when it consumes the key this handler never sees
+      // it, so there is no double-execution.
+      if (mod) {
+        const key = e.key.toLowerCase()
+        if (key === 'z' && !e.shiftKey) { e.preventDefault(); typingRef.current = null; undo(); return }
+        if ((key === 'z' && e.shiftKey) || key === 'y') { e.preventDefault(); typingRef.current = null; redo(); return }
+        if (key === 'b' && selection?.type === 'text') { e.preventDefault(); toggleStyleFlag('bold'); return }
+        if (key === 'i' && selection?.type === 'text') { e.preventDefault(); toggleStyleFlag('italic'); return }
+        if (key === '=' || key === '+') { e.preventDefault(); zoomStep(1); return }
+        if (key === '-') { e.preventDefault(); zoomStep(-1); return }
+        if (key === '0') { e.preventDefault(); useEditorStore.getState().requestFit(); return }
+      }
 
       if (selection?.type === 'frame' && !mod) {
         const nudge = e.shiftKey ? 10 : 1
