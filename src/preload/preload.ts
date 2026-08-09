@@ -12,5 +12,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportPDF: (data: ArrayBuffer, path: string) =>
     ipcRenderer.invoke('export:pdf', data, path),
   getSystemFontsDir: () =>
-    ipcRenderer.invoke('system:fontsDir')
+    ipcRenderer.invoke('system:fontsDir'),
+  onMenuEvent: (channel: string, callback: (...args: any[]) => void) => {
+    ipcRenderer.on(channel, (_event, ...args) => callback(...args))
+  }
 })
