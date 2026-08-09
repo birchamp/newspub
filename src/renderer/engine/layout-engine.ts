@@ -6,13 +6,11 @@ import type {
 import { layoutFrameText } from './frame-layout'
 import { computeExclusionZones } from './wrap-calculator'
 
-const DEFAULT_LINE_HEIGHT = 20
-
 export function layoutThread(
   thread: Thread,
   frames: Array<{ frame: TextFrame; pageId: string; pageIndex: number }>,
   imageFrames: Array<{ rect: import('@model/types').Rect; wrapMode: 'skip' | 'rect' }>,
-  lineHeight: number = DEFAULT_LINE_HEIGHT
+  lineHeight?: number  // omit to derive per-frame from the text's font size
 ): ThreadLayout {
   const frameLayouts: FrameLayout[] = []
   let currentOffset = 0

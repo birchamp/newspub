@@ -111,7 +111,7 @@ function renderPage(
     const frameLayout = threadLayout?.frameLayouts.find(fl => fl.frameId === frame.id)
 
     if (frameLayout) {
-      paintTextLines(ctx, frameLayout.lines, textFrame.rect.x, textFrame.rect.y)
+      paintTextLines(ctx, frameLayout.lines, textFrame.rect.x, textFrame.rect.y, textFrame.rect.width)
 
       // Continuation markers
       if (frameLayout.continuationTo) {

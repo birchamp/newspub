@@ -7,10 +7,44 @@ import { getAvailableWidthForLine, getSkipRange } from './wrap-calculator'
 interface FrameLayoutInput {
   runs: StyledRun[]
   frameRect: Rect
-  lineHeight: number
+  lineHeight?: number  // omit to derive from the frame's starting font size
   exclusions: ExclusionZone[]
   startOffset: number // character offset into the thread to start from
   padding?: number
+}
+
+/** Style of the run containing the given offset (or the last run) */
+function styleAtOffset(runs: StyledRun[], offset: number): TextStyle {
+  let pos = 0
+  for (const run of runs) {
+    pos += run.text.length
+    if (offset < pos) return run.style
+  }
+  return runs.length > 0 ? runs[runs.length - 1].style : {}
+}
+
+// Shared measuring context: real canvas metrics in the renderer, a rough
+// estimate in DOM-free environments (unit tests).
+let measureCanvasCtx: CanvasRenderingContext2D | null | undefined
+function getMeasureCtx(): CanvasRenderingContext2D | null {
+  if (measureCanvasCtx === undefined) {
+    measureCanvasCtx =
+      typeof document !== 'undefined'
+        ? document.createElement('canvas').getContext('2d')
+        : null
+  }
+  return measureCanvasCtx
+}
+
+function measureRun(text: string, style: TextStyle): number {
+  const ctx = getMeasureCtx()
+  if (ctx) {
+    const weight = style.bold ? 'bold' : 'normal'
+    const slant = style.italic ? 'italic' : 'normal'
+    ctx.font = `${slant} ${weight} ${style.fontSize ?? 14}px ${style.fontFamily ?? 'sans-serif'}`
+    return ctx.measureText(text).width
+  }
+  return text.length * ((style.fontSize ?? 14) * 0.6) // rough estimate
 }
 
 interface FrameLayoutResult {
@@ -23,7 +57,6 @@ export function layoutFrameText(input: FrameLayoutInput): FrameLayoutResult {
   const {
     runs,
     frameRect,
-    lineHeight,
     exclusions,
     startOffset,
     padding = 8
@@ -41,9 +74,13 @@ export function layoutFrameText(input: FrameLayoutInput): FrameLayoutResult {
     return { lines: [], endOffset: startOffset, overflow: false }
   }
 
-  // Determine font from first run (simplified — in production, handle multi-style)
-  const firstStyle = runs.length > 0 ? runs[0].style : {}
-  const font = `${firstStyle.fontSize ?? 14}px ${firstStyle.fontFamily ?? 'sans-serif'}`
+  // Font and line height follow the style where this frame's text starts, so
+  // a headline frame with 28pt text wraps and spaces correctly. (Mixed sizes
+  // within one frame still approximate using the starting style.)
+  const startStyle = styleAtOffset(runs, startOffset)
+  const weight = startStyle.bold ? 'bold ' : ''
+  const font = `${weight}${startStyle.fontSize ?? 14}px ${startStyle.fontFamily ?? 'sans-serif'}`
+  const lineHeight = input.lineHeight ?? Math.round((startStyle.fontSize ?? 14) * 1.4)
 
   const prepared = prepareWithSegments(textToLayout, font)
   const skipRange = getSkipRange(baseWidth, availableHeight, exclusions)
@@ -109,14 +146,15 @@ function resolveRunStyles(
     const sliceEnd = Math.min(to, runEnd) - runStart
     const text = run.text.slice(sliceStart, sliceEnd)
 
+    const width = measureRun(text, run.style)
     result.push({
       text,
       style: run.style,
       x,
-      width: 0 // will be computed by renderer using measureText
+      width
     })
 
-    x += text.length * ((run.style.fontSize ?? 14) * 0.6) // rough estimate
+    x += width
   }
 
   return result

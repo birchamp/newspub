@@ -1,6 +1,7 @@
 // src/renderer/canvas/text-painter.ts
 import type { LayoutLine } from '@engine/layout-types'
 import type { TextStyle } from '@model/types'
+import { lineAlignOffset } from '@engine/alignment'
 
 export function buildFontString(style: TextStyle): string {
   const weight = style.bold ? 'bold' : 'normal'
@@ -14,13 +15,14 @@ export function paintTextLines(
   ctx: CanvasRenderingContext2D,
   lines: LayoutLine[],
   frameX: number,
-  frameY: number
+  frameY: number,
+  frameWidth: number
 ): void {
   for (const line of lines) {
+    const align = lineAlignOffset(line, frameWidth)
     if (line.runStyles.length > 0) {
-      // Paint runs sequentially with real measured advances — the layout's
-      // per-run x values are estimates and would overlap styled text.
-      let x = frameX + line.x
+      // Paint runs sequentially with real measured advances.
+      let x = frameX + line.x + align
       for (const runStyle of line.runStyles) {
         ctx.font = buildFontString(runStyle.style)
         ctx.fillStyle = runStyle.style.color ?? '#000000'
@@ -30,7 +32,7 @@ export function paintTextLines(
     } else {
       // Fallback: draw whole line
       ctx.fillStyle = '#000000'
-      ctx.fillText(line.text, frameX + line.x, frameY + line.y + line.height * 0.8)
+      ctx.fillText(line.text, frameX + line.x + align, frameY + line.y + line.height * 0.8)
     }
   }
 }

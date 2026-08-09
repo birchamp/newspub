@@ -1,6 +1,15 @@
 // src/renderer/ui/components/Toolbar.tsx
 import { useEditorStore } from '@ui/store/editor-store'
-import { toggleStyleFlag, selectionStyleFlag, undo, redo, canUndo, canRedo, zoomStep } from '@ui/actions'
+import {
+  toggleStyleFlag, selectionStyleFlag, selectionStyleValue, applyTextStyle,
+  setAlignment, undo, redo, canUndo, canRedo, zoomStep
+} from '@ui/actions'
+
+const FONT_FAMILIES = [
+  'sans-serif', 'serif', 'Arial', 'Helvetica', 'Georgia',
+  'Times New Roman', 'Courier New', 'monospace'
+]
+const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 21, 24, 28, 32, 36, 48, 64]
 
 export default function Toolbar() {
   const { activeTool, setActiveTool, zoom, zoomAtCenter, selection, requestFit } = useEditorStore()
@@ -10,6 +19,10 @@ export default function Toolbar() {
   const editingText = selection?.type === 'text'
   const boldActive = editingText && selectionStyleFlag('bold')
   const italicActive = editingText && selectionStyleFlag('italic')
+  const fontFamily = (editingText && selectionStyleValue('fontFamily')) || 'sans-serif'
+  const fontSize = (editingText && selectionStyleValue('fontSize')) || 14
+  const color = (editingText && selectionStyleValue('color')) || '#000000'
+  const alignment = (editingText && selectionStyleValue('alignment')) || 'left'
 
   // Keep focus in the canvas's hidden textarea while clicking format buttons
   const keepFocus = (e: React.MouseEvent) => e.preventDefault()
@@ -55,6 +68,44 @@ export default function Toolbar() {
         onClick={() => toggleStyleFlag('italic')}
         title="Italic (Ctrl+I)"
       >I</button>
+
+      {/* Font family / size / color */}
+      <select
+        value={fontFamily}
+        disabled={!editingText}
+        onMouseDown={e => e.stopPropagation()}
+        onChange={e => applyTextStyle({ fontFamily: e.target.value })}
+        style={{ ...btn(false, !editingText), width: 120, padding: '3px 4px' }}
+        title="Font family"
+      >
+        {FONT_FAMILIES.map(f => <option key={f} value={f}>{f}</option>)}
+        {!FONT_FAMILIES.includes(fontFamily) && <option value={fontFamily}>{fontFamily}</option>}
+      </select>
+      <select
+        value={FONT_SIZES.includes(fontSize) ? fontSize : fontSize}
+        disabled={!editingText}
+        onChange={e => applyTextStyle({ fontSize: parseInt(e.target.value, 10) })}
+        style={{ ...btn(false, !editingText), width: 52, padding: '3px 4px' }}
+        title="Font size"
+      >
+        {FONT_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
+        {!FONT_SIZES.includes(fontSize) && <option value={fontSize}>{fontSize}</option>}
+      </select>
+      <input
+        type="color"
+        value={color}
+        disabled={!editingText}
+        onChange={e => applyTextStyle({ color: e.target.value })}
+        style={{ width: 26, height: 24, padding: 1, border: '1px solid #ddd', borderRadius: 4, background: 'transparent', cursor: editingText ? 'pointer' : 'default' }}
+        title="Text color"
+      />
+
+      <Divider />
+
+      {/* Alignment */}
+      <button style={btn(alignment === 'left', !editingText)} disabled={!editingText} onMouseDown={keepFocus} onClick={() => setAlignment('left')} title="Align left">L</button>
+      <button style={btn(alignment === 'center', !editingText)} disabled={!editingText} onMouseDown={keepFocus} onClick={() => setAlignment('center')} title="Align center">C</button>
+      <button style={btn(alignment === 'right', !editingText)} disabled={!editingText} onMouseDown={keepFocus} onClick={() => setAlignment('right')} title="Align right">R</button>
 
       <div style={{ flex: 1 }} />
 

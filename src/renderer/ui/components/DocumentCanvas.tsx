@@ -15,7 +15,12 @@ import { insertText, deleteText, applyStyle, getRunAtOffset, getPlainText, creat
 import { generateId } from '@model/document'
 import { expandToWord } from '@input/selection'
 import { parseHtmlToRuns, runsToHtml, runsToPlainText } from '@input/clipboard'
-import { pushCommand, makeCommand, undo, redo, toggleStyleFlag, zoomStep } from '@ui/actions'
+import {
+  pushCommand, makeCommand, undo, redo, toggleStyleFlag, zoomStep,
+  deleteFrame, duplicateFrame, reorderFrame, chooseImageForFrame,
+  assetFromFile, placeImageInFrame
+} from '@ui/actions'
+import { lineAlignOffset } from '@engine/alignment'
 import type { LayoutLine, DocumentLayout } from '@engine/layout-types'
 import type { Document, Frame, Page, Point, Rect, Thread, TextFrame } from '@model/types'
 
@@ -58,6 +63,64 @@ function resizeRect(orig: Rect, handle: HandlePosition, dx: number, dy: number):
     height = MIN_FRAME_SIZE
   }
   return { x, y, width, height }
+}
+
+// ---- Snapping ----
+
+const PAGE_MARGIN = 36
+const SNAP_TOLERANCE_PX = 6
+
+interface SnapGuide { axis: 'v' | 'h'; at: number; from: number; to: number }
+
+interface SnapResult { dx: number; dy: number; guides: SnapGuide[] }
+
+/** Snap a page-local rect's edges/centers to page guides and sibling frames */
+function computeSnap(
+  rect: Rect,
+  page: Page,
+  pageSize: { width: number; height: number },
+  spread: SpreadPosition,
+  excludeFrameId: string,
+  tolerance: number,
+  snapEdges: { left: boolean; right: boolean; top: boolean; bottom: boolean; centers: boolean }
+): SnapResult {
+  const xs: number[] = [0, PAGE_MARGIN, pageSize.width / 2, pageSize.width - PAGE_MARGIN, pageSize.width]
+  const ys: number[] = [0, PAGE_MARGIN, pageSize.height / 2, pageSize.height - PAGE_MARGIN, pageSize.height]
+  for (const f of page.frames) {
+    if (f.id === excludeFrameId) continue
+    xs.push(f.rect.x, f.rect.x + f.rect.width / 2, f.rect.x + f.rect.width)
+    ys.push(f.rect.y, f.rect.y + f.rect.height / 2, f.rect.y + f.rect.height)
+  }
+
+  const xEdges: number[] = []
+  if (snapEdges.left) xEdges.push(rect.x)
+  if (snapEdges.centers) xEdges.push(rect.x + rect.width / 2)
+  if (snapEdges.right) xEdges.push(rect.x + rect.width)
+  const yEdges: number[] = []
+  if (snapEdges.top) yEdges.push(rect.y)
+  if (snapEdges.centers) yEdges.push(rect.y + rect.height / 2)
+  if (snapEdges.bottom) yEdges.push(rect.y + rect.height)
+
+  let dx = 0, dy = 0
+  let bestX = tolerance, bestY = tolerance
+  let guideX: number | null = null, guideY: number | null = null
+  for (const edge of xEdges) {
+    for (const t of xs) {
+      const d = Math.abs(t - edge)
+      if (d < bestX) { bestX = d; dx = t - edge; guideX = t }
+    }
+  }
+  for (const edge of yEdges) {
+    for (const t of ys) {
+      const d = Math.abs(t - edge)
+      if (d < bestY) { bestY = d; dy = t - edge; guideY = t }
+    }
+  }
+
+  const guides: SnapGuide[] = []
+  if (guideX !== null) guides.push({ axis: 'v', at: spread.x + guideX, from: spread.y, to: spread.y + pageSize.height })
+  if (guideY !== null) guides.push({ axis: 'h', at: spread.y + guideY, from: spread.x, to: spread.x + pageSize.width })
+  return { dx, dy, guides }
 }
 
 const RESIZE_CURSORS: Record<HandlePosition, string> = {
@@ -180,7 +243,7 @@ function caretRectForOffset(ctx: CanvasRenderingContext2D, geos: ThreadFrameGeo[
     const isLast = i === target.lines.length - 1
     if (offset <= lineStart + len - (isLast ? 0 : 1) || (isLast && offset >= lineStart)) {
       const local = Math.max(0, Math.min(offset - lineStart, len))
-      const x = measureLinePrefix(ctx, line, local)
+      const x = measureLinePrefix(ctx, line, local) + lineAlignOffset(line, target.rect.width)
       return {
         x: target.spread.x + target.rect.x + line.x + x,
         y: target.spread.y + target.rect.y + line.y,
@@ -193,7 +256,7 @@ function caretRectForOffset(ctx: CanvasRenderingContext2D, geos: ThreadFrameGeo[
   }
   const last = target.lines[target.lines.length - 1]
   return {
-    x: target.spread.x + target.rect.x + last.x + measureLinePrefix(ctx, last, last.text.length),
+    x: target.spread.x + target.rect.x + last.x + measureLinePrefix(ctx, last, last.text.length) + lineAlignOffset(last, target.rect.width),
     y: target.spread.y + target.rect.y + last.y,
     height: last.height,
     geo: target,
@@ -226,7 +289,7 @@ function caretOffsetForPoint(ctx: CanvasRenderingContext2D, geos: ThreadFrameGeo
     const isLast = i === target.lines.length - 1
     if (relY < line.y + line.height || isLast) {
       if (relY < line.y && i === 0) return lineStart
-      const relX = docPoint.x - target.spread.x - target.rect.x - line.x
+      const relX = docPoint.x - target.spread.x - target.rect.x - line.x - lineAlignOffset(line, target.rect.width)
       return lineStart + characterIndexAtX(ctx, line, relX)
     }
     lineStart += line.text.length
@@ -266,6 +329,7 @@ export default function DocumentCanvas() {
   const nudgeRef = useRef<{ groupId: string; last: number } | null>(null)
   const imagesRef = useRef<Map<string, HTMLImageElement>>(new Map())
   const animRef = useRef<number | null>(null)
+  const snapGuidesRef = useRef<SnapGuide[] | null>(null)
 
   // Layout is pure in the document — compute once per document change.
   const layout = useMemo(() => (doc ? layoutDocument(doc) : null), [doc])
@@ -353,8 +417,9 @@ export default function DocumentCanvas() {
             const selStart = Math.max(start, lineStart)
             const selEnd = Math.min(end, lineStart + len)
             if (selEnd > selStart) {
-              const x0 = measureLinePrefix(ctx, line, selStart - lineStart)
-              const x1 = measureLinePrefix(ctx, line, selEnd - lineStart)
+              const align = lineAlignOffset(line, geo.rect.width)
+              const x0 = measureLinePrefix(ctx, line, selStart - lineStart) + align
+              const x1 = measureLinePrefix(ctx, line, selEnd - lineStart) + align
               ctx.fillRect(
                 geo.spread.x + geo.rect.x + line.x + x0,
                 geo.spread.y + geo.rect.y + line.y,
@@ -370,6 +435,23 @@ export default function DocumentCanvas() {
         const caret = caretRectForOffset(ctx, threadGeos, textSel.focus)
         if (caret) paintCursor(ctx, caret.x, caret.y + 2, caret.height - 4)
       }
+      resetTransform(ctx)
+    }
+
+    // Snap guides while dragging
+    if (snapGuidesRef.current?.length) {
+      applyCamera(ctx, dprCamera)
+      ctx.save()
+      ctx.strokeStyle = '#ec4899'
+      ctx.lineWidth = 1 / zoom
+      ctx.setLineDash([5 / zoom, 3 / zoom])
+      for (const g of snapGuidesRef.current) {
+        ctx.beginPath()
+        if (g.axis === 'v') { ctx.moveTo(g.at, g.from); ctx.lineTo(g.at, g.to) }
+        else { ctx.moveTo(g.from, g.at); ctx.lineTo(g.to, g.at) }
+        ctx.stroke()
+      }
+      ctx.restore()
       resetTransform(ctx)
     }
 
@@ -948,10 +1030,38 @@ export default function DocumentCanvas() {
       const dy = docPoint.y - d.startY
       if (!d.moved && Math.abs(dx) * camera.zoom < 3 && Math.abs(dy) * camera.zoom < 3) return
       if (!d.moved) setDrag({ ...d, moved: true })
-      const rect: Rect = { ...d.origRect, x: d.origRect.x + dx, y: d.origRect.y + dy }
+      let rect: Rect = { ...d.origRect, x: d.origRect.x + dx, y: d.origRect.y + dy }
+      // Snap edges/centers to page guides and sibling frames
+      const page = doc.pages.find(p => p.id === d.pageId)
+      const spread = findSpreadForPage(doc, d.pageId, spreadPositions)
+      if (page && spread) {
+        const snap = computeSnap(rect, page, doc.metadata.pageSize, spread, d.frameId, SNAP_TOLERANCE_PX / camera.zoom,
+          { left: true, right: true, top: true, bottom: true, centers: true })
+        rect = { ...rect, x: rect.x + snap.dx, y: rect.y + snap.dy }
+        snapGuidesRef.current = snap.guides
+      }
       updateDocument(dd => setFrameRect(dd, d.pageId, d.frameId, rect))
     } else if (d.type === 'resize-frame') {
-      const rect = resizeRect(d.origRect, d.handle, docPoint.x - d.startX, docPoint.y - d.startY)
+      let rect = resizeRect(d.origRect, d.handle, docPoint.x - d.startX, docPoint.y - d.startY)
+      // Snap only the edges being dragged
+      const page = doc.pages.find(p => p.id === d.pageId)
+      const spread = findSpreadForPage(doc, d.pageId, spreadPositions)
+      if (page && spread) {
+        const h = d.handle
+        const edges = {
+          left: h.includes('left'),
+          right: h.includes('right'),
+          top: h === 'top' || h === 'top-left' || h === 'top-right',
+          bottom: h === 'bottom' || h === 'bottom-left' || h === 'bottom-right',
+          centers: false
+        }
+        const snap = computeSnap(rect, page, doc.metadata.pageSize, spread, d.frameId, SNAP_TOLERANCE_PX / camera.zoom, edges)
+        if (edges.left) { rect = { ...rect, x: rect.x + snap.dx, width: rect.width - snap.dx } }
+        else if (edges.right) { rect = { ...rect, width: rect.width + snap.dx } }
+        if (edges.top) { rect = { ...rect, y: rect.y + snap.dy, height: rect.height - snap.dy } }
+        else if (edges.bottom) { rect = { ...rect, height: rect.height + snap.dy } }
+        snapGuidesRef.current = snap.guides
+      }
       updateDocument(dd => setFrameRect(dd, d.pageId, d.frameId, rect))
     } else if (d.type === 'draw-frame') {
       setDrag({ ...d, currentX: docPoint.x, currentY: docPoint.y })
@@ -970,6 +1080,7 @@ export default function DocumentCanvas() {
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
     const d = dragRef.current
     setDrag(null)
+    snapGuidesRef.current = null
     if (!d || !doc) return
     if (d.type === 'pan' || d.type === 'text-select') return
     const docPoint = toDocPoint(e)
@@ -1091,8 +1202,90 @@ export default function DocumentCanvas() {
     const hit = hitTestFrames(docPoint, doc.pages, spreadPositions)
     if (hit && hit.frame.type === 'text') {
       enterTextEditing(hit.frame, hit.pageId, docPoint, false)
+    } else if (hit && hit.frame.type === 'image') {
+      // Double-click an image frame to choose its image
+      void chooseImageForFrame(hit.pageId, hit.frame.id)
     }
   }, [doc, activeTool, textSel, threadGeos, spreadPositions, toDocPoint, measureCtx, setSelection, enterTextEditing])
+
+  // ---- Drag-and-drop image import ----
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const onDragOver = (e: DragEvent) => { e.preventDefault() }
+    const onDrop = async (e: DragEvent) => {
+      e.preventDefault()
+      const state = useEditorStore.getState()
+      const dropDoc = state.document
+      if (!dropDoc) return
+      const file = Array.from(e.dataTransfer?.files ?? [])
+        .find(f => /^image\/(jpeg|png|webp)$/.test(f.type))
+      if (!file) return
+      const data = await file.arrayBuffer()
+      const asset = assetFromFile(file.name, data)
+      if (!asset) return
+
+      const rect0 = canvas.getBoundingClientRect()
+      const docPoint = screenToDoc(
+        { x: e.clientX - rect0.left, y: e.clientY - rect0.top },
+        { zoom: state.zoom, panX: state.panX, panY: state.panY }
+      )
+      const sps = getSpreadPositions(dropDoc.pages.length, dropDoc.metadata.pageSize)
+
+      // Dropping onto an existing image frame replaces its image
+      const hit = hitTestFrames(docPoint, dropDoc.pages, sps)
+      if (hit && hit.frame.type === 'image') {
+        placeImageInFrame(hit.pageId, hit.frame.id, asset)
+        return
+      }
+
+      // Otherwise create a new image frame at the drop point, sized to the image
+      const target = findPageAtPoint(dropDoc, docPoint, sps)
+      if (!target) return
+      const dims = await new Promise<{ w: number; h: number }>(resolve => {
+        const img = new Image()
+        const url = URL.createObjectURL(new Blob([data], { type: asset.mimeType }))
+        img.onload = () => { resolve({ w: img.naturalWidth || 300, h: img.naturalHeight || 200 }); URL.revokeObjectURL(url) }
+        img.onerror = () => { resolve({ w: 300, h: 200 }); URL.revokeObjectURL(url) }
+        img.src = url
+      })
+      const maxW = Math.min(300, dropDoc.metadata.pageSize.width - PAGE_MARGIN * 2)
+      const w = Math.min(dims.w, maxW)
+      const h = w * dims.h / dims.w
+      const frame: Frame = {
+        type: 'image',
+        id: generateId('frame'),
+        rect: {
+          x: docPoint.x - target.spread.x - w / 2,
+          y: docPoint.y - target.spread.y - h / 2,
+          width: w,
+          height: h
+        },
+        imageAssetId: null,
+        wrapMode: 'rect',
+        imageFit: 'fit'
+      }
+      const pageId = target.page.id
+      const add = () => useEditorStore.getState().updateDocument(dd => ({
+        ...dd,
+        pages: dd.pages.map(p => p.id !== pageId ? p : { ...p, frames: [...p.frames, frame] })
+      }))
+      const remove = () => useEditorStore.getState().updateDocument(dd => ({
+        ...dd,
+        pages: dd.pages.map(p => p.id !== pageId ? p : { ...p, frames: p.frames.filter(f => f.id !== frame.id) })
+      }))
+      add()
+      pushCommand(makeCommand('drop-image-frame', add, remove))
+      placeImageInFrame(pageId, frame.id, asset)
+      useEditorStore.getState().setSelection({ type: 'frame', frameId: frame.id, pageId })
+    }
+    canvas.addEventListener('dragover', onDragOver)
+    canvas.addEventListener('drop', onDrop)
+    return () => {
+      canvas.removeEventListener('dragover', onDragOver)
+      canvas.removeEventListener('drop', onDrop)
+    }
+  }, [])
 
   // ---- Wheel: pan / ctrl+wheel zoom-at-cursor (native, non-passive) ----
   useEffect(() => {
@@ -1150,50 +1343,9 @@ export default function DocumentCanvas() {
   }, [doc, selection, updateDocument])
 
   const deleteSelectedFrame = useCallback(() => {
-    if (!doc || selection?.type !== 'frame') return
-    const page = doc.pages.find(p => p.id === selection.pageId)
-    const frameIndex = page?.frames.findIndex(f => f.id === selection.frameId) ?? -1
-    if (!page || frameIndex === -1) return
-    const frame = page.frames[frameIndex]
-    const pageId = page.id
-
-    // If this is the only frame of its thread, remove the thread too
-    let orphanThread: Thread | null = null
-    if (frame.type === 'text') {
-      const others = doc.pages.some(p =>
-        p.frames.some(f => f.type === 'text' && f.threadId === frame.threadId && f.id !== frame.id)
-      )
-      if (!others) orphanThread = doc.threads[frame.threadId] ?? null
-    }
-
-    const removeFrame = () =>
-      useEditorStore.getState().updateDocument(dd => {
-        const threads = { ...dd.threads }
-        if (orphanThread) delete threads[orphanThread.id]
-        return {
-          ...dd,
-          threads,
-          pages: dd.pages.map(p =>
-            p.id !== pageId ? p : { ...p, frames: p.frames.filter(f => f.id !== frame.id) }
-          )
-        }
-      })
-    const restoreFrame = () =>
-      useEditorStore.getState().updateDocument(dd => ({
-        ...dd,
-        threads: orphanThread ? { ...dd.threads, [orphanThread.id]: orphanThread } : dd.threads,
-        pages: dd.pages.map(p => {
-          if (p.id !== pageId) return p
-          const frames = [...p.frames]
-          frames.splice(Math.min(frameIndex, frames.length), 0, frame)
-          return { ...p, frames }
-        })
-      }))
-
-    removeFrame()
-    setSelection(null)
-    pushCommand(makeCommand('delete-frame', removeFrame, restoreFrame))
-  }, [doc, selection, setSelection])
+    if (selection?.type !== 'frame') return
+    deleteFrame(selection.pageId, selection.frameId)
+  }, [selection])
 
   const cycleToNextThreadFrame = useCallback(() => {
     if (!doc || selection?.type !== 'frame') return
@@ -1241,6 +1393,21 @@ export default function DocumentCanvas() {
         if ((key === 'z' && e.shiftKey) || key === 'y') { e.preventDefault(); typingRef.current = null; redo(); return }
         if (key === 'b' && selection?.type === 'text') { e.preventDefault(); toggleStyleFlag('bold'); return }
         if (key === 'i' && selection?.type === 'text') { e.preventDefault(); toggleStyleFlag('italic'); return }
+        if (key === 'd' && selection?.type === 'frame') {
+          e.preventDefault()
+          duplicateFrame(selection.pageId, selection.frameId)
+          return
+        }
+        if (key === ']' && selection?.type === 'frame') {
+          e.preventDefault()
+          reorderFrame(selection.pageId, selection.frameId, 'front')
+          return
+        }
+        if (key === '[' && selection?.type === 'frame') {
+          e.preventDefault()
+          reorderFrame(selection.pageId, selection.frameId, 'back')
+          return
+        }
         if (key === '=' || key === '+') { e.preventDefault(); zoomStep(1); return }
         if (key === '-') { e.preventDefault(); zoomStep(-1); return }
         if (key === '0') { e.preventDefault(); useEditorStore.getState().requestFit(); return }

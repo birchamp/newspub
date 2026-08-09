@@ -4,6 +4,7 @@ import type { Document, Page, TextFrame, ImageFrame } from '@model/types'
 import type { DocumentLayout, FrameLayout, LayoutLine } from '@engine/layout-types'
 import { resolveFont, resolveStandardFont } from './font-resolver'
 import { toArrayBuffer } from '@file/file-manager'
+import { lineAlignOffset } from '@engine/alignment'
 
 interface ExportOptions {
   pageRange?: { start: number; end: number }
@@ -117,6 +118,7 @@ export async function exportToPdf(
       if (!frameLayout) continue
 
       for (const line of frameLayout.lines) {
+        const align = lineAlignOffset(line, textFrame.rect.width)
         for (const runStyle of line.runStyles) {
           const font = await getFont(
             runStyle.style.fontFamily ?? 'Helvetica',
@@ -140,7 +142,7 @@ export async function exportToPdf(
           const pdfY = pageHeight - (textFrame.rect.y + line.y + line.height * 0.8)
 
           pdfPage.drawText(runStyle.text, {
-            x: textFrame.rect.x + runStyle.x,
+            x: textFrame.rect.x + runStyle.x + align,
             y: pdfY,
             size: fontSize,
             font,
