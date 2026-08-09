@@ -1,8 +1,8 @@
 // src/main/ipc-handlers.ts
 import { ipcMain, dialog } from 'electron'
-import { readFile, writeFile, rename, unlink } from 'fs/promises'
-import { join, homedir } from 'path'
-import { existsSync } from 'fs'
+import { readFile, writeFile, rename } from 'fs/promises'
+import { join } from 'path'
+import { homedir } from 'os'
 
 export function registerIpcHandlers(): void {
   ipcMain.handle('file:save', async (_event, data: ArrayBuffer, path: string) => {
@@ -15,7 +15,8 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('file:open', async (_event, path: string) => {
     const buffer = await readFile(path)
-    return buffer.buffer
+    // Slice to the view's exact range — Buffer may be a pool view
+    return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
   })
 
   ipcMain.handle('dialog:save', async (_event, options: object) => {

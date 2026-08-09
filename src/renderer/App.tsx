@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import Toolbar from '@ui/components/Toolbar'
 import PageSidebar from '@ui/components/PageSidebar'
 import DocumentCanvas from '@ui/components/DocumentCanvas'
@@ -10,14 +10,12 @@ import ExportDialog from '@ui/components/ExportDialog'
 import DocumentSetupDialog from '@ui/components/DocumentSetupDialog'
 import { useEditorStore } from '@ui/store/editor-store'
 import { presetTemplates } from '@template/preset-templates'
-import { HistoryManager } from '@history/history-manager'
+import { appHistory } from '@history/app-history'
 import { packNewspub, unpackNewspub } from '@file/file-manager'
 import { layoutDocument } from '@engine/layout-engine'
 import { exportToPdf } from '@export/pdf-exporter'
 import { stripToTemplate } from '@template/template-manager'
 import type { Document } from '@model/types'
-
-const history = new HistoryManager()
 
 type DialogState =
   | { type: 'none' }
@@ -30,6 +28,10 @@ export default function App() {
   const { document: doc, setDocument, filePath, setFilePath, markClean } = useEditorStore()
   const [dialog, setDialog] = useState<DialogState>({ type: 'template-picker' })
 
+  // Latest-callback ref so the one-time menu registration below never
+  // captures a stale closure (e.g. doc === null on first render).
+  const menuRef = useRef({ handleSave: () => {}, handleSaveAs: () => {} })
+
   // Listen for menu events from main process
   useEffect(() => {
     const api = (window as any).electronAPI
@@ -37,12 +39,12 @@ export default function App() {
 
     const handlers: Record<string, () => void> = {
       'menu:new': () => setDialog({ type: 'template-picker' }),
-      'menu:save': () => handleSave(),
-      'menu:save-as': () => handleSaveAs(),
+      'menu:save': () => menuRef.current.handleSave(),
+      'menu:save-as': () => menuRef.current.handleSaveAs(),
       'menu:save-template': () => setDialog({ type: 'save-as-template' }),
       'menu:export-pdf': () => setDialog({ type: 'export' }),
-      'menu:undo': () => { history.undo(); /* re-read doc from store */ },
-      'menu:redo': () => { history.redo(); },
+      'menu:undo': () => { appHistory.undo() },
+      'menu:redo': () => { appHistory.redo() },
     }
 
     for (const [channel, handler] of Object.entries(handlers)) {
@@ -76,6 +78,11 @@ export default function App() {
     markClean()
   }, [doc, setFilePath, markClean])
 
+  // Keep menu handlers pointing at the latest callbacks
+  useEffect(() => {
+    menuRef.current = { handleSave, handleSaveAs }
+  }, [handleSave, handleSaveAs])
+
   const handleExport = useCallback(async (options: { allPages: boolean; startPage: number; endPage: number }) => {
     if (!doc) return
     const api = (window as any).electronAPI
@@ -108,7 +115,7 @@ export default function App() {
 
       {dialog.type === 'template-picker' && (
         <TemplatePickerDialog
-          onSelect={(newDoc) => { setDocument(newDoc); setDialog({ type: 'none' }); history.clear(); }}
+          onSelect={(newDoc) => { setDocument(newDoc); setDialog({ type: 'none' }); appHistory.clear(); }}
           onCancel={() => { if (doc) setDialog({ type: 'none' }) }}
         />
       )}
