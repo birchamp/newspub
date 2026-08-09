@@ -1297,6 +1297,7 @@ export default function DocumentCanvas() {
   return (
     <>
       <canvas
+        id="document-canvas"
         ref={canvasRef}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
