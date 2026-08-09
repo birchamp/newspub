@@ -11,6 +11,8 @@ import DocumentSetupDialog from '@ui/components/DocumentSetupDialog'
 import { useEditorStore } from '@ui/store/editor-store'
 import { presetTemplates } from '@template/preset-templates'
 import { appHistory } from '@history/app-history'
+import { undo, redo, toggleStyleFlag, zoomStep } from '@ui/actions'
+import { addSpread } from '@model/page'
 import { packNewspub, unpackNewspub } from '@file/file-manager'
 import { layoutDocument } from '@engine/layout-engine'
 import { exportToPdf } from '@export/pdf-exporter'
@@ -30,21 +32,34 @@ export default function App() {
 
   // Latest-callback ref so the one-time menu registration below never
   // captures a stale closure (e.g. doc === null on first render).
-  const menuRef = useRef({ handleSave: () => {}, handleSaveAs: () => {} })
+  const menuRef = useRef({ handleSave: () => {}, handleSaveAs: () => {}, handleOpen: () => {} })
 
   // Listen for menu events from main process
   useEffect(() => {
     const api = (window as any).electronAPI
     if (!api?.onMenuEvent) return
 
+    const store = useEditorStore.getState
     const handlers: Record<string, () => void> = {
       'menu:new': () => setDialog({ type: 'template-picker' }),
+      'menu:open': () => menuRef.current.handleOpen(),
       'menu:save': () => menuRef.current.handleSave(),
       'menu:save-as': () => menuRef.current.handleSaveAs(),
       'menu:save-template': () => setDialog({ type: 'save-as-template' }),
       'menu:export-pdf': () => setDialog({ type: 'export' }),
-      'menu:undo': () => { appHistory.undo() },
-      'menu:redo': () => { appHistory.redo() },
+      'menu:undo': undo,
+      'menu:redo': redo,
+      'menu:zoom-in': () => zoomStep(1),
+      'menu:zoom-out': () => zoomStep(-1),
+      'menu:zoom-fit': () => store().requestFit(),
+      'menu:insert-text-frame': () => store().setActiveTool('draw-text-frame'),
+      'menu:insert-image-frame': () => store().setActiveTool('draw-image-frame'),
+      'menu:add-spread': () => {
+        const s = store()
+        if (s.document) s.updateDocument(dd => addSpread(dd, dd.pages.length))
+      },
+      'menu:bold': () => toggleStyleFlag('bold'),
+      'menu:italic': () => toggleStyleFlag('italic'),
     }
 
     for (const [channel, handler] of Object.entries(handlers)) {
@@ -78,10 +93,27 @@ export default function App() {
     markClean()
   }, [doc, setFilePath, markClean])
 
+  const handleOpen = useCallback(async () => {
+    const api = (window as any).electronAPI
+    const result = await api.showOpenDialog({})
+    if (result.canceled || !result.filePaths?.length) return
+    const path = result.filePaths[0]
+    try {
+      const buffer = await api.openFile(path)
+      const opened = await unpackNewspub(buffer)
+      setDocument(opened)
+      setFilePath(path)
+      appHistory.clear()
+      setDialog({ type: 'none' })
+    } catch (err) {
+      console.error('Failed to open document:', err)
+    }
+  }, [setDocument, setFilePath])
+
   // Keep menu handlers pointing at the latest callbacks
   useEffect(() => {
-    menuRef.current = { handleSave, handleSaveAs }
-  }, [handleSave, handleSaveAs])
+    menuRef.current = { handleSave, handleSaveAs, handleOpen }
+  }, [handleSave, handleSaveAs, handleOpen])
 
   const handleExport = useCallback(async (options: { allPages: boolean; startPage: number; endPage: number }) => {
     if (!doc) return

@@ -2,7 +2,7 @@
 import { useEditorStore } from '@ui/store/editor-store'
 
 export default function PageSidebar() {
-  const { document: doc, currentPageIndex, setCurrentPageIndex } = useEditorStore()
+  const { document: doc, currentPageIndex, scrollToPage } = useEditorStore()
 
   if (!doc) return <div style={containerStyle}><span style={{ color: '#999' }}>No document</span></div>
 
@@ -31,7 +31,7 @@ export default function PageSidebar() {
         return (
           <div
             key={i}
-            onClick={() => setCurrentPageIndex(spread.pageIndices[0])}
+            onClick={() => scrollToPage(spread.pageIndices[0])}
             style={{
               padding: '8px 4px',
               marginBottom: 4,

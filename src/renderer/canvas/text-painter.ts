@@ -2,7 +2,7 @@
 import type { LayoutLine } from '@engine/layout-types'
 import type { TextStyle } from '@model/types'
 
-function buildFontString(style: TextStyle): string {
+export function buildFontString(style: TextStyle): string {
   const weight = style.bold ? 'bold' : 'normal'
   const slant = style.italic ? 'italic' : 'normal'
   const size = style.fontSize ?? 14
@@ -18,10 +18,14 @@ export function paintTextLines(
 ): void {
   for (const line of lines) {
     if (line.runStyles.length > 0) {
+      // Paint runs sequentially with real measured advances — the layout's
+      // per-run x values are estimates and would overlap styled text.
+      let x = frameX + line.x
       for (const runStyle of line.runStyles) {
         ctx.font = buildFontString(runStyle.style)
         ctx.fillStyle = runStyle.style.color ?? '#000000'
-        ctx.fillText(runStyle.text, frameX + runStyle.x, frameY + line.y + line.height * 0.8)
+        ctx.fillText(runStyle.text, x, frameY + line.y + line.height * 0.8)
+        x += ctx.measureText(runStyle.text).width
       }
     } else {
       // Fallback: draw whole line
@@ -29,6 +33,49 @@ export function paintTextLines(
       ctx.fillText(line.text, frameX + line.x, frameY + line.y + line.height * 0.8)
     }
   }
+}
+
+/** Measured x-advance of the first `chars` characters of a line (line-local px) */
+export function measureLinePrefix(
+  ctx: CanvasRenderingContext2D,
+  line: LayoutLine,
+  chars: number
+): number {
+  let remaining = Math.max(0, Math.min(chars, line.text.length))
+  let x = 0
+  ctx.save()
+  if (line.runStyles.length > 0) {
+    for (const runStyle of line.runStyles) {
+      if (remaining <= 0) break
+      ctx.font = buildFontString(runStyle.style)
+      const take = Math.min(remaining, runStyle.text.length)
+      x += ctx.measureText(runStyle.text.slice(0, take)).width
+      remaining -= take
+    }
+  } else {
+    x = ctx.measureText(line.text.slice(0, remaining)).width
+  }
+  ctx.restore()
+  return x
+}
+
+/** Character index within a line closest to the given line-local x position */
+export function characterIndexAtX(
+  ctx: CanvasRenderingContext2D,
+  line: LayoutLine,
+  targetX: number
+): number {
+  if (targetX <= 0) return 0
+  let prev = 0
+  for (let i = 1; i <= line.text.length; i++) {
+    const w = measureLinePrefix(ctx, line, i)
+    if (w >= targetX) {
+      // Snap to whichever side of the character is closer
+      return targetX - prev <= w - targetX ? i - 1 : i
+    }
+    prev = w
+  }
+  return line.text.length
 }
 
 export function paintContinuationMarker(
