@@ -333,7 +333,7 @@ impl Session {
             return Err(CoreError::NoSuchPage(page).into());
         }
         let layout = self.layout();
-        let disp = newpub_render::page_display(&self.doc, &layout, page);
+        let disp = newpub_render::page_display_for(&self.doc, &layout, page, true);
         newpub_render::render_page(&mut self.raster, &self.doc, &self.fonts, &disp, dpi)
             .ok_or_else(|| EngineError::Other("render failed".into()))
     }

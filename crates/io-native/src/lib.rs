@@ -1,6 +1,7 @@
 //! newpub-io-native: the `.npub` format — a zip with `document.json` and `media/<id>`.
 
-use newpub_core::{Document, FORMAT_VERSION};
+use newpub_core::{Document, FORMAT_VERSION, Id, ObjectKind};
+use std::collections::HashSet;
 use std::io::{Read, Seek, Write};
 use std::sync::Arc;
 
@@ -18,7 +19,24 @@ pub enum NativeError {
     MissingMedia(String),
 }
 
+/// Drops image assets that no image frame uses (embedded fonts and other assets are kept).
+fn without_unused_assets(doc: &Document) -> Document {
+    let used: HashSet<Id> = doc
+        .objects
+        .values()
+        .filter_map(|o| match &o.kind {
+            ObjectKind::Image(im) => im.asset,
+            _ => None,
+        })
+        .collect();
+    let mut doc = doc.clone();
+    doc.assets.retain(|id, a| used.contains(id) || !a.mime.starts_with("image/"));
+    doc
+}
+
 pub fn write<W: Write + Seek>(doc: &Document, w: W) -> Result<(), NativeError> {
+    let pruned = without_unused_assets(doc);
+    let doc = &pruned;
     let mut z = zip::ZipWriter::new(w);
     let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     z.start_file(
