@@ -4,7 +4,10 @@ A fresh session should be able to resume work from this file, PARITY.md, PROGRES
 
 ## 0. Context and assumptions
 
-- **Predecessor.** `birchamp/newspub` held only a README when the rewrite began ("Simple desktop publishing
+- **Predecessor (corrected 2026-10-08).** The existing newpub is the Electron + React + TypeScript app on
+  `birchamp/newspub` branches `master` (spec + plan + scaffold) and `claude/ui-testing-responsiveness-smep9u` (fuller implementation).
+  Its model and UX decisions are surveyed in §12. The original Phase 0 note below described only the `main` branch:
+  `main` held only a README when the rewrite began ("Simple desktop publishing
   app using Pretext as the layout engine"). There was no document model or UX to carry over. The single
   inherited decision is the **Pretext approach to text layout**: measure text segments once, then lay them
   out with cheap arithmetic, never through a DOM. Our layout engine keeps that approach (§5).

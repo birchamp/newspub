@@ -7,8 +7,7 @@ The dashboard parses this file:
 
 ## Open blockers (need human input)
 
-- [B-001] Brief placeholders were left blank: the existing newpub repo/stack, the new repo URL, the target users, and where the dashboard is published. Working assumptions are in ARCHITECTURE.md §0 (this repo; small-org newsletters, bulletins, and booklets; GitHub Pages plus a claude.ai artifact). Confirm or correct them.
-- [B-002] GitHub Pages must be enabled (Settings → Pages → Source: GitHub Actions) before the CI dashboard deploy step can publish.
+- [B-001] Partly answered: the existing source is birchamp/newspub (Electron + React + TypeScript on branches `master` and `claude/ui-testing-responsiveness-smep9u`). Still open: target users (assumed: small-org newsletters, bulletins, and booklets, unless the predecessor's spec says otherwise) and the dashboard location (assumed: GitHub Pages, which already deploys from CI).
 
 ## Log
 
@@ -18,3 +17,8 @@ The dashboard parses this file:
 - Decisions: egui/eframe for UI (AccessKit + egui_kittest give headless UI journeys); our own layout engine instead of parley/cosmic-text, because Publisher needs per-line widths and frame chains; snapshot undo instead of inverse commands; journeys load only bundled OFL fonts so output is deterministic; `newpub-engine` crate added so the app and the runner share one dispatch path.
 - Found by journeys while building: narrow wrap pieces force-broke words (fixed: only full-width lines may break inside a word); letterboxed images smeared edge pixels (fixed: clip to the visible image rect); PDF text extraction inserts spaces between runs (runner text matching is whitespace-tolerant).
 - Risk noted: krilla 0.8 has no PDF/X validator, so EX-03 (PDF/X) needs an extension or post-processing.
+
+### 2026-10-08 18:05 — Predecessor located (lead)
+- User: the existing repo is birchamp/newspub. Beyond the initial-commit `main` it has two branches: `master` (design spec, implementation plan, Electron + React + Vite scaffold, model types) and `claude/ui-testing-responsiveness-smep9u` (a fuller TypeScript app: images, typography, snapping, arrange, thumbnails, shared undo). Phase 0 started from `main` alone and missed these.
+- Decision: survey the predecessor's document model and UX now, adopt its decisions where they don't conflict with Publisher parity, and record each adoption in ARCHITECTURE.md §0.
+- B-002 resolved: GitHub Pages was already enabled; the CI deploy-pages step succeeded.
