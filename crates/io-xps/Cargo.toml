@@ -1,5 +1,5 @@
 [package]
-name = "newpub-io-html"
+name = "newpub-io-xps"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,3 +10,4 @@ newpub-layout.workspace = true
 newpub-render.workspace = true
 thiserror.workspace = true
 zip.workspace = true
+image.workspace = true

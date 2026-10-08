@@ -12,6 +12,7 @@ newpub-io-pdf.workspace = true
 newpub-io-native.workspace = true
 newpub-io-pub.workspace = true
 newpub-io-html.workspace = true
+newpub-io-xps.workspace = true
 newpub-spell.workspace = true
 serde.workspace = true
 serde_json.workspace = true
