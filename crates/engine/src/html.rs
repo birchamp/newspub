@@ -1,12 +1,18 @@
 //! HTML export (EX-04).
-//! Owner: Batch 2 task HTML. Placeholder until that task lands.
 
-#![allow(unused_imports)]
-use crate::{Action, EngineError, Outcome, Query, Session, SessionAction};
-use serde_json::Value;
+use crate::{EngineError, Outcome, Session, SessionAction};
 
 impl Session {
     pub(crate) fn html_action(&mut self, a: &SessionAction) -> Result<Outcome, EngineError> {
-        Err(EngineError::Other(format!("{a:?} is not implemented yet")))
+        match a {
+            SessionAction::ExportHtml { path } => {
+                let dir = self.resolve(path);
+                let layout = self.layout();
+                newpub_io_html::export(&self.doc, &layout, &self.fonts, &dir)
+                    .map_err(|e| EngineError::Other(e.to_string()))?;
+                Ok(Outcome::default())
+            }
+            other => Err(EngineError::Other(format!("{other:?} is not an HTML action"))),
+        }
     }
 }
