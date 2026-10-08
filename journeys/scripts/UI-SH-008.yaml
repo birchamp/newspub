@@ -22,7 +22,7 @@ steps:
   - click_at: [1in, 5in]
   - expect: {query: {q: page_objects, page: 0}, len: 2}
   - expect: {query: {q: document}, path: /pages/0/objects/1, gt: 0, as: c}
-  - expect: {query: {q: object, id: $c}, path: /kind/kind/closed, equals: true}
+  - expect: {query: {q: object, id: $c}, path: /kind/kind/bezier/closed, equals: true}
   # point editing: each point is a handle with an accessible name; dragging one moves it
   - click_at: [2in, 1in]
   - expect: {query: {q: view}, path: /selection, equals: [$p]}
