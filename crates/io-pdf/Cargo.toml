@@ -12,3 +12,4 @@ newpub-layout.workspace = true
 krilla.workspace = true
 lopdf.workspace = true
 thiserror.workspace = true
+serde_json.workspace = true

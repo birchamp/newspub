@@ -84,6 +84,7 @@ fn kcolor(c: &Color) -> (krilla::paint::Paint, f32) {
     let a = c.alpha();
     let u = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
     let p: krilla::paint::Paint = match c {
+        Color::Rgb { r, .. } if separations::gray_mode() => krilla::color::luma::Color::new(*r).into(),
         Color::Rgb { r, g, b, .. } => rgb::Color::new(*r, *g, *b).into(),
         // Scheme colours are resolved before export; an unresolved one prints as its default-scheme RGB.
         Color::Scheme { .. } => {
@@ -156,13 +157,20 @@ fn kgradient(g: &GradientPaint) -> Option<krilla::paint::Paint> {
             let [r, gr, b, a] = c.to_rgba8();
             Stop {
                 offset: NormalizedF32::new(*at as f32).unwrap_or(NormalizedF32::ZERO),
-                color: rgb::Color::new(r, gr, b).into(),
+                color: if separations::gray_mode() {
+                    krilla::color::luma::Color::new(r).into()
+                } else {
+                    rgb::Color::new(r, gr, b).into()
+                },
                 opacity: NormalizedF32::new(a as f32 / 255.0).unwrap_or(NormalizedF32::ONE),
             }
         })
         .collect();
     if stops.len() == 1 {
         let [r, gr, b, _] = g.stops.first()?.1.to_rgba8();
+        if separations::gray_mode() {
+            return Some(krilla::color::luma::Color::new(r).into());
+        }
         return Some(rgb::Color::new(r, gr, b).into());
     }
     Some(if g.radial {
