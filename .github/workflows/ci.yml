@@ -67,8 +67,40 @@ jobs:
         if: steps.journeys.outcome != 'success'
         run: exit 1
 
-  dashboard:
+  conformance:
+    # Independent validators on journey output: veraPDF (PDF/UA-1), epubcheck, libgxps (XPS) and a real print
+    # hand-off through CUPS to a virtual PDF printer.
     needs: journeys
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Linux packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libgtk-3-dev libgxps-utils poppler-utils cups cups-pdf default-jre-headless
+          sudo systemctl start cups || sudo service cups start
+          sudo lpadmin -d PDF || true
+          lpstat -t || true
+      - uses: actions/download-artifact@v4
+        with:
+          name: journey-results-linux
+          path: ci-results/linux
+      - name: build
+        run: cargo build -p newpub-journeys --release
+      - name: conformance checks
+        run: tools/conformance/run.sh ci-results/linux target/conformance
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conformance
+          path: target/conformance
+          if-no-files-found: warn
+
+  dashboard:
+    needs: [journeys, conformance]
     if: always()
     runs-on: ubuntu-latest
     permissions:

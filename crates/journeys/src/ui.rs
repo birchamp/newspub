@@ -165,7 +165,11 @@ pub fn run_ui_journey(script: &Value, steps: &[Value], ctx: &mut Ctx) -> Result<
     session.base_dir = ctx.out.clone();
     let mut app = NewpubApp::new(session);
     app.startup_picker = script.get("startup_template_picker").and_then(|v| v.as_bool()).unwrap_or(false);
-    app.print_spool = Some(ctx.out.join("print-spool"));
+    // Journeys spool print jobs to files; the CI conformance job sets NEWPUB_REAL_PRINT=1 to print through the OS
+    // (a CUPS virtual PDF printer) instead.
+    if std::env::var_os("NEWPUB_REAL_PRINT").is_none() {
+        app.print_spool = Some(ctx.out.join("print-spool"));
+    }
     let mut h = Harness::builder()
         .with_size(egui::Vec2::new(1280.0, 860.0))
         .with_max_steps(64)

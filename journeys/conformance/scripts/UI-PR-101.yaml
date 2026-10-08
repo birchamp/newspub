@@ -1,0 +1,13 @@
+id: UI-PR-101
+title: Real print hand-off — a job reaches the operating system's print queue (CI conformance, CUPS PDF printer)
+covers: [PR-07]
+ui: true
+steps:
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 1in], to: [5in, 2in]}
+  - type: {text: "Printed by newpub"}
+  - key: {key: "Escape"}
+  - key: {key: "P", command: true}
+  - expect_ui: {label: "Print publication"}
+  - click: {label: "Send to Printer"}
+  - expect: {query: {q: view}, path: /print_jobs, equals: 1}
