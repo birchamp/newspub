@@ -443,6 +443,18 @@ pub enum Command {
         at: Option<usize>,
         field: crate::field::Field,
     },
+    /// Insert a mail-merge field (data-source column name) at `at` (default end).
+    InsertMergeField {
+        target: Id,
+        #[serde(default)]
+        at: Option<usize>,
+        field: String,
+    },
+    /// Make a picture frame a mail-merge picture field (None clears it).
+    SetPictureField {
+        id: Id,
+        field: Option<String>,
+    },
     SetSection {
         page: usize,
         #[serde(default = "one_u32")]
@@ -821,7 +833,7 @@ impl Document {
     }
 
     /// Deep-copies an object (and group children / text stories) onto a page.
-    fn duplicate_object(
+    pub(crate) fn duplicate_object(
         &mut self,
         id: Id,
         page: usize,
@@ -1601,6 +1613,8 @@ impl Document {
             | SetTableCells { .. }
             | ApplyTableFormat { .. } => crate::table::apply(self, cmd),
             InsertField { .. }
+            | InsertMergeField { .. }
+            | SetPictureField { .. }
             | SetSection { .. }
             | RemoveSection { .. }
             | SetBaselineGrid { .. }

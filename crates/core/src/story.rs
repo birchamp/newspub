@@ -111,7 +111,12 @@ impl Story {
         let n = text.chars().count();
         let attrs = attrs.unwrap_or_else(|| match (&self.typing_attrs, self.chars.is_empty()) {
             (Some(t), true) => t.clone(),
-            _ => self.span_attrs_at(at.saturating_sub(1)),
+            _ => {
+                // Typing continues the formatting before it, but never extends a field.
+                let mut a = self.span_attrs_at(at.saturating_sub(1));
+                a.field = None;
+                a
+            }
         });
         // Paragraph attrs: a new paragraph inherits the attrs of the one it splits.
         let pi = self.para_index_at(at);

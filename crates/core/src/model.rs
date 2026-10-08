@@ -538,6 +538,9 @@ pub struct Document {
     /// Baseline grid (TY-14).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub baseline_grid: Option<BaselineGrid>,
+    /// Mail-merge data source (MM-01..MM-04): a snapshot of the data plus filter/sort options.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merge: Option<MergeData>,
     pub next_id: u64,
 }
 
@@ -585,6 +588,84 @@ pub struct Bookmark {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MergeData {
+    /// Path of the data file (pictures in it are relative to its folder).
+    pub path: String,
+    pub fields: Vec<String>,
+    pub rows: Vec<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filter: Option<MergeFilter>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sort: Option<MergeSort>,
+    #[serde(default)]
+    pub skip_blank_lines: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FilterOp {
+    Equals,
+    NotEquals,
+    Contains,
+    IsBlank,
+    IsNotBlank,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MergeFilter {
+    pub field: String,
+    pub op: FilterOp,
+    #[serde(default)]
+    pub value: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MergeSort {
+    pub field: String,
+    #[serde(default)]
+    pub descending: bool,
+}
+
+impl MergeData {
+    /// Records after filtering and sorting, as field → value maps.
+    pub fn records(&self) -> Vec<BTreeMap<String, String>> {
+        let col = |name: &str| self.fields.iter().position(|f| f.eq_ignore_ascii_case(name));
+        let mut rows: Vec<&Vec<String>> = self.rows.iter().collect();
+        if let Some(f) = &self.filter
+            && let Some(c) = col(&f.field)
+        {
+            rows.retain(|r| {
+                let v = r.get(c).map(|s| s.as_str()).unwrap_or("");
+                match f.op {
+                    FilterOp::Equals => v.eq_ignore_ascii_case(&f.value),
+                    FilterOp::NotEquals => !v.eq_ignore_ascii_case(&f.value),
+                    FilterOp::Contains => v.to_lowercase().contains(&f.value.to_lowercase()),
+                    FilterOp::IsBlank => v.trim().is_empty(),
+                    FilterOp::IsNotBlank => !v.trim().is_empty(),
+                }
+            });
+        }
+        if let Some(sd) = &self.sort
+            && let Some(c) = col(&sd.field)
+        {
+            rows.sort_by(|a, b| {
+                let (x, y) = (a.get(c).map(|s| s.to_lowercase()), b.get(c).map(|s| s.to_lowercase()));
+                if sd.descending { y.cmp(&x) } else { x.cmp(&y) }
+            });
+        }
+        rows.into_iter()
+            .map(|r| {
+                self.fields
+                    .iter()
+                    .enumerate()
+                    .map(|(i, f)| (f.clone(), r.get(i).cloned().unwrap_or_default()))
+                    .collect()
+            })
+            .collect()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BaselineGrid {
     pub spacing: Length,
     /// First baseline, from the page top.
@@ -625,6 +706,7 @@ impl Document {
             reading_order: BTreeMap::new(),
             sections: vec![],
             baseline_grid: None,
+            merge: None,
             next_id: 1,
         };
         for _ in 0..pages.max(1) {

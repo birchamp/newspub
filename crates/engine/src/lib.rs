@@ -8,6 +8,7 @@ mod fixups;
 mod guides;
 mod html;
 mod layersq;
+mod merge;
 mod pdfq;
 mod pictures;
 mod pubimport;
@@ -46,6 +47,22 @@ pub enum EngineError {
     Other(String),
 }
 
+/// Reads a PNG or JPEG file into a new asset of `d`.
+pub(crate) fn load_picture(d: &mut Document, p: &Path) -> Result<Id, EngineError> {
+    let bytes = std::fs::read(p)?;
+    let reader = image::ImageReader::new(std::io::Cursor::new(&bytes))
+        .with_guessed_format()
+        .map_err(|e| EngineError::Image(e.to_string()))?;
+    let mime = match reader.format() {
+        Some(image::ImageFormat::Png) => "image/png",
+        Some(image::ImageFormat::Jpeg) => "image/jpeg",
+        other => return Err(EngineError::Image(format!("unsupported picture format {other:?}"))),
+    };
+    let (pw, ph) = reader.into_dimensions().map_err(|e| EngineError::Image(e.to_string()))?;
+    let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    Ok(d.add_asset(&name, mime, Arc::from(bytes), pw, ph))
+}
+
 /// Result of running an action.
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct Outcome {
@@ -76,6 +93,10 @@ pub struct Session {
     pub(crate) pub_import: pubimport::State,
     #[allow(dead_code)] // used once FI-03 lands
     pub(crate) autosave: autosave::State,
+    /// Mail-merge preview record (index into the filtered, sorted records).
+    pub(crate) merge_preview: Option<usize>,
+    /// The document as displayed when it differs from `doc` (merge preview); computed with the layout.
+    view: Option<Arc<Document>>,
 }
 
 impl Session {
@@ -96,6 +117,8 @@ impl Session {
             spell: Default::default(),
             pub_import: Default::default(),
             autosave: Default::default(),
+            merge_preview: None,
+            view: None,
         }
     }
 
@@ -128,7 +151,13 @@ impl Session {
     /// Current layout (cached until the document changes).
     pub fn layout(&mut self) -> Arc<DocLayout> {
         if self.layout.is_none() {
-            self.layout = Some(Arc::new(newpub_layout::layout_document(&self.doc, &self.fonts)));
+            self.view = self.preview_doc().map(Arc::new);
+            if self.view.is_some() {
+                // Preview pictures get fresh asset ids each time.
+                self.raster.clear_images();
+            }
+            let doc = self.view.as_deref().unwrap_or(&self.doc);
+            self.layout = Some(Arc::new(newpub_layout::layout_document(doc, &self.fonts)));
         }
         self.layout.clone().expect("layout computed")
     }
@@ -316,6 +345,13 @@ impl Session {
             ExportHtml { .. } => self.html_action(s),
             ImportPub { .. } => self.pub_action(s),
             SetAutosave { .. } | RecoverAutosave { .. } => self.autosave_action(s),
+            AttachDataSource { .. }
+            | SetMergePreview { .. }
+            | SetMergeFilter { .. }
+            | SetMergeSort { .. }
+            | SetMergeOptions { .. }
+            | MergeToPdf { .. }
+            | MergeToPublication {} => self.merge_action(s),
             ExportPng { path, page, dpi } => {
                 let png = self.page_png(*page, *dpi)?;
                 std::fs::write(self.resolve(path), png)?;
@@ -326,7 +362,8 @@ impl Session {
 
     pub fn pdf_bytes(&mut self, options: &PdfOptions) -> Result<Vec<u8>, EngineError> {
         let layout = self.layout();
-        Ok(newpub_io_pdf::export_pdf(&self.doc, &layout, &self.fonts, options)?)
+        let doc = self.view.as_deref().unwrap_or(&self.doc);
+        Ok(newpub_io_pdf::export_pdf(doc, &layout, &self.fonts, options)?)
     }
 
     /// Renders a page to a pixmap at `dpi`.
@@ -335,8 +372,9 @@ impl Session {
             return Err(CoreError::NoSuchPage(page).into());
         }
         let layout = self.layout();
-        let disp = newpub_render::page_display(&self.doc, &layout, page);
-        newpub_render::render_page(&mut self.raster, &self.doc, &self.fonts, &disp, dpi)
+        let doc = self.view.as_deref().unwrap_or(&self.doc);
+        let disp = newpub_render::page_display(doc, &layout, page);
+        newpub_render::render_page(&mut self.raster, doc, &self.fonts, &disp, dpi)
             .ok_or_else(|| EngineError::Other("render failed".into()))
     }
 
@@ -391,19 +429,9 @@ impl Session {
         link: bool,
     ) -> Result<Outcome, EngineError> {
         let p = self.resolve(path);
-        let bytes = std::fs::read(&p)?;
-        let reader = image::ImageReader::new(std::io::Cursor::new(&bytes))
-            .with_guessed_format()
-            .map_err(|e| EngineError::Image(e.to_string()))?;
-        let mime = match reader.format() {
-            Some(image::ImageFormat::Png) => "image/png",
-            Some(image::ImageFormat::Jpeg) => "image/jpeg",
-            other => return Err(EngineError::Image(format!("unsupported picture format {other:?}"))),
-        };
-        let (pw, ph) = reader.into_dimensions().map_err(|e| EngineError::Image(e.to_string()))?;
-        let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
         let mut d = self.doc.clone();
-        let aid = d.add_asset(&name, mime, Arc::from(bytes), pw, ph);
+        let aid = load_picture(&mut d, &p)?;
+        let (pw, ph) = d.assets.get(&aid).map(|a| (a.px_w, a.px_h)).unwrap_or((1, 1));
         if link && let Some(a) = d.assets.get_mut(&aid) {
             a.link = Some(p.to_string_lossy().to_string());
         }
@@ -753,6 +781,7 @@ impl Session {
                        "covered": (r, c) != (*row, *col), "fill": cell.fill})
             }
             TableFormats => json!(newpub_core::table::FORMATS.iter().map(|f| f.0).collect::<Vec<_>>()),
+            DataSource => self.merge_query(q)?,
             PageLabel { page } => {
                 if *page >= self.doc.pages.len() {
                     return Err(CoreError::NoSuchPage(*page).into());

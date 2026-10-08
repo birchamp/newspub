@@ -219,6 +219,44 @@ pub enum SessionAction {
         #[serde(default)]
         whole_word: bool,
     },
+    // ---- Mail merge (lead, engine/src/merge.rs) ----
+    /// Attach a CSV data source (first row = field names). Undoable.
+    AttachDataSource {
+        path: String,
+    },
+    /// Show record `record` (index into the filtered, sorted list) in place of the fields; None shows field names.
+    SetMergePreview {
+        #[serde(default)]
+        record: Option<usize>,
+    },
+    /// Filter the recipient list; with no field the filter is cleared.
+    SetMergeFilter {
+        #[serde(default)]
+        field: Option<String>,
+        #[serde(default)]
+        op: Option<newpub_core::FilterOp>,
+        #[serde(default)]
+        value: Option<String>,
+    },
+    /// Sort the recipient list; with no field the sort is cleared.
+    SetMergeSort {
+        #[serde(default)]
+        field: Option<String>,
+        #[serde(default)]
+        descending: bool,
+    },
+    SetMergeOptions {
+        #[serde(default)]
+        skip_blank_lines: Option<bool>,
+    },
+    /// Export one copy of the publication per record to a single PDF.
+    MergeToPdf {
+        path: String,
+        #[serde(default)]
+        options: Option<PdfOptions>,
+    },
+    /// Replace the publication with one copy of its pages per record, fields replaced by text. Undoable.
+    MergeToPublication {},
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -281,6 +319,13 @@ impl SessionAction {
         "import_pub",
         "set_autosave",
         "recover_autosave",
+        "attach_data_source",
+        "set_merge_preview",
+        "set_merge_filter",
+        "set_merge_sort",
+        "set_merge_options",
+        "merge_to_pdf",
+        "merge_to_publication",
     ];
 }
 
@@ -416,6 +461,8 @@ pub enum Query {
     PageLabel {
         page: usize,
     },
+    /// `{fields, records (after filter), path}` or null when no data source is attached.
+    DataSource,
     /// Baselines of a frame's lines in page coordinates.
     PageBaselines {
         frame: Id,

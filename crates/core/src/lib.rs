@@ -8,6 +8,7 @@ pub mod guides;
 pub mod history;
 pub mod layers;
 pub mod links;
+pub mod merge;
 pub mod model;
 pub mod story;
 pub mod table;

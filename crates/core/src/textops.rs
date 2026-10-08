@@ -19,6 +19,16 @@ pub(crate) fn apply(doc: &mut Document, cmd: &Command) -> Result<Applied, CoreEr
             st.insert(at, &FIELD_CHAR.to_string(), Some(attrs))?;
             Ok(Applied::default())
         }
+        InsertMergeField { target, at, field } => {
+            apply(doc, &InsertField { target: *target, at: *at, field: Field::Merge(field.clone()) })
+        }
+        SetPictureField { id, field } => {
+            match &mut doc.object_mut(*id)?.kind {
+                ObjectKind::Image(im) => im.merge_field = field.clone(),
+                _ => return Err(CoreError::WrongKind(*id, "picture")),
+            }
+            Ok(Applied::default())
+        }
         SetSection { page, start_at, format } => {
             let pid = doc.pages.get(*page).ok_or(CoreError::NoSuchPage(*page))?.id;
             doc.sections.retain(|s| s.page != pid);
