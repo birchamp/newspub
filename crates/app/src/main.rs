@@ -13,5 +13,9 @@ fn main() -> eframe::Result {
         viewport: egui::ViewportBuilder::default().with_title("newpub").with_inner_size([1280.0, 860.0]),
         ..Default::default()
     };
-    eframe::run_native("newpub", options, Box::new(|_cc| Ok(Box::new(NewpubApp::new(session)))))
+    eframe::run_native(
+        "newpub",
+        options,
+        Box::new(|_cc| Ok(Box::new(NewpubApp::new(session).with_persistent_recent()))),
+    )
 }
