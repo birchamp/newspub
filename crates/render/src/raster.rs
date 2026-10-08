@@ -221,6 +221,7 @@ impl Rasterizer {
                         Self::stroke(pm, &p, s, t);
                     }
                 }
+                Item::Tag(_) => {}
                 Item::Glyphs { run, transform } => {
                     let t = ts(&base.compose(*transform));
                     self.draw_run(pm, fonts, run, t);

@@ -10,7 +10,7 @@ steps:
   # choose the text-box tool with the keyboard, then insert a frame from the focused canvas with Enter
   - focus: {label: "Text Box"}
   - key: {key: "Enter"}
-  - expect: {query: {q: view}, path: /tool, equals: "Text"}
+  - expect: {query: {q: view}, path: /tool, equals: "TextBox"}
   - focus: {label: "Page canvas"}
   - key: {key: "Enter"}
   - expect: {query: {q: view}, path: /selection, len: 1}

@@ -22,7 +22,8 @@ pub fn finish(bytes: Vec<u8>, doc: &Document, opts: &PdfOptions) -> Result<Vec<u
     match opts.standard {
         None => Ok(bytes),
         Some(PdfStandard::PdfX4) => pdf_x4(bytes, doc),
-        Some(s @ PdfStandard::PdfUa1) => Err(PdfError::Unsupported(format!("{s:?} output is not implemented yet"))),
+        // Tagging, metadata and validation happen during export (tagging.rs, krilla's UA-1 validator).
+        Some(PdfStandard::PdfUa1) => Ok(bytes),
     }
 }
 

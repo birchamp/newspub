@@ -9,13 +9,14 @@ use krilla::paint::{Fill, FillRule, LineCap as KLineCap, LineJoin as KLineJoin, 
 use krilla::text::{Font, GlyphId, KrillaGlyph};
 use newpub_core::{Affine, Color, Document, ImageAdjust};
 use newpub_layout::{DocLayout, FaceId, FontStore};
-use newpub_render::{GradientPaint, Item, PageDisplay, PathEl, StrokeStyle, adjust_rgba, page_display};
+use newpub_render::{GradientPaint, Item, PageDisplay, PathEl, StrokeStyle, TagMark, adjust_rgba, page_display};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub mod impose;
 pub mod links;
 pub mod standards;
+mod tagging;
 
 #[derive(Debug, thiserror::Error)]
 pub enum PdfError {
@@ -228,114 +229,134 @@ impl Ctx<'_> {
             .clone()
     }
 
-    fn draw(&mut self, s: &mut krilla::surface::Surface, page: &PageDisplay) {
+    /// Draws the display list. With a tagger, structure markers open marked content and everything else is
+    /// drawn as an artifact (PDF/UA).
+    fn draw(&mut self, s: &mut krilla::surface::Surface, page: &PageDisplay, mut tags: Option<&mut tagging::Tagger>) {
         for item in &page.items {
-            match item {
-                Item::Path { path, fill, stroke, transform } => {
-                    let Some(p) = kpath(path) else { continue };
-                    s.push_transform(&kt(transform));
-                    match fill {
-                        Some(f) => {
-                            let (paint, a) = kcolor(f);
-                            s.set_fill(Some(Fill {
-                                paint,
-                                opacity: NormalizedF32::new(a).unwrap_or(NormalizedF32::ONE),
-                                rule: FillRule::NonZero,
-                            }));
-                        }
-                        None => s.set_fill(None),
-                    }
-                    s.set_stroke(stroke.as_ref().map(kstroke));
-                    s.draw_path(&p);
-                    s.pop();
+            match (item, tags.as_deref_mut()) {
+                (Item::Tag(TagMark::Begin { owner, path }), Some(t)) => t.begin(s, *owner, path),
+                (Item::Tag(TagMark::End), Some(t)) => t.end(s),
+                (Item::Tag(_), None) => {}
+                (_, Some(t)) if !t.is_open() => {
+                    tagging::Tagger::start_artifact(s);
+                    self.draw_item(s, item);
+                    s.end_tagged();
                 }
-                Item::GradPath { path, paint, transform } => {
-                    let (Some(p), Some(kp)) = (kpath(path), kgradient(paint)) else { continue };
-                    s.push_transform(&kt(transform));
-                    s.set_fill(Some(Fill { paint: kp, opacity: NormalizedF32::ONE, rule: FillRule::NonZero }));
-                    s.set_stroke(None);
-                    s.draw_path(&p);
-                    s.pop();
-                }
-                Item::Image { asset, local, clip, mask, opacity, adjust, transform } => {
-                    let Some(img) = self.image(*asset, adjust) else { continue };
-                    let (pw, ph) = img.size();
-                    let Some(size) = Size::from_wh(pw as f32, ph as f32) else { continue };
-                    let Some(cr) = KRect::from_xywh(clip.x as f32, clip.y as f32, clip.w as f32, clip.h as f32) else {
-                        continue;
-                    };
-                    let mut pb = PathBuilder::new();
-                    pb.push_rect(cr);
-                    let Some(cp) = pb.finish() else { continue };
-                    let mp = match mask {
-                        Some(m) => match kpath(m) {
-                            Some(mp) => Some(mp),
-                            None => continue,
-                        },
-                        None => None,
-                    };
-                    let faded = *opacity < 0.999;
-                    s.push_transform(&kt(transform));
-                    s.push_clip_path(&cp, &FillRule::NonZero);
-                    if let Some(mp) = &mp {
-                        s.push_clip_path(mp, &FillRule::NonZero);
-                    }
-                    if faded {
-                        s.push_opacity(NormalizedF32::new(*opacity as f32).unwrap_or(NormalizedF32::ONE));
-                    }
-                    s.push_transform(&kt(local));
-                    s.draw_image(img, size);
-                    s.pop();
-                    if faded {
-                        s.pop();
-                    }
-                    if mp.is_some() {
-                        s.pop();
-                    }
-                    s.pop();
-                    s.pop();
-                }
-                Item::Glyphs { run, transform } => {
-                    let Some(font) = self.font(run.face) else { continue };
-                    let Some(first) = run.glyphs.first() else { continue };
-                    let (x0, y0) = (first.x, first.y);
-                    let size = run.size as f32;
-                    let xs = run.x_scale.max(0.01);
-                    let glyphs: Vec<KrillaGlyph> = run
-                        .glyphs
-                        .iter()
-                        .enumerate()
-                        .map(|(i, g)| {
-                            let next_x = run.glyphs.get(i + 1).map(|n| n.x).unwrap_or(g.x + g.advance);
-                            let adv = ((next_x - g.x) / xs / run.size) as f32;
-                            KrillaGlyph::new(
-                                GlyphId::new(g.id as u32),
-                                adv,
-                                0.0,
-                                ((g.y - y0) / run.size) as f32,
-                                0.0,
-                                g.text_range.clone(),
-                                None,
-                            )
-                        })
-                        .collect();
-                    let skew = if run.synthetic_italic { -0.21 } else { 0.0 };
-                    let local = Affine::translate(x0, y0).compose(Affine([xs, 0.0, skew, 1.0, 0.0, 0.0]));
-                    s.push_transform(&kt(&transform.compose(local)));
-                    let (paint, a) = kcolor(&run.color);
-                    let opacity = NormalizedF32::new(a).unwrap_or(NormalizedF32::ONE);
-                    s.set_fill(Some(Fill { paint: paint.clone(), opacity, rule: FillRule::NonZero }));
-                    s.set_stroke(run.synthetic_bold.then(|| Stroke {
-                        paint,
-                        width: (run.size * 0.03) as f32,
-                        opacity,
-                        ..Default::default()
-                    }));
-                    s.draw_glyphs(Point::from_xy(0.0, 0.0), &glyphs, font, &run.text, size, false);
-                    s.set_stroke(None);
-                    s.pop();
-                }
+                _ => self.draw_item(s, item),
             }
+        }
+        if let Some(t) = tags {
+            t.end(s);
+        }
+    }
+
+    fn draw_item(&mut self, s: &mut krilla::surface::Surface, item: &Item) {
+        match item {
+            Item::Path { path, fill, stroke, transform } => {
+                let Some(p) = kpath(path) else { return };
+                s.push_transform(&kt(transform));
+                match fill {
+                    Some(f) => {
+                        let (paint, a) = kcolor(f);
+                        s.set_fill(Some(Fill {
+                            paint,
+                            opacity: NormalizedF32::new(a).unwrap_or(NormalizedF32::ONE),
+                            rule: FillRule::NonZero,
+                        }));
+                    }
+                    None => s.set_fill(None),
+                }
+                s.set_stroke(stroke.as_ref().map(kstroke));
+                s.draw_path(&p);
+                s.pop();
+            }
+            Item::GradPath { path, paint, transform } => {
+                let (Some(p), Some(kp)) = (kpath(path), kgradient(paint)) else { return };
+                s.push_transform(&kt(transform));
+                s.set_fill(Some(Fill { paint: kp, opacity: NormalizedF32::ONE, rule: FillRule::NonZero }));
+                s.set_stroke(None);
+                s.draw_path(&p);
+                s.pop();
+            }
+            Item::Image { asset, local, clip, mask, opacity, adjust, transform } => {
+                let Some(img) = self.image(*asset, adjust) else { return };
+                let (pw, ph) = img.size();
+                let Some(size) = Size::from_wh(pw as f32, ph as f32) else { return };
+                let Some(cr) = KRect::from_xywh(clip.x as f32, clip.y as f32, clip.w as f32, clip.h as f32) else {
+                    return;
+                };
+                let mut pb = PathBuilder::new();
+                pb.push_rect(cr);
+                let Some(cp) = pb.finish() else { return };
+                let mp = match mask {
+                    Some(m) => match kpath(m) {
+                        Some(mp) => Some(mp),
+                        None => return,
+                    },
+                    None => None,
+                };
+                let faded = *opacity < 0.999;
+                s.push_transform(&kt(transform));
+                s.push_clip_path(&cp, &FillRule::NonZero);
+                if let Some(mp) = &mp {
+                    s.push_clip_path(mp, &FillRule::NonZero);
+                }
+                if faded {
+                    s.push_opacity(NormalizedF32::new(*opacity as f32).unwrap_or(NormalizedF32::ONE));
+                }
+                s.push_transform(&kt(local));
+                s.draw_image(img, size);
+                s.pop();
+                if faded {
+                    s.pop();
+                }
+                if mp.is_some() {
+                    s.pop();
+                }
+                s.pop();
+                s.pop();
+            }
+            Item::Glyphs { run, transform } => {
+                let Some(font) = self.font(run.face) else { return };
+                let Some(first) = run.glyphs.first() else { return };
+                let (x0, y0) = (first.x, first.y);
+                let size = run.size as f32;
+                let xs = run.x_scale.max(0.01);
+                let glyphs: Vec<KrillaGlyph> = run
+                    .glyphs
+                    .iter()
+                    .enumerate()
+                    .map(|(i, g)| {
+                        let next_x = run.glyphs.get(i + 1).map(|n| n.x).unwrap_or(g.x + g.advance);
+                        let adv = ((next_x - g.x) / xs / run.size) as f32;
+                        KrillaGlyph::new(
+                            GlyphId::new(g.id as u32),
+                            adv,
+                            0.0,
+                            ((g.y - y0) / run.size) as f32,
+                            0.0,
+                            g.text_range.clone(),
+                            None,
+                        )
+                    })
+                    .collect();
+                let skew = if run.synthetic_italic { -0.21 } else { 0.0 };
+                let local = Affine::translate(x0, y0).compose(Affine([xs, 0.0, skew, 1.0, 0.0, 0.0]));
+                s.push_transform(&kt(&transform.compose(local)));
+                let (paint, a) = kcolor(&run.color);
+                let opacity = NormalizedF32::new(a).unwrap_or(NormalizedF32::ONE);
+                s.set_fill(Some(Fill { paint: paint.clone(), opacity, rule: FillRule::NonZero }));
+                s.set_stroke(run.synthetic_bold.then(|| Stroke {
+                    paint,
+                    width: (run.size * 0.03) as f32,
+                    opacity,
+                    ..Default::default()
+                }));
+                s.draw_glyphs(Point::from_xy(0.0, 0.0), &glyphs, font, &run.text, size, false);
+                s.set_stroke(None);
+                s.pop();
+            }
+            Item::Tag(_) => {}
         }
     }
 }
@@ -387,7 +408,17 @@ pub fn export_pdf(
     let bleed = if opts.bleed { doc.setup.bleed.0 } else { 0.0 };
     let marks = if opts.crop_marks { MARK_GAP + MARK_LEN + 2.0 } else { 0.0 };
     let pad = bleed + marks;
-    let mut kd = KDoc::new();
+    let ua = opts.standard == Some(PdfStandard::PdfUa1);
+    let mut kd = if ua {
+        let configuration = krilla::configure::ConfigurationBuilder::new()
+            .with_accessibility_validator(krilla::configure::Accessibility::UA1)
+            .finish()
+            .map_err(|e| PdfError::Krilla(format!("{e:?}")))?;
+        KDoc::new_with(krilla::SerializeSettings { configuration, enable_tagging: true, ..Default::default() })
+    } else {
+        KDoc::new()
+    };
+    let mut tagger: Option<tagging::Tagger> = ua.then(Default::default);
     let mut ctx = Ctx { doc, fonts, kfonts: HashMap::new(), images: HashMap::new() };
     let mut meta = krilla::metadata::Metadata::new().creator("newpub".to_string());
     if !doc.meta.title.is_empty() {
@@ -395,6 +426,9 @@ pub fn export_pdf(
     }
     if !doc.meta.author.is_empty() {
         meta = meta.authors(vec![doc.meta.author.clone()]);
+    }
+    if !doc.meta.lang.is_empty() {
+        meta = meta.language(doc.meta.lang.clone());
     }
     kd.set_metadata(meta);
 
@@ -425,23 +459,44 @@ pub fn export_pdf(
             if let Some(cp) = pb.finish() {
                 s.push_clip_path(&cp, &FillRule::NonZero);
                 s.push_transform(&Transform::from_translate(ox as f32, oy as f32));
-                ctx.draw(&mut s, &disp);
+                if let Some(t) = tagger.as_mut() {
+                    t.set_page(doc, pi);
+                }
+                ctx.draw(&mut s, &disp, tagger.as_mut());
                 s.pop();
                 s.pop();
             }
         }
         if opts.crop_marks {
+            if ua {
+                tagging::Tagger::start_artifact(&mut s);
+            }
             crop_marks(&mut s, pad, pad, sw, sh, bleed + MARK_GAP);
+            if ua {
+                s.end_tagged();
+            }
         }
         s.finish();
         for slot in &sheet.slots {
             if let Some(pi) = slot.page {
-                links::annotate_page(&mut page, doc, layout, pi, (pad + slot.x, pad + slot.y));
+                if let Some(t) = tagger.as_mut() {
+                    t.set_page(doc, pi);
+                }
+                links::annotate_page(&mut page, doc, layout, pi, (pad + slot.x, pad + slot.y), tagger.as_mut());
             }
         }
         page.finish();
     }
     links::outline(&mut kd, doc, &sheets);
+    if let Some(t) = &tagger
+        && doc.bookmarks.is_empty()
+    {
+        links::heading_outline(&mut kd, &t.headings, doc.pages.len());
+    }
+    if let Some(t) = tagger {
+        let lang = (!doc.meta.lang.is_empty()).then(|| doc.meta.lang.clone());
+        kd.set_tag_tree(t.tree(doc, lang));
+    }
     let bytes = kd.finish().map_err(|e| PdfError::Krilla(format!("{e:?}")))?;
     standards::finish(bytes, doc, opts)
 }

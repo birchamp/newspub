@@ -76,6 +76,115 @@ pub enum Item {
     GradPath { path: Vec<PathEl>, paint: GradientPaint, transform: Affine },
     /// Glyphs positioned in frame-local coordinates, mapped to the page by `transform`.
     Glyphs { run: GlyphRun, transform: Affine },
+    /// Structure marker for tagged PDF (AX-03); renderers that do not tag ignore it.
+    Tag(TagMark),
+}
+
+/// Start or end of content that belongs to a structure element. Content outside any mark is an artifact.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TagMark {
+    /// `owner` is the top-level page object the content comes from (for reading order); `path` lists the
+    /// structure elements from the outermost to the one the content belongs to.
+    Begin {
+        owner: Id,
+        path: Vec<(TagKey, Role)>,
+    },
+    End,
+}
+
+/// Identity of a structure element, so content drawn in pieces (lines, frames) joins one element.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TagKey {
+    Object(Id),
+    /// Paragraph `n` of a story.
+    Para(Id, usize),
+    Row(Id, usize),
+    Cell(Id, usize, usize),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Role {
+    /// Level 1–6 and the heading's text (PDF/UA wants a title on headings).
+    Heading(u16, String),
+    P,
+    Figure(Option<String>),
+    Table,
+    Row,
+    Cell,
+    /// A link annotation (added by the PDF exporter).
+    Link,
+}
+
+/// The top-level object containing `id` (itself if it has no group parent).
+fn top_owner(doc: &Document, id: Id) -> Id {
+    let mut cur = id;
+    for _ in 0..64 {
+        match doc.objects.get(&cur).and_then(|o| o.parent) {
+            Some(p) => cur = p,
+            None => break,
+        }
+    }
+    cur
+}
+
+/// Heading level from a paragraph style name ("Title", "Heading 1".."Heading 6").
+fn para_role(doc: &Document, story: Id, para: usize) -> Role {
+    let name = doc
+        .stories
+        .get(&story)
+        .and_then(|st| st.paras.get(para))
+        .and_then(|p| p.style)
+        .and_then(|sid| doc.styles.para.get(&sid))
+        .map(|s| s.name.trim().to_ascii_lowercase())
+        .unwrap_or_default();
+    let level = if name == "title" {
+        Some(1)
+    } else {
+        name.strip_prefix("heading").map(str::trim).and_then(|n| n.parse::<u16>().ok()).filter(|n| (1..=6).contains(n))
+    };
+    match level {
+        Some(n) => {
+            let text = doc
+                .stories
+                .get(&story)
+                .and_then(|st| st.para_ranges().get(para).map(|r| st.slice(r.clone()).trim().to_string()))
+                .unwrap_or_default();
+            Role::Heading(n, text.chars().filter(|c| !c.is_control() && *c != '\u{FFFC}').take(200).collect())
+        }
+        None => Role::P,
+    }
+}
+
+/// Pushes a frame's glyph runs, each line marked as part of its paragraph's structure element
+/// (nested inside `outer`).
+fn push_lines(
+    doc: &Document,
+    owner: Id,
+    story: Id,
+    fl: &newpub_layout::FrameLayout,
+    outer: &[(TagKey, Role)],
+    t: Affine,
+    items: &mut Vec<Item>,
+) {
+    for line in &fl.lines {
+        let runs: Vec<&GlyphRun> = line.runs.iter().filter(|r| !r.glyphs.is_empty()).collect();
+        if runs.is_empty() {
+            continue;
+        }
+        // Lines that are not part of the story (continued notices) are artifacts.
+        let tagged = line.para != usize::MAX;
+        if tagged {
+            let mut path = outer.to_vec();
+            path.push((TagKey::Para(story, line.para), para_role(doc, story, line.para)));
+            items.push(Item::Tag(TagMark::Begin { owner, path }));
+        }
+        for run in runs {
+            items.push(Item::Glyphs { run: run.clone(), transform: t });
+        }
+        if tagged {
+            items.push(Item::Tag(TagMark::End));
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -433,7 +542,52 @@ fn visible(doc: &Document, o: &Object) -> bool {
     }
 }
 
+/// Pushes an object's items; pictures and described shapes become Figure structure elements.
 fn push_object(
+    doc: &Document,
+    layout: &DocLayout,
+    page: usize,
+    id: Id,
+    parent: Affine,
+    screen: bool,
+    items: &mut Vec<Item>,
+) {
+    let figure = doc.objects.get(&id).filter(|o| !o.decorative).and_then(|o| match &o.kind {
+        ObjectKind::Image(im) if im.asset.is_some() => Some(o.alt_text.clone()),
+        ObjectKind::Shape(_) if o.alt_text.as_deref().is_some_and(|a| !a.trim().is_empty()) => Some(o.alt_text.clone()),
+        _ => None,
+    });
+    let start = items.len();
+    push_object_inner(doc, layout, page, id, parent, screen, items);
+    if let Some(alt) = figure
+        && items.len() > start
+    {
+        // A described shape's own text stays its own paragraphs: only the drawing is the figure.
+        let owner = top_owner(doc, id);
+        let mut out: Vec<Item> =
+            vec![Item::Tag(TagMark::Begin { owner, path: vec![(TagKey::Object(id), Role::Figure(alt.clone()))] })];
+        for it in items.drain(start..) {
+            match it {
+                Item::Tag(TagMark::Begin { owner, path }) => {
+                    out.push(Item::Tag(TagMark::End));
+                    out.push(Item::Tag(TagMark::Begin { owner, path }));
+                }
+                Item::Tag(TagMark::End) => {
+                    out.push(Item::Tag(TagMark::End));
+                    out.push(Item::Tag(TagMark::Begin {
+                        owner,
+                        path: vec![(TagKey::Object(id), Role::Figure(alt.clone()))],
+                    }));
+                }
+                other => out.push(other),
+            }
+        }
+        out.push(Item::Tag(TagMark::End));
+        items.extend(out);
+    }
+}
+
+fn push_object_inner(
     doc: &Document,
     layout: &DocLayout,
     page: usize,
@@ -499,16 +653,10 @@ fn push_object(
                     });
                 }
             }
-            if s.story.is_some()
+            if let Some(sid) = s.story
                 && let Some(fl) = layout.frames.get(&id)
             {
-                for line in &fl.lines {
-                    for run in &line.runs {
-                        if !run.glyphs.is_empty() {
-                            items.push(Item::Glyphs { run: run.clone(), transform: t });
-                        }
-                    }
-                }
+                push_lines(doc, top_owner(doc, id), sid, fl, &[], t, items);
             }
         }
         ObjectKind::Text(tf) => {
@@ -532,13 +680,7 @@ fn push_object(
                         transform: t,
                     });
                 }
-                for line in &fl.lines {
-                    for run in &line.runs {
-                        if !run.glyphs.is_empty() {
-                            items.push(Item::Glyphs { run: run.clone(), transform: t });
-                        }
-                    }
-                }
+                push_lines(doc, top_owner(doc, id), tf.story, fl, &[], t, items);
             }
         }
         ObjectKind::Image(im) => {
@@ -624,13 +766,12 @@ fn push_object(
                         });
                     }
                     if let Some(fl) = layout.frames.get(&cell.story) {
-                        for line in &fl.lines {
-                            for run in &line.runs {
-                                if !run.glyphs.is_empty() {
-                                    items.push(Item::Glyphs { run: run.clone(), transform: t });
-                                }
-                            }
-                        }
+                        let outer = [
+                            (TagKey::Object(id), Role::Table),
+                            (TagKey::Row(id, r), Role::Row),
+                            (TagKey::Cell(id, r, c), Role::Cell),
+                        ];
+                        push_lines(doc, top_owner(doc, id), cell.story, fl, &outer, t, items);
                         for d in &fl.decorations {
                             items.push(Item::Path {
                                 path: rect_path(d.x0, d.y - d.thickness / 2.0, d.x1 - d.x0, d.thickness),

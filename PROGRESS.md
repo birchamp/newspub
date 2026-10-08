@@ -72,3 +72,15 @@ The dashboard parses this file:
 - Journey corrections (lead's arithmetic): J-TF-010 deletes 112 chars, not 113; J-IM-006 probe as above.
 - Disk: the session disk filled up (12 GB target plus agent worktrees) and caused a rustc ICE. Freed by dropping target/debug; agents now share one target dir that the lead clears after each batch.
 - Local: 93/97. Remaining P0–P2: GD-04/UI-06 (rulers, zoom, spread view: UI-GD-001 to be written), PR-07 (print: UI-PR-001), AX-04 (keyboard/AccessKit: UI-AX-001), AX-03 (tagged PDF), BB-03/04 (building blocks, schemes), UI-08 (template picker).
+
+### 2026-10-08 21:50 — Lead: BB-04 schemes, AX-03 tagged PDF, Batch 3 dispatched
+- BB-04, done by the lead because it touches core colour and font resolution:
+  - `Color::Scheme` slots; 7 original colour schemes and 6 font schemes on bundled fonts;
+  - `resolve_char` resolves "+major"/"+minor" and scheme text colours; the engine's display document resolves object, page and table scheme colours, used for render, PDF, HTML and merge.
+- AX-03 tagged PDF / PDF/UA-1:
+  - Structure markers are added to the shared display list: P, or H1–H6 from "Heading N"/"Title" paragraph styles, with the heading text as title; Figure with alt text for pictures and described shapes; Table/TR/TD for cells.
+  - The PDF exporter builds krilla's tag tree in each page's reading order. Undescribed, decorative, master-page and crop-mark content is drawn as artifacts. Link annotations are tagged with alt text.
+  - krilla's UA-1 validator runs on export. When there are no bookmarks, the outline comes from the headings, or from the pages if there are no headings.
+- Batch 3 dispatched (all Sonnet, base 4a2fcc8): BLOCKS (BB-03, on the new core `Fragment` API), PICKPRINT (UI-08, PR-07), VIEWAX (GD-04, UI-06, AX-04).
+- Journey fix (lead): UI-AX-001 tool name is "TextBox" (the app's `Tool` debug name), not "Text".
+- Local: 95/100.
