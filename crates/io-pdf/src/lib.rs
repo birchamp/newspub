@@ -7,6 +7,7 @@ use krilla::num::NormalizedF32;
 use krilla::page::PageSettings;
 use krilla::paint::{Fill, FillRule, LineCap as KLineCap, LineJoin as KLineJoin, Stroke, StrokeDash};
 use krilla::text::{Font, GlyphId, KrillaGlyph};
+use krilla_svg::SurfaceExt as _;
 use newpub_core::{Affine, Color, Document, ImageAdjust};
 use newpub_layout::{DocLayout, FaceId, FontStore};
 use newpub_render::{GradientPaint, Item, PageDisplay, PathEl, StrokeStyle, TagMark, adjust_rgba, page_display};
@@ -199,6 +200,7 @@ struct Ctx<'a> {
     fonts: &'a FontStore,
     kfonts: HashMap<FaceId, Option<Font>>,
     images: HashMap<(newpub_core::Id, String), Option<krilla::image::Image>>,
+    svgs: HashMap<newpub_core::Id, Option<std::sync::Arc<usvg::Tree>>>,
 }
 
 impl Ctx<'_> {
@@ -209,6 +211,18 @@ impl Ctx<'_> {
             .or_insert_with(|| {
                 let f = fonts.face(id);
                 Font::new(krilla::Data::from(f.data.clone()), f.index)
+            })
+            .clone()
+    }
+
+    /// The parsed SVG tree for an SVG asset (None for raster assets). Cached.
+    fn svg(&mut self, id: newpub_core::Id) -> Option<std::sync::Arc<usvg::Tree>> {
+        let doc = self.doc;
+        self.svgs
+            .entry(id)
+            .or_insert_with(|| {
+                let a = doc.assets.get(&id).filter(|a| a.mime == "image/svg+xml")?;
+                newpub_render::raster::svg_tree(&a.bytes).map(std::sync::Arc::new)
             })
             .clone()
     }
@@ -285,9 +299,21 @@ impl Ctx<'_> {
                 s.pop();
             }
             Item::Image { asset, local, clip, mask, opacity, adjust, transform } => {
-                let Some(img) = self.image(*asset, adjust) else { return };
-                let (pw, ph) = img.size();
-                let Some(size) = Size::from_wh(pw as f32, ph as f32) else { return };
+                let svg = self.svg(*asset).filter(|_| adjust.is_identity());
+                let img = if svg.is_some() { None } else { self.image(*asset, adjust) };
+                // Size in asset px space (SVG trees and re-rasterised SVGs both map onto the asset's px size).
+                let (pw, ph) = match (&svg, &img, self.doc.assets.get(asset)) {
+                    (Some(t), _, _) => (t.size().width(), t.size().height()),
+                    (None, Some(_), Some(a)) if a.mime == "image/svg+xml" => {
+                        (a.px_w.max(1) as f32, a.px_h.max(1) as f32)
+                    }
+                    (None, Some(i), _) => {
+                        let (w, h) = i.size();
+                        (w as f32, h as f32)
+                    }
+                    _ => return,
+                };
+                let Some(size) = Size::from_wh(pw, ph) else { return };
                 let Some(cr) = KRect::from_xywh(clip.x as f32, clip.y as f32, clip.w as f32, clip.h as f32) else {
                     return;
                 };
@@ -311,7 +337,13 @@ impl Ctx<'_> {
                     s.push_opacity(NormalizedF32::new(*opacity as f32).unwrap_or(NormalizedF32::ONE));
                 }
                 s.push_transform(&kt(local));
-                s.draw_image(img, size);
+                match (&svg, img) {
+                    (Some(tree), _) => {
+                        let _ = s.draw_svg(tree, size, krilla_svg::SvgSettings::default());
+                    }
+                    (None, Some(img)) => s.draw_image(img, size),
+                    _ => {}
+                }
                 s.pop();
                 if faded {
                     s.pop();
@@ -425,7 +457,7 @@ pub fn export_pdf(
         KDoc::new()
     };
     let mut tagger: Option<tagging::Tagger> = ua.then(Default::default);
-    let mut ctx = Ctx { doc, fonts, kfonts: HashMap::new(), images: HashMap::new() };
+    let mut ctx = Ctx { doc, fonts, kfonts: HashMap::new(), images: HashMap::new(), svgs: HashMap::new() };
     let mut meta = krilla::metadata::Metadata::new().creator("newpub".to_string());
     if !doc.meta.title.is_empty() {
         meta = meta.title(doc.meta.title.clone());

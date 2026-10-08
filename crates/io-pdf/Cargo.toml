@@ -12,3 +12,5 @@ newpub-layout.workspace = true
 krilla.workspace = true
 lopdf.workspace = true
 thiserror.workspace = true
+usvg.workspace = true
+krilla-svg.workspace = true

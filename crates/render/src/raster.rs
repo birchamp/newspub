@@ -62,9 +62,14 @@ pub struct Rasterizer {
 /// Decodes image bytes and applies `adjust` (greyscale, brightness, contrast, recolour, in that order).
 /// Returns width, height and straight (non-premultiplied) RGBA bytes.
 pub fn adjust_rgba(bytes: &[u8], adjust: &ImageAdjust) -> Option<(u32, u32, Vec<u8>)> {
-    let img = image::load_from_memory(bytes).ok()?.to_rgba8();
-    let (w, h) = img.dimensions();
-    let mut data = img.into_raw();
+    let (w, h, mut data) = if is_svg(bytes) {
+        let (w, h, d) = rasterise_svg(bytes)?;
+        (w, h, d)
+    } else {
+        let img = image::load_from_memory(bytes).ok()?.to_rgba8();
+        let (w, h) = img.dimensions();
+        (w, h, img.into_raw())
+    };
     if adjust.is_identity() {
         return Some((w, h, data));
     }
@@ -91,6 +96,52 @@ pub fn adjust_rgba(bytes: &[u8], adjust: &ImageAdjust) -> Option<(u32, u32, Vec<
         }
         for (d, v) in px[..3].iter_mut().zip(c) {
             *d = v.round().clamp(0.0, 255.0) as u8;
+        }
+    }
+    Some((w, h, data))
+}
+
+/// Scale at which SVG pictures are rasterised, relative to their CSS-px size.
+pub const SVG_RASTER_SCALE: f32 = 4.0;
+
+/// True for SVG data (an `<svg` element start within the first KB; the engine already vetted the format).
+pub fn is_svg(bytes: &[u8]) -> bool {
+    let head = String::from_utf8_lossy(&bytes[..bytes.len().min(1024)]);
+    head.contains("<svg")
+}
+
+/// Parses SVG data with the bundled fonts only (no system fonts).
+pub fn svg_tree(bytes: &[u8]) -> Option<usvg::Tree> {
+    static FONTS: std::sync::OnceLock<std::sync::Arc<usvg::fontdb::Database>> = std::sync::OnceLock::new();
+    let db = FONTS.get_or_init(|| {
+        let mut db = usvg::fontdb::Database::new();
+        for (_, data) in newpub_layout::fonts::BUNDLED {
+            db.load_font_data(data.to_vec());
+        }
+        db.set_serif_family("Liberation Serif");
+        db.set_sans_serif_family("Liberation Sans");
+        db.set_monospace_family("DejaVu Sans");
+        std::sync::Arc::new(db)
+    });
+    let opt = usvg::Options { fontdb: db.clone(), font_family: "Liberation Sans".into(), ..Default::default() };
+    usvg::Tree::from_data(bytes, &opt).ok()
+}
+
+/// Rasterises SVG data at [`SVG_RASTER_SCALE`] times its px size. Returns straight RGBA.
+fn rasterise_svg(bytes: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
+    let tree = svg_tree(bytes)?;
+    let w = ((tree.size().width() * SVG_RASTER_SCALE).ceil() as u32).clamp(1, 8192);
+    let h = ((tree.size().height() * SVG_RASTER_SCALE).ceil() as u32).clamp(1, 8192);
+    let mut pm = Pixmap::new(w, h)?;
+    let t = Transform::from_scale(w as f32 / tree.size().width(), h as f32 / tree.size().height());
+    resvg::render(&tree, t, &mut pm.as_mut());
+    let mut data = pm.take();
+    for px in data.chunks_exact_mut(4) {
+        let a = px[3] as u32;
+        if a > 0 && a < 255 {
+            for c in &mut px[..3] {
+                *c = ((*c as u32 * 255 + a / 2) / a).min(255) as u8;
+            }
         }
     }
     Some((w, h, data))
@@ -237,6 +288,10 @@ impl Rasterizer {
                         .entry((*asset, format!("{adjust:?}")))
                         .or_insert_with(|| doc.assets.get(asset).and_then(|a| decode_adjusted(&a.bytes, adjust)));
                     let Some(img) = img.as_ref() else { continue };
+                    // `local` is in asset px space; SVGs are rasterised at a larger scale.
+                    let (apw, aph) = doc.assets.get(asset).map(|a| (a.px_w.max(1), a.px_h.max(1))).unwrap_or((1, 1));
+                    let local = &local
+                        .compose(Affine::scale(apw as f64 / img.width() as f64, aph as f64 / img.height() as f64));
                     let Some(rect) =
                         tiny_skia::Rect::from_xywh(clip.x as f32, clip.y as f32, clip.w as f32, clip.h as f32)
                     else {

@@ -46,8 +46,11 @@ unicode-linebreak = "0.1"
 unicode-segmentation = "1"
 hyphenation = { version = "0.8", features = ["embed_en-us"] }
 tiny-skia = "0.12"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "tiff"] }
 krilla = "0.8"
+krilla-svg = "0.8.1"
+usvg = { version = "0.47.0", default-features = false, features = ["text"] }
+resvg = { version = "0.47.0", default-features = false, features = ["text"] }
 lopdf = { version = "0.45", default-features = false }
 hayro = "0.8"
 zip = { version = "8", default-features = false, features = ["deflate"] }

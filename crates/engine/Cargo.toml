@@ -17,5 +17,7 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 image.workspace = true
+png = "0.18.1"
 zip.workspace = true
 calamine = "0.26"
+usvg.workspace = true
