@@ -141,14 +141,49 @@ impl Flow {
 
 fn frame_geom(doc: &Document, id: Id) -> Option<FrameGeom> {
     let obj = doc.objects.get(&id)?;
-    let ObjectKind::Text(tf) = &obj.kind else { return None };
     let w = obj.rect.w;
     let h = obj.rect.h;
+    // Shapes holding text (SH-06): the text area is the shape's inscribed box, text centred vertically.
+    let shape_tf;
+    let tf = match &obj.kind {
+        ObjectKind::Text(tf) => tf,
+        ObjectKind::Shape(sh) => {
+            let story = sh.story?;
+            let mut t = TextFrame::new(story);
+            t.valign = VAlign::Middle;
+            let (fx, fy): (f64, f64) = match sh.kind {
+                ShapeKind::Ellipse | ShapeKind::Star { .. } | ShapeKind::Polygon { .. } => (0.1464, 0.1464),
+                ShapeKind::Triangle => (0.25, 0.5),
+                _ => (0.0, 0.0),
+            };
+            let pad = 5.76;
+            t.insets = newpub_core::Insets {
+                left: newpub_core::Length(w * fx + pad),
+                right: newpub_core::Length(w * fx + pad),
+                top: newpub_core::Length(h * fy.min(0.25) + pad),
+                bottom: newpub_core::Length(h * fx + pad),
+            };
+            shape_tf = t;
+            &shape_tf
+        }
+        _ => return None,
+    };
     let ins = tf.insets;
     let content = Rect::new(0.0, 0.0, w, h).inset(ins.left.0, ins.top.0, ins.right.0, ins.bottom.0);
     let n = tf.columns.max(1) as f64;
     let gutter = tf.gutter.0.max(0.0);
     let cw = ((content.w - gutter * (n - 1.0)) / n).max(1.0);
+    if tf.vertical {
+        // Vertical text: one character per line, stacked top to bottom (a hair-wide column forces a break after every glyph).
+        return Some(FrameGeom {
+            id,
+            tf: tf.clone(),
+            cols: vec![(content.x, content.x + 0.01)],
+            top: content.y,
+            bottom: content.bottom(),
+            ex: vec![],
+        });
+    }
     let cols = (0..tf.columns.max(1)).map(|i| {
         let x0 = content.x + i as f64 * (cw + gutter);
         (x0, x0 + cw)

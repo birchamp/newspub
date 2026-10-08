@@ -303,6 +303,17 @@ fn push_object(doc: &Document, layout: &DocLayout, page: usize, id: Id, parent: 
                     });
                 }
             }
+            if s.story.is_some()
+                && let Some(fl) = layout.frames.get(&id)
+            {
+                for line in &fl.lines {
+                    for run in &line.runs {
+                        if !run.glyphs.is_empty() {
+                            items.push(Item::Glyphs { run: run.clone(), transform: t });
+                        }
+                    }
+                }
+            }
         }
         ObjectKind::Text(tf) => {
             if tf.fill.is_some() || tf.stroke.is_some() {

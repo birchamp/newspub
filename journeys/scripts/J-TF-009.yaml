@@ -3,12 +3,12 @@ title: Rotated text frames and vertical text direction
 covers: [TF-10]
 steps:
   - new_document: {width: 8.5in, height: 11in}
-  - add_text_frame: {page: 0, rect: [2in, 2in, 4in, 0.5in]}
+  - add_text_frame: {page: 0, rect: [2in, 2in, 4in, 0.6in]}
     as: f
   - insert_text: {target: $f, text: "SIDEWAYS"}
   - format_chars: {target: $f, attrs: {size: 24}}
   - set_object: {id: $f, patch: {rotation: 90}}
-  # rotated 90° about the centre (288, 162): text now runs top to bottom through the centre column
+  # rotated 90° about the centre (288, 165.6): text now runs top to bottom through the centre column
   - expect_png: {page: 0, ink: [{rect: [276, 30, 24, 260], min: 0.05}, {rect: [150, 140, 100, 40], max: 0.0}]}
   - export_pdf: {path: rotated.pdf}
   - expect_pdf: {file: rotated.pdf, text_contains: ["SIDEWAYS"], ink: [{page: 1, rect: [276, 30, 24, 260], min: 0.05}]}

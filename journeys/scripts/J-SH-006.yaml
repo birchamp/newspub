@@ -10,7 +10,9 @@ steps:
   - insert_text: {target: $s, text: "Bake sale today in the church hall"}
   - format_paras: {target: $s, attrs: {align: center}}
   # text is laid out inside the shape's text area (for an ellipse, the inscribed rectangle) and centred vertically
-  - expect: {query: {q: frame_text, frame: $e}, equals: "Bake sale today in the church hall"}
+  - expect: {query: {q: story_text, target: $s}, equals: "Bake sale today in the church hall"}
+  - expect: {query: {q: frame_text, frame: $e}, starts_with: "Bake sale today"}
+  - expect: {query: {q: overflow, target: $s}, equals: false}
   - expect: {query: {q: text_bounds, frame: $e}, path: /x, gt: 100}
   - expect: {query: {q: text_bounds, frame: $e}, path: /y, gt: 110}
   - export_pdf: {path: shape-text.pdf}

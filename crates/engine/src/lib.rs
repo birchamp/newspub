@@ -759,9 +759,49 @@ impl Session {
                 }
                 json!(self.doc.page_label(*page))
             }
-            GlyphCount { .. } | MissingGlyphs { .. } | PageBaselines { .. } | ShapeKinds => {
-                return Err(EngineError::Other(format!("query {q:?} is not implemented yet")));
+            GlyphCount { frame } => {
+                self.doc.object(*frame)?;
+                let l = self.layout();
+                let n: usize = l
+                    .frames
+                    .get(frame)
+                    .map(|f| f.lines.iter().flat_map(|ln| ln.runs.iter()).flat_map(|r| r.glyphs.iter()).filter(|g| !g.generated).count())
+                    .unwrap_or(0);
+                json!(n)
             }
+            MissingGlyphs { frame } => {
+                self.doc.object(*frame)?;
+                let l = self.layout();
+                // Glyph 0 is the missing-glyph (.notdef) glyph; spaces and controls never count.
+                let n: usize = l
+                    .frames
+                    .get(frame)
+                    .map(|f| {
+                        f.lines
+                            .iter()
+                            .flat_map(|ln| ln.runs.iter())
+                            .flat_map(|r| r.glyphs.iter().map(move |g| (r, g)))
+                            .filter(|(r, g)| {
+                                g.id == 0 && r.text.get(g.text_range.clone()).is_some_and(|t| t.chars().any(|c| !c.is_whitespace() && !c.is_control()))
+                            })
+                            .count()
+                    })
+                    .unwrap_or(0);
+                json!(n)
+            }
+            PageBaselines { frame } => {
+                let o = self.doc.object(*frame)?.clone();
+                let l = self.layout();
+                let v: Vec<f64> = l
+                    .frames
+                    .get(frame)
+                    .map(|f| f.lines.iter().filter(|ln| ln.para != usize::MAX).map(|ln| o.rect.y + ln.baseline).collect())
+                    .unwrap_or_default();
+                json!(v)
+            }
+            ShapeKinds => json!([
+                "rect", "round_rect", "ellipse", "line", "triangle", "star", "polygon", "arrow", "callout", "path"
+            ]),
             Guides { .. } | Snap { .. } | ObjectGeometry { .. } => self.guides_query(q)?,
             BuiltinTemplates => self.templates_query(q)?,
             Spelling | SpellingLanguages => self.spell_query(q)?,
