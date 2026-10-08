@@ -3,6 +3,7 @@
 
 mod a11y;
 mod dup;
+mod pane;
 mod picker;
 mod print;
 mod recent;
@@ -95,6 +96,8 @@ pub struct NewpubApp {
     last_print_job: Option<serde_json::Value>,
     /// Scroll, spread, units and keyboard-editing state (see view.rs).
     view: view::ViewState,
+    /// Selection pane (see pane.rs).
+    pane: pane::PaneState,
 }
 
 /// Text buffers of the object and format panels.
@@ -140,6 +143,7 @@ impl NewpubApp {
             print_jobs: 0,
             last_print_job: None,
             view: view::ViewState::default(),
+            pane: pane::PaneState::default(),
         }
     }
 
@@ -296,6 +300,7 @@ impl NewpubApp {
         egui::Panel::right("format").resizable(false).default_size(190.0).show(ui, |ui| self.format_panel(ui));
         egui::CentralPanel::default().show(ui, |ui| self.canvas(ui));
         self.dialogs(&ctx);
+        self.selection_pane(&ctx);
     }
 
     fn open_picker(&mut self) {
@@ -462,6 +467,9 @@ impl NewpubApp {
                 if ui.selectable_label(self.tool == tool, label).clicked() {
                     self.tool = tool;
                 }
+            }
+            if ui.selectable_label(self.pane.open, "Selection Pane").clicked() {
+                self.pane.open = !self.pane.open;
             }
             if ui.button("Picture").clicked() {
                 self.dialog = Dialog::InsertPicture { path: String::new() };
