@@ -369,7 +369,11 @@ pub enum ObjectKind {
     Text(TextFrame),
     Shape(Shape),
     Image(ImageFrame),
-    Group { children: Vec<Id> },
+    Group {
+        children: Vec<Id>,
+    },
+    /// Table (TB-01..TB-04); see core::table.
+    Table(crate::table::Table),
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -29,6 +29,9 @@ pub struct Story {
     pub paras: Vec<ParaAttrs>,
     /// Ordered chain of text frames that display this story.
     pub frames: Vec<Id>,
+    /// Formatting for text typed into the story while it is empty (e.g. a table header cell's bold).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub typing_attrs: Option<CharAttrs>,
 }
 
 /// Converts a char index into a byte index in `s` (clamped to the end).
@@ -38,7 +41,14 @@ pub fn byte_at(s: &str, ci: usize) -> usize {
 
 impl Story {
     pub fn new(id: Id) -> Story {
-        Story { id, text: String::new(), chars: vec![], paras: vec![ParaAttrs::default()], frames: vec![] }
+        Story {
+            id,
+            text: String::new(),
+            chars: vec![],
+            paras: vec![ParaAttrs::default()],
+            frames: vec![],
+            typing_attrs: None,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -99,7 +109,10 @@ impl Story {
         }
         let text = text.replace("\r\n", "\n").replace('\r', "\n");
         let n = text.chars().count();
-        let attrs = attrs.unwrap_or_else(|| self.span_attrs_at(at.saturating_sub(1)));
+        let attrs = attrs.unwrap_or_else(|| match (&self.typing_attrs, self.chars.is_empty()) {
+            (Some(t), true) => t.clone(),
+            _ => self.span_attrs_at(at.saturating_sub(1)),
+        });
         // Paragraph attrs: a new paragraph inherits the attrs of the one it splits.
         let pi = self.para_index_at(at);
         let new_paras = text.matches(PARA_SEP).count();

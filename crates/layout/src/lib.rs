@@ -139,6 +139,24 @@ pub fn layout_one(doc: &Document, fonts: &FontStore, story: Id) -> Option<(Story
     doc.stories.get(&story).map(|s| story::layout_story(doc, fonts, s, None))
 }
 
+/// Height a table cell's text needs (content plus the cell's insets), at the cell's current width.
+pub fn cell_natural_height(
+    doc: &Document,
+    fonts: &FontStore,
+    table: &newpub_core::table::Table,
+    row: usize,
+    col: usize,
+) -> f64 {
+    let (Some(cell), Some(mut rect)) = (table.cell(row, col), table.cell_rect(row, col)) else { return 0.0 };
+    let Some(story) = doc.stories.get(&cell.story) else { return 0.0 };
+    rect.h = 1.0e6;
+    let (_, frames) = story::layout_cell(doc, fonts, story, cell, rect, None);
+    let bottom =
+        frames.first().and_then(|f| f.lines.iter().map(|l| l.top + l.height).reduce(f64::max)).unwrap_or(rect.y);
+    let used = (bottom - rect.y).max(0.0);
+    if story.is_empty() { 0.0 } else { used + cell.insets.bottom.0 }
+}
+
 /// Lays out every story in the document.
 pub fn layout_document(doc: &Document, fonts: &FontStore) -> DocLayout {
     let mut out = DocLayout::default();
@@ -163,6 +181,25 @@ pub fn layout_document(doc: &Document, fonts: &FontStore) -> DocLayout {
                         out.page_frames.insert((f.frame, pi), f);
                     }
                 }
+            }
+        }
+    }
+    // Table cells: each visible cell's story in its cell box (table-local coordinates).
+    for o in doc.objects.values() {
+        let ObjectKind::Table(t) = &o.kind else { continue };
+        let page = doc.page_of(o.id);
+        for r in 0..t.rows() {
+            for c in 0..t.cols() {
+                let (Some(cell), Some(rect)) = (t.cell(r, c), t.cell_rect(r, c)) else { continue };
+                if cell.covered {
+                    continue;
+                }
+                let Some(story) = doc.stories.get(&cell.story) else { continue };
+                let (sl, frames) = story::layout_cell(doc, fonts, story, cell, rect, page);
+                for f in frames {
+                    out.frames.insert(f.frame, f);
+                }
+                out.stories.insert(story.id, sl);
             }
         }
     }

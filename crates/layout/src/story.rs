@@ -410,9 +410,46 @@ pub fn layout_story(
     page_override: Option<usize>,
 ) -> (StoryLayout, Vec<FrameLayout>) {
     let frames: Vec<FrameGeom> = story.frames.iter().filter_map(|f| frame_geom(doc, *f)).collect();
+    layout_in(doc, fonts, story, frames, page_override)
+}
+
+/// Lays out a table cell's story in the cell's content box (table-local coordinates); the result's
+/// frame id is the cell's story id. `max_height` overrides the box height (to measure natural height).
+pub fn layout_cell(
+    doc: &Document,
+    fonts: &FontStore,
+    story: &Story,
+    cell: &newpub_core::table::Cell,
+    rect: Rect,
+    page: Option<usize>,
+) -> (StoryLayout, Vec<FrameLayout>) {
+    let mut tf = TextFrame::new(story.id);
+    tf.insets = cell.insets;
+    tf.valign = cell.valign;
+    let ins = cell.insets;
+    let content = rect.inset(ins.left.0, ins.top.0, ins.right.0, ins.bottom.0);
+    let geom = FrameGeom {
+        id: story.id,
+        tf,
+        cols: vec![(content.x, content.x + content.w.max(1.0))],
+        top: content.y,
+        bottom: content.bottom(),
+        ex: vec![],
+    };
+    layout_in(doc, fonts, story, vec![geom], page)
+}
+
+fn layout_in(
+    doc: &Document,
+    fonts: &FontStore,
+    story: &Story,
+    frames: Vec<FrameGeom>,
+    page_override: Option<usize>,
+) -> (StoryLayout, Vec<FrameLayout>) {
     let scale = frames.first().map(|f| f.tf.fit_scale).unwrap_or(1.0).clamp(0.01, 100.0);
     let mut outs: Vec<FrameLayout> = frames.iter().map(|f| FrameLayout { frame: f.id, ..Default::default() }).collect();
-    let mut sl = StoryLayout { story: story.id, overflow_at: None, frames: story.frames.clone(), scale };
+    let mut sl =
+        StoryLayout { story: story.id, overflow_at: None, frames: frames.iter().map(|f| f.id).collect(), scale };
     if frames.is_empty() {
         sl.overflow_at = (!story.is_empty()).then_some(0);
         return (sl, outs);
@@ -716,55 +753,53 @@ fn add_continued_notices(
         }
         let f = &frames[i];
         let (x0, x1) = (f.cols.first().map(|c| c.0).unwrap_or(0.0), f.cols.last().map(|c| c.1).unwrap_or(0.0));
-        if f.tf.continued_on {
-            if let Some(j) = (i + 1..frames.len()).find(|&j| has_text[j]) {
-                if let Some(pj) = page_of(j).filter(|pj| Some(*pj) != page_of(i)) {
-                    let text = format!("(Continued on page {})", doc.page_label(pj));
-                    let baseline = f.bottom + notice.ascent;
-                    let at = outs[i].char_range.end;
-                    let (run, w) = notice.run(fonts, &text, 0.0, baseline, at);
-                    let x = (x1 - w).max(x0);
-                    let run = shift_run(run, x);
-                    outs[i].lines.push(Line {
-                        column: f.cols.len().saturating_sub(1),
-                        x,
-                        width: x1 - x0,
-                        top: f.bottom,
-                        height: notice.height,
-                        baseline,
-                        char_range: at..at,
-                        para: usize::MAX,
-                        runs: vec![run],
-                        hyphenated: false,
-                    });
-                }
-            }
+        if f.tf.continued_on
+            && let Some(j) = (i + 1..frames.len()).find(|&j| has_text[j])
+            && let Some(pj) = page_of(j).filter(|pj| Some(*pj) != page_of(i))
+        {
+            let text = format!("(Continued on page {})", doc.page_label(pj));
+            let baseline = f.bottom + notice.ascent;
+            let at = outs[i].char_range.end;
+            let (run, w) = notice.run(fonts, &text, 0.0, baseline, at);
+            let x = (x1 - w).max(x0);
+            let run = shift_run(run, x);
+            outs[i].lines.push(Line {
+                column: f.cols.len().saturating_sub(1),
+                x,
+                width: x1 - x0,
+                top: f.bottom,
+                height: notice.height,
+                baseline,
+                char_range: at..at,
+                para: usize::MAX,
+                runs: vec![run],
+                hyphenated: false,
+            });
         }
-        if f.tf.continued_from {
-            if let Some(k) = (0..i).rev().find(|&k| has_text[k]) {
-                if let Some(pk) = page_of(k).filter(|pk| Some(*pk) != page_of(i)) {
-                    let text = format!("(Continued from page {})", doc.page_label(pk));
-                    let top = f.top - notice.height;
-                    let baseline = top + notice.ascent;
-                    let at = outs[i].char_range.start;
-                    let (run, _) = notice.run(fonts, &text, x0, baseline, at);
-                    outs[i].lines.insert(
-                        0,
-                        Line {
-                            column: 0,
-                            x: x0,
-                            width: x1 - x0,
-                            top,
-                            height: notice.height,
-                            baseline,
-                            char_range: at..at,
-                            para: usize::MAX,
-                            runs: vec![run],
-                            hyphenated: false,
-                        },
-                    );
-                }
-            }
+        if f.tf.continued_from
+            && let Some(k) = (0..i).rev().find(|&k| has_text[k])
+            && let Some(pk) = page_of(k).filter(|pk| Some(*pk) != page_of(i))
+        {
+            let text = format!("(Continued from page {})", doc.page_label(pk));
+            let top = f.top - notice.height;
+            let baseline = top + notice.ascent;
+            let at = outs[i].char_range.start;
+            let (run, _) = notice.run(fonts, &text, x0, baseline, at);
+            outs[i].lines.insert(
+                0,
+                Line {
+                    column: 0,
+                    x: x0,
+                    width: x1 - x0,
+                    top,
+                    height: notice.height,
+                    baseline,
+                    char_range: at..at,
+                    para: usize::MAX,
+                    runs: vec![run],
+                    hyphenated: false,
+                },
+            );
         }
     }
 }

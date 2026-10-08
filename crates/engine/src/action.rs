@@ -422,6 +422,18 @@ pub enum Query {
     },
     /// Names of the shape kinds the model supports.
     ShapeKinds,
+    /// Table geometry: `{rows, cols, col_widths, row_heights, header_rows, format}`.
+    Table {
+        id: Id,
+    },
+    /// A cell: `{story, rowspan, colspan, covered, fill}` (a covered cell reports its owner's story).
+    TableCell {
+        table: Id,
+        row: usize,
+        col: usize,
+    },
+    /// Names of the preset table formats.
+    TableFormats,
     // ---- GUIDES task ----
     /// Guides on a page (margin grid, page and master ruler guides): `{vertical: [x…], horizontal: [y…]}` sorted, de-duplicated.
     Guides {

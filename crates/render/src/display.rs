@@ -367,6 +367,67 @@ fn push_object(doc: &Document, layout: &DocLayout, page: usize, id: Id, parent: 
                 });
             }
         }
+        ObjectKind::Table(tb) => {
+            // Fills, then text, then borders on top.
+            for r in 0..tb.rows() {
+                for c in 0..tb.cols() {
+                    let (Some(cell), Some(cr)) = (tb.cell(r, c), tb.cell_rect(r, c)) else { continue };
+                    if cell.covered {
+                        continue;
+                    }
+                    if let Some(f) = &cell.fill {
+                        items.push(Item::Path {
+                            path: rect_path(cr.x, cr.y, cr.w, cr.h),
+                            fill: Some(f.clone()),
+                            stroke: None,
+                            transform: t,
+                        });
+                    }
+                    if let Some(fl) = layout.frames.get(&cell.story) {
+                        for line in &fl.lines {
+                            for run in &line.runs {
+                                if !run.glyphs.is_empty() {
+                                    items.push(Item::Glyphs { run: run.clone(), transform: t });
+                                }
+                            }
+                        }
+                        for d in &fl.decorations {
+                            items.push(Item::Path {
+                                path: rect_path(d.x0, d.y - d.thickness / 2.0, d.x1 - d.x0, d.thickness),
+                                fill: Some(d.color.clone()),
+                                stroke: None,
+                                transform: t,
+                            });
+                        }
+                    }
+                }
+            }
+            for r in 0..tb.rows() {
+                for c in 0..tb.cols() {
+                    let (Some(cell), Some(cr)) = (tb.cell(r, c), tb.cell_rect(r, c)) else { continue };
+                    if cell.covered {
+                        continue;
+                    }
+                    let b = &cell.borders;
+                    let edges = [
+                        (&b.top, (cr.x, cr.y), (cr.right(), cr.y)),
+                        (&b.bottom, (cr.x, cr.bottom()), (cr.right(), cr.bottom())),
+                        (&b.left, (cr.x, cr.y), (cr.x, cr.bottom())),
+                        (&b.right, (cr.right(), cr.y), (cr.right(), cr.bottom())),
+                    ];
+                    for (stroke, a, z) in edges {
+                        if let Some(s) = stroke {
+                            items.push(Item::Path {
+                                path: vec![PathEl::Move(a.0, a.1), PathEl::Line(z.0, z.1)],
+                                fill: None,
+                                stroke: Some(stroke_style(s)),
+                                transform: t,
+                            });
+                        }
+                    }
+                }
+            }
+        }
         ObjectKind::Group { children } => {
             // Children are stored in page coordinates; the group's own transform is not applied.
             for c in children {

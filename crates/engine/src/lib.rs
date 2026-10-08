@@ -733,6 +733,26 @@ impl Session {
                 "units": self.guides.units,
             }),
             AllStoryText => json!(self.doc.stories.values().map(|s| s.text.clone()).collect::<Vec<_>>().join("\n")),
+            Table { id } => {
+                let ObjectKind::Table(t) = &self.doc.object(*id)?.kind else {
+                    return Err(CoreError::WrongKind(*id, "table").into());
+                };
+                json!({
+                    "rows": t.rows(), "cols": t.cols(),
+                    "col_widths": t.col_widths, "row_heights": t.row_heights,
+                    "header_rows": t.header_rows, "format": t.format,
+                })
+            }
+            TableCell { table, row, col } => {
+                let ObjectKind::Table(t) = &self.doc.object(*table)?.kind else {
+                    return Err(CoreError::WrongKind(*table, "table").into());
+                };
+                let (r, c) = t.owner(*row, *col).ok_or_else(|| EngineError::Other(format!("no cell {row},{col}")))?;
+                let cell = t.cell(r, c).ok_or_else(|| EngineError::Other(format!("no cell {row},{col}")))?;
+                json!({"story": cell.story, "rowspan": cell.rowspan, "colspan": cell.colspan,
+                       "covered": (r, c) != (*row, *col), "fill": cell.fill})
+            }
+            TableFormats => json!(newpub_core::table::FORMATS.iter().map(|f| f.0).collect::<Vec<_>>()),
             PageLabel { page } => {
                 if *page >= self.doc.pages.len() {
                     return Err(CoreError::NoSuchPage(*page).into());
@@ -891,7 +911,7 @@ impl Session {
                                 && layout.stories.get(&t.story).is_some_and(|s| s.overflow_at.is_some());
                         }
                     }
-                    ObjectKind::Group { .. } => {}
+                    ObjectKind::Group { .. } | ObjectKind::Table(_) => {}
                 }
                 if let Some(m) = missing {
                     out.push(issue("missing_alt_text", id, pi, m));

@@ -8,6 +8,42 @@ use newpub_layout::FontStore;
 
 pub(crate) fn run(doc: &mut Document, fonts: &FontStore) {
     autofit(doc, fonts);
+    table_rows(doc, fonts);
+}
+
+/// Grows (and shrinks back to their minimum) table rows so every cell's text fits; syncs the table's rect.
+fn table_rows(doc: &mut Document, fonts: &FontStore) {
+    let ids: Vec<Id> = doc.objects.values().filter(|o| matches!(o.kind, ObjectKind::Table(_))).map(|o| o.id).collect();
+    for id in ids {
+        let Some(ObjectKind::Table(t)) = doc.objects.get(&id).map(|o| o.kind.clone()) else { continue };
+        let mut heights: Vec<f64> = t.min_row_heights.iter().map(|h| h.0).collect();
+        // Single-row cells first, then spanning cells add any deficit to their last row.
+        for pass in 0..2 {
+            for r in 0..t.rows() {
+                for c in 0..t.cols() {
+                    let Some(cell) = t.cell(r, c) else { continue };
+                    if cell.covered || (cell.rowspan > 1) != (pass == 1) {
+                        continue;
+                    }
+                    let need = newpub_layout::cell_natural_height(doc, fonts, &t, r, c);
+                    let span = (r..(r + cell.rowspan as usize).min(t.rows())).map(|k| heights[k]).sum::<f64>();
+                    if need > span + 1e-6 {
+                        let last = (r + cell.rowspan as usize).min(t.rows()) - 1;
+                        heights[last] += need - span;
+                    }
+                }
+            }
+        }
+        if let Some(o) = doc.objects.get_mut(&id)
+            && let ObjectKind::Table(tm) = &mut o.kind
+        {
+            for (k, h) in heights.iter().enumerate() {
+                tm.row_heights[k] = newpub_core::Length((h * 100.0).ceil() / 100.0);
+            }
+            o.rect.w = tm.col_widths.iter().map(|w| w.0).sum();
+            o.rect.h = tm.row_heights.iter().map(|h| h.0).sum();
+        }
+    }
 }
 
 fn overflows(doc: &Document, fonts: &FontStore, story: Id) -> bool {

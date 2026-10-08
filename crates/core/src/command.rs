@@ -469,6 +469,80 @@ pub enum Command {
         id: Id,
     },
 
+    // ---- tables (TB-01..TB-04; lead; core/src/table.rs) ----
+    /// Table with equal column widths and row heights filling `rect`. Created ids: table, then cell stories row-major.
+    AddTable {
+        #[serde(default)]
+        page: Option<usize>,
+        #[serde(default)]
+        master: Option<Id>,
+        rect: Rect,
+        rows: usize,
+        cols: usize,
+    },
+    InsertTableRows {
+        table: Id,
+        at: usize,
+        count: usize,
+    },
+    DeleteTableRows {
+        table: Id,
+        at: usize,
+        count: usize,
+    },
+    InsertTableCols {
+        table: Id,
+        at: usize,
+        count: usize,
+    },
+    DeleteTableCols {
+        table: Id,
+        at: usize,
+        count: usize,
+    },
+    SetTableColWidth {
+        table: Id,
+        col: usize,
+        width: Length,
+    },
+    /// Minimum row height (rows still grow to fit their text).
+    SetTableRowHeight {
+        table: Id,
+        row: usize,
+        height: Length,
+    },
+    MergeTableCells {
+        table: Id,
+        row: usize,
+        col: usize,
+        rows: usize,
+        cols: usize,
+    },
+    SplitTableCell {
+        table: Id,
+        row: usize,
+        col: usize,
+    },
+    /// Fill and borders for a block of cells.
+    SetTableCells {
+        table: Id,
+        row: usize,
+        col: usize,
+        #[serde(default = "one")]
+        rows: usize,
+        #[serde(default = "one")]
+        cols: usize,
+        #[serde(default)]
+        fill: Option<Color>,
+        #[serde(default)]
+        borders: Option<crate::table::BorderSpec>,
+    },
+    /// Apply a named preset table format (see `crate::table::FORMATS`).
+    ApplyTableFormat {
+        table: Id,
+        format: String,
+    },
+
     // ---- layers ----
     AddLayer {
         name: String,
@@ -579,7 +653,7 @@ impl Document {
     }
 
     /// Adds `obj` to a page or master (front of z-order).
-    fn place(&mut self, page: Option<usize>, master: Option<Id>, obj: Object) -> Result<Id, CoreError> {
+    pub(crate) fn place(&mut self, page: Option<usize>, master: Option<Id>, obj: Object) -> Result<Id, CoreError> {
         let id = obj.id;
         match (page, master) {
             (_, Some(m)) => {
@@ -596,7 +670,7 @@ impl Document {
         Ok(id)
     }
 
-    fn new_object(&mut self, rect: Rect, kind: ObjectKind) -> Object {
+    pub(crate) fn new_object(&mut self, rect: Rect, kind: ObjectKind) -> Object {
         let id = self.alloc();
         Object {
             id,
@@ -730,6 +804,16 @@ impl Document {
                     }
                 }
             }
+            ObjectKind::Table(t) => {
+                for c in &t.cells {
+                    self.stories.remove(&c.story);
+                }
+            }
+            ObjectKind::Shape(sh) => {
+                if let Some(s) = sh.story {
+                    self.stories.remove(&s);
+                }
+            }
             _ => {}
         }
         self.objects.remove(&id);
@@ -776,6 +860,25 @@ impl Document {
                     new_kids.push(nk);
                 }
                 *children = new_kids;
+            }
+            ObjectKind::Table(t) => {
+                for c in &mut t.cells {
+                    let s = self.alloc();
+                    let mut st = self.story(c.story)?.clone();
+                    st.id = s;
+                    self.stories.insert(s, st);
+                    c.story = s;
+                }
+            }
+            ObjectKind::Shape(sh) => {
+                if let Some(old) = sh.story {
+                    let s = self.alloc();
+                    let mut st = self.story(old)?.clone();
+                    st.id = s;
+                    st.frames = vec![nid];
+                    self.stories.insert(s, st);
+                    sh.story = Some(s);
+                }
             }
             _ => {}
         }
@@ -1486,6 +1589,17 @@ impl Document {
                 crate::links::apply(self, cmd)
             }
             MoveLayer { .. } | DeleteLayer { .. } => crate::layers::apply(self, cmd),
+            AddTable { .. }
+            | InsertTableRows { .. }
+            | DeleteTableRows { .. }
+            | InsertTableCols { .. }
+            | DeleteTableCols { .. }
+            | SetTableColWidth { .. }
+            | SetTableRowHeight { .. }
+            | MergeTableCells { .. }
+            | SplitTableCell { .. }
+            | SetTableCells { .. }
+            | ApplyTableFormat { .. } => crate::table::apply(self, cmd),
             InsertField { .. }
             | SetSection { .. }
             | RemoveSection { .. }
