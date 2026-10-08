@@ -9,6 +9,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
   the failing set (J-AX-003, J-BB-003, J-BB-004, UI-SH-007) is the same on every OS. The remaining P0–P2 items were checked
   from CI run 37842573100 (commit bb529dc): 100/100 journeys pass on macOS, Windows, and Linux. The P3 items were
   checked from CI run 37854377656 (commit 6c64ad8): 116/116 journeys pass on all three OSes.
+  PF-01 and the widened SH-08 were checked from CI run 37859050166 (commit 41e16cb): 119/119 journeys pass on all three OSes.
 - Journeys are written by the lead **before** an item is dispatched. The implementing agent never edits them.
 - Priorities: **P0** means newpub is unusable without it. **P1** means everyday work needs it.
   **P2** covers professional and occasional workflows. **P3** is rare, legacy, or research.
@@ -85,7 +86,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | SH-05 | P2 | AutoShapes library (rounded rectangle, star, arrow, callout, polygon, triangle) | J-SH-005 | [x] |
 | SH-06 | P2 | Text inside shapes | J-SH-006 | [x] |
 | SH-07 | P2 | Gradient, pattern, and transparency fills; shape shadow | J-SH-007 | [x] |
-| SH-08 | P3 | Freeform / Bézier drawing and point editing (canvas tool and point handles) | J-SH-008, UI-SH-008 | [ ] |
+| SH-08 | P3 | Freeform / Bézier drawing and point editing (canvas tool and point handles) | J-SH-008, UI-SH-008 | [x] |
 
 ## TB: Tables
 
@@ -233,7 +234,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 
 | ID | P | Feature | Journeys | Done |
 |----|---|---------|----------|------|
-| PF-01 | P2 | Editing and exporting a long publication stays responsive (no quadratic slow-downs) | J-PF-001 | [ ] |
+| PF-01 | P2 | Editing and exporting a long publication stays responsive (no quadratic slow-downs) | J-PF-001 | [x] |
 
 ## UI: Application shell (real-UI journeys)
 

@@ -25,3 +25,6 @@ steps:
   # booklet imposition keeps the tags
   - export_pdf: {path: booklet.pdf, options: {imposition: booklet}}
   - expect_pdf: {file: booklet.pdf, tagged: {structure: ["H1", "P", "Figure"]}}
+  # the same publication as PDF/UA-1 (checked by veraPDF in the CI conformance job)
+  - export_pdf: {path: ua.pdf, options: {standard: pdf_ua1}}
+  - expect_pdf: {file: ua.pdf, tagged: {structure: ["H1", "P", "Figure"], lang: "en-GB"}}

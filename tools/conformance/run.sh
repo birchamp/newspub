@@ -19,10 +19,13 @@ check() {
 # veraPDF (PDF/UA-1) on the PDF/UA journey output and an ordinary tagged export.
 verapdf_ua() {
   local f=$1
-  docker run --rm -v "$(cd "$(dirname "$f")" && pwd):/data" verapdf/cli:latest --flavour ua1 --format text "/data/$(basename "$f")" | tee /dev/stderr | grep -q "^PASS"
+  # Machine-readable report: compliance flag plus the failed rules (logged for diagnosis).
+  docker run --rm -v "$(cd "$(dirname "$f")" && pwd):/data" verapdf/cli:latest --flavour ua1 --format mrr "/data/$(basename "$f")" >"$OUT/verapdf-$(basename "$f").xml"
+  grep -o '<rule [^>]*status="failed"[^>]*>' "$OUT/verapdf-$(basename "$f").xml" | head -40 >&2
+  grep -q 'isCompliant="true"' "$OUT/verapdf-$(basename "$f").xml"
 }
-check verapdf-ua1-tagged "verapdf_ua" "$R/J-AX-003/tagged.pdf"
-check verapdf-ua1-plain-export "verapdf_ua" "$R/J-EX-007/plain.pdf"
+check verapdf-ua1-accessibility-journey "verapdf_ua" "$R/J-AX-003/tagged.pdf"
+check verapdf-ua1-newsletter "verapdf_ua" "$R/J-EX-007/ua.pdf"
 
 # epubcheck on the EPUB export.
 epubcheck_run() {
