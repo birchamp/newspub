@@ -16,6 +16,12 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "newpub",
         options,
-        Box::new(|_cc| Ok(Box::new(NewpubApp::new(session).with_persistent_recent()))),
+        Box::new(|_cc| {
+            Ok(Box::new({
+                let mut app = NewpubApp::new(session).with_persistent_recent();
+                app.startup_picker = true;
+                app
+            }))
+        }),
     )
 }
