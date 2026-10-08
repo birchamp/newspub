@@ -446,6 +446,25 @@ impl Session {
         Ok(Outcome { created })
     }
 
+    /// Sorted, de-duplicated font families used by any text, resolved per paragraph through styles.
+    fn fonts_in_use(&self) -> std::collections::BTreeSet<String> {
+        let mut out = std::collections::BTreeSet::new();
+        for st in self.doc.stories.values() {
+            let ranges = st.para_ranges();
+            for (run, attrs) in st.runs() {
+                if run.is_empty() {
+                    continue;
+                }
+                for (pi, pr) in ranges.iter().enumerate() {
+                    let overlaps = run.start.max(pr.start) < run.end.min(pr.end);
+                    let Some(para) = st.paras.get(pi).filter(|_| overlaps) else { continue };
+                    out.insert(self.doc.resolve_char(para, attrs).font);
+                }
+            }
+        }
+        out
+    }
+
     /// Answers a query.
     pub fn query(&mut self, q: &Query) -> Result<Value, EngineError> {
         use Query::*;
@@ -642,7 +661,20 @@ impl Session {
                 }
                 serde_json::to_value(groups).map_err(|e| EngineError::Other(e.to_string()))?
             }
-            FontsUsed | MissingFonts | Assets | Find { .. } | AccessibilityCheck => {
+            FontsUsed => json!(self.fonts_in_use().into_iter().collect::<Vec<_>>()),
+            MissingFonts => {
+                json!(self.fonts_in_use().into_iter().filter(|f| !self.fonts.has_family(f)).collect::<Vec<_>>())
+            }
+            Assets => Value::Array(
+                self.doc
+                    .assets
+                    .values()
+                    .map(|a| {
+                        json!({"id": a.id, "name": a.name, "mime": a.mime, "px_w": a.px_w, "px_h": a.px_h, "link": a.link})
+                    })
+                    .collect(),
+            ),
+            Find { .. } | AccessibilityCheck => {
                 return Err(EngineError::Other(format!("query {q:?} is not implemented yet")));
             }
             TextBounds { frame } => {
