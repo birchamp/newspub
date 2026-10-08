@@ -1,0 +1,51 @@
+id: J-PG-002
+title: Insert, delete, duplicate, and reorder pages
+covers: [PG-03]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - insert_pages: {count: 2}
+  - expect: {query: {q: page_count}, equals: 3}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 4in, 1in]}
+    as: a
+  - insert_text: {target: $a, text: "Alpha page"}
+  - add_text_frame: {page: 1, rect: [1in, 1in, 4in, 1in]}
+    as: b
+  - insert_text: {target: $b, text: "Bravo page"}
+  - add_text_frame: {page: 2, rect: [1in, 1in, 4in, 1in]}
+    as: c
+  - insert_text: {target: $c, text: "Charlie page"}
+  # move Charlie to the front
+  - move_page: {from: 2, to: 0}
+  - expect: {query: {q: object_page, id: $c}, equals: 0}
+  - expect: {query: {q: object_page, id: $a}, equals: 1}
+  - export_pdf: {path: reordered.pdf}
+  - expect_pdf:
+      file: reordered.pdf
+      pages: 3
+      page_text:
+        - {page: 1, contains: "Charlie page"}
+        - {page: 2, contains: "Alpha page"}
+        - {page: 3, contains: "Bravo page"}
+  # duplicate Alpha (now page index 1): copy is independent
+  - duplicate_page: {page: 1}
+  - expect: {query: {q: page_count}, equals: 4}
+  - let: {copy_objects: {q: page_objects, page: 2}}
+  - expect: {query: {q: page_objects, page: 2}, len: 1}
+  - expect: {query: {q: frame_text, frame: $a}, equals: "Alpha page"}
+  - export_pdf: {path: duplicated.pdf}
+  - expect_pdf: {file: duplicated.pdf, pages: 4, page_text: [{page: 3, contains: "Alpha page"}]}
+  # delete the original Alpha page; its frame goes away, the copy remains
+  - delete_page: {page: 1}
+  - expect: {query: {q: page_count}, equals: 3}
+  - export_pdf: {path: deleted.pdf}
+  - expect_pdf:
+      file: deleted.pdf
+      pages: 3
+      page_text:
+        - {page: 1, contains: "Charlie page"}
+        - {page: 2, contains: "Alpha page"}
+        - {page: 3, contains: "Bravo page"}
+  # cannot delete the only page
+  - new_document: {width: 8.5in, height: 11in}
+  - expect_error: {delete_page: {page: 0}}
+  - expect_error: {move_page: {from: 0, to: 5}}

@@ -1,0 +1,33 @@
+id: J-TY-001
+title: Character formatting — font, size, bold, italic, underline, colour
+covers: [TY-01]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 6.5in, 3in]}
+    as: f
+  - insert_text: {target: $f, text: "Plain words then Bold Serif then italic red then underlined."}
+  # "Bold Serif" = chars 17..27, "italic red" = 33..43, "underlined" = 49..59
+  - format_chars: {target: $f, start: 17, end: 27, attrs: {bold: true, font: "Liberation Serif", size: 24}}
+  - format_chars: {target: $f, start: 33, end: 43, attrs: {italic: true, color: "#cc0000"}}
+  - format_chars: {target: $f, start: 49, end: 59, attrs: {underline: true}}
+  - expect: {query: {q: char_attrs, target: $f, at: 0}, path: /font, equals: "Carlito"}
+  - expect: {query: {q: char_attrs, target: $f, at: 0}, path: /size, equals: 11}
+  - expect: {query: {q: char_attrs, target: $f, at: 20}, path: /bold, equals: true}
+  - expect: {query: {q: char_attrs, target: $f, at: 20}, path: /font, equals: "Liberation Serif"}
+  - expect: {query: {q: char_attrs, target: $f, at: 20}, path: /size, equals: 24}
+  - expect: {query: {q: char_attrs, target: $f, at: 27}, path: /bold, equals: false}
+  - expect: {query: {q: char_attrs, target: $f, at: 35}, path: /italic, equals: true}
+  - expect: {query: {q: char_attrs, target: $f, at: 35}, path: /color, equals: {space: rgb, r: 204, g: 0, b: 0, a: 1.0}}
+  - expect: {query: {q: char_attrs, target: $f, at: 50}, path: /underline, equals: true}
+  # the 24pt run makes its line taller than a plain 11pt line
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/height, gt: 25}
+  - export_pdf: {path: chars.pdf}
+  - expect_pdf:
+      file: chars.pdf
+      text_contains: ["Plain words then Bold Serif then italic red then underlined."]
+      fonts: {contains: ["Carlito-Regular", "LiberationSerif-Bold", "Carlito-Italic"], embedded: true}
+  # typing after a formatted run continues its formatting
+  - type_text: {target: $f, at: 27, text: "!"}
+  - expect: {query: {q: char_attrs, target: $f, at: 27}, path: /bold, equals: true}
+  # red italic text renders red
+  - expect_png: {page: 0, dpi: 144, ink: [{rect: [72, 72, 460, 40], min: 0.02}]}

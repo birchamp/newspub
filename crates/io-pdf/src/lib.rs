@@ -1,0 +1,334 @@
+//! newpub-io-pdf: PDF export with krilla.
+
+use krilla::Document as KDoc;
+use krilla::color::{cmyk, rgb, separation};
+use krilla::geom::{PathBuilder, Point, Rect as KRect, Size, Transform};
+use krilla::num::NormalizedF32;
+use krilla::page::PageSettings;
+use krilla::paint::{Fill, FillRule, Stroke, StrokeDash};
+use krilla::text::{Font, GlyphId, KrillaGlyph};
+use newpub_core::{Affine, Color, Document};
+use newpub_layout::{DocLayout, FaceId, FontStore};
+use newpub_render::{Item, PageDisplay, PathEl, StrokeStyle, page_display};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+#[derive(Debug, thiserror::Error)]
+pub enum PdfError {
+    #[error("pdf: {0}")]
+    Krilla(String),
+    #[error("no pages to export")]
+    Empty,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Imposition {
+    /// One page per PDF page.
+    #[default]
+    None,
+    /// Saddle-stitch booklet: two pages side by side per sheet side, in fold order.
+    Booklet,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PdfOptions {
+    /// Include the document bleed around each page.
+    pub bleed: bool,
+    /// Draw crop marks outside the trim (and bleed).
+    pub crop_marks: bool,
+    pub imposition: Imposition,
+    /// 0-based page indices to export (default all).
+    pub pages: Option<Vec<usize>>,
+}
+
+/// Distance from the trim/bleed edge to where crop marks start, and their length.
+const MARK_GAP: f64 = 6.0;
+const MARK_LEN: f64 = 18.0;
+
+fn kcolor(c: &Color) -> (krilla::paint::Paint, f32) {
+    let a = c.alpha();
+    let u = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let p: krilla::paint::Paint = match c {
+        Color::Rgb { r, g, b, .. } => rgb::Color::new(*r, *g, *b).into(),
+        Color::Cmyk { c, m, y, k, .. } => cmyk::Color::new(u(*c), u(*m), u(*y), u(*k)).into(),
+        Color::Spot { name, c, m, y, k, tint, .. } => {
+            let fallback = krilla::color::RegularColor::Cmyk(cmyk::Color::new(u(*c), u(*m), u(*y), u(*k)));
+            let space =
+                separation::SeparationSpace::new(separation::SeparationColorant::Custom(name.clone()), fallback);
+            krilla::color::Color::Special(krilla::color::SpecialColor::Separation(separation::Color::new(
+                u(*tint),
+                space,
+            )))
+            .into()
+        }
+    };
+    (p, a)
+}
+
+fn kt(a: &Affine) -> Transform {
+    let [sa, sb, sc, sd, se, sf] = a.0;
+    Transform::from_row(sa as f32, sb as f32, sc as f32, sd as f32, se as f32, sf as f32)
+}
+
+fn kpath(els: &[PathEl]) -> Option<krilla::geom::Path> {
+    let mut pb = PathBuilder::new();
+    for e in els {
+        match *e {
+            PathEl::Move(x, y) => pb.move_to(x as f32, y as f32),
+            PathEl::Line(x, y) => pb.line_to(x as f32, y as f32),
+            PathEl::Cubic(a, b, c, d, e, f) => pb.cubic_to(a as f32, b as f32, c as f32, d as f32, e as f32, f as f32),
+            PathEl::Close => pb.close(),
+        }
+    }
+    pb.finish()
+}
+
+fn kstroke(s: &StrokeStyle) -> Stroke {
+    let (paint, a) = kcolor(&s.color);
+    Stroke {
+        paint,
+        width: s.width as f32,
+        opacity: NormalizedF32::new(a).unwrap_or(NormalizedF32::ONE),
+        dash: (!s.dash.is_empty())
+            .then(|| StrokeDash { array: s.dash.iter().map(|d| *d as f32).collect(), offset: 0.0 }),
+        ..Default::default()
+    }
+}
+
+struct Ctx<'a> {
+    doc: &'a Document,
+    fonts: &'a FontStore,
+    kfonts: HashMap<FaceId, Option<Font>>,
+    images: HashMap<newpub_core::Id, Option<krilla::image::Image>>,
+}
+
+impl Ctx<'_> {
+    fn font(&mut self, id: FaceId) -> Option<Font> {
+        let fonts = self.fonts;
+        self.kfonts
+            .entry(id)
+            .or_insert_with(|| {
+                let f = fonts.face(id);
+                Font::new(krilla::Data::from(f.data.clone()), f.index)
+            })
+            .clone()
+    }
+
+    fn image(&mut self, id: newpub_core::Id) -> Option<krilla::image::Image> {
+        let doc = self.doc;
+        self.images
+            .entry(id)
+            .or_insert_with(|| {
+                let a = doc.assets.get(&id)?;
+                let data: Vec<u8> = a.bytes.to_vec();
+                let img = if a.mime == "image/jpeg" {
+                    krilla::image::Image::from_jpeg(data.into(), true)
+                } else {
+                    krilla::image::Image::from_png(data.into(), true)
+                };
+                img.ok()
+            })
+            .clone()
+    }
+
+    fn draw(&mut self, s: &mut krilla::surface::Surface, page: &PageDisplay) {
+        for item in &page.items {
+            match item {
+                Item::Path { path, fill, stroke, transform } => {
+                    let Some(p) = kpath(path) else { continue };
+                    s.push_transform(&kt(transform));
+                    match fill {
+                        Some(f) => {
+                            let (paint, a) = kcolor(f);
+                            s.set_fill(Some(Fill {
+                                paint,
+                                opacity: NormalizedF32::new(a).unwrap_or(NormalizedF32::ONE),
+                                rule: FillRule::NonZero,
+                            }));
+                        }
+                        None => s.set_fill(None),
+                    }
+                    s.set_stroke(stroke.as_ref().map(kstroke));
+                    s.draw_path(&p);
+                    s.pop();
+                }
+                Item::Image { asset, local, clip, transform } => {
+                    let Some(img) = self.image(*asset) else { continue };
+                    let (pw, ph) = img.size();
+                    let Some(size) = Size::from_wh(pw as f32, ph as f32) else { continue };
+                    let Some(cr) = KRect::from_xywh(clip.x as f32, clip.y as f32, clip.w as f32, clip.h as f32) else {
+                        continue;
+                    };
+                    let mut pb = PathBuilder::new();
+                    pb.push_rect(cr);
+                    let Some(cp) = pb.finish() else { continue };
+                    s.push_transform(&kt(transform));
+                    s.push_clip_path(&cp, &FillRule::NonZero);
+                    s.push_transform(&kt(local));
+                    s.draw_image(img, size);
+                    s.pop();
+                    s.pop();
+                    s.pop();
+                }
+                Item::Glyphs { run, transform } => {
+                    let Some(font) = self.font(run.face) else { continue };
+                    let Some(first) = run.glyphs.first() else { continue };
+                    let (x0, y0) = (first.x, first.y);
+                    let size = run.size as f32;
+                    let xs = run.x_scale.max(0.01);
+                    let glyphs: Vec<KrillaGlyph> = run
+                        .glyphs
+                        .iter()
+                        .enumerate()
+                        .map(|(i, g)| {
+                            let next_x = run.glyphs.get(i + 1).map(|n| n.x).unwrap_or(g.x + g.advance);
+                            let adv = ((next_x - g.x) / xs / run.size) as f32;
+                            KrillaGlyph::new(
+                                GlyphId::new(g.id as u32),
+                                adv,
+                                0.0,
+                                ((g.y - y0) / run.size) as f32,
+                                0.0,
+                                g.text_range.clone(),
+                                None,
+                            )
+                        })
+                        .collect();
+                    let skew = if run.synthetic_italic { -0.21 } else { 0.0 };
+                    let local = Affine::translate(x0, y0).compose(Affine([xs, 0.0, skew, 1.0, 0.0, 0.0]));
+                    s.push_transform(&kt(&transform.compose(local)));
+                    let (paint, a) = kcolor(&run.color);
+                    let opacity = NormalizedF32::new(a).unwrap_or(NormalizedF32::ONE);
+                    s.set_fill(Some(Fill { paint: paint.clone(), opacity, rule: FillRule::NonZero }));
+                    s.set_stroke(run.synthetic_bold.then(|| Stroke {
+                        paint,
+                        width: (run.size * 0.03) as f32,
+                        opacity,
+                        ..Default::default()
+                    }));
+                    s.draw_glyphs(Point::from_xy(0.0, 0.0), &glyphs, font, &run.text, size, false);
+                    s.set_stroke(None);
+                    s.pop();
+                }
+            }
+        }
+    }
+}
+
+fn crop_marks(s: &mut krilla::surface::Surface, x: f64, y: f64, w: f64, h: f64, off: f64) {
+    let mut pb = PathBuilder::new();
+    let (x1, y1) = (x + w, y + h);
+    for (cx, cy, dx, dy) in [(x, y, -1.0, -1.0), (x1, y, 1.0, -1.0), (x, y1, -1.0, 1.0), (x1, y1, 1.0, 1.0)] {
+        // horizontal mark
+        pb.move_to((cx + dx * off) as f32, cy as f32);
+        pb.line_to((cx + dx * (off + MARK_LEN)) as f32, cy as f32);
+        // vertical mark
+        pb.move_to(cx as f32, (cy + dy * off) as f32);
+        pb.line_to(cx as f32, (cy + dy * (off + MARK_LEN)) as f32);
+    }
+    if let Some(p) = pb.finish() {
+        s.set_fill(None);
+        // Registration colour: prints on every separation.
+        let reg = separation::Color::new(
+            255,
+            separation::SeparationSpace::new(
+                separation::SeparationColorant::AllColorants,
+                krilla::color::RegularColor::Cmyk(cmyk::Color::new(255, 255, 255, 255)),
+            ),
+        );
+        s.set_stroke(Some(Stroke {
+            paint: krilla::color::Color::Special(krilla::color::SpecialColor::Separation(reg)).into(),
+            width: 0.25,
+            ..Default::default()
+        }));
+        s.draw_path(&p);
+        s.set_stroke(None);
+    }
+}
+
+/// Exports the document to PDF bytes.
+pub fn export_pdf(
+    doc: &Document,
+    layout: &DocLayout,
+    fonts: &FontStore,
+    opts: &PdfOptions,
+) -> Result<Vec<u8>, PdfError> {
+    let indices: Vec<usize> = opts.pages.clone().unwrap_or_else(|| (0..doc.pages.len()).collect());
+    let indices: Vec<usize> = indices.into_iter().filter(|i| *i < doc.pages.len()).collect();
+    if indices.is_empty() {
+        return Err(PdfError::Empty);
+    }
+    let (w, h) = (doc.setup.width.0, doc.setup.height.0);
+    let bleed = if opts.bleed { doc.setup.bleed.0 } else { 0.0 };
+    let marks = if opts.crop_marks { MARK_GAP + MARK_LEN + 2.0 } else { 0.0 };
+    let pad = bleed + marks;
+    let mut kd = KDoc::new();
+    let mut ctx = Ctx { doc, fonts, kfonts: HashMap::new(), images: HashMap::new() };
+    let mut meta = krilla::metadata::Metadata::new().creator("newpub".to_string());
+    if !doc.meta.title.is_empty() {
+        meta = meta.title(doc.meta.title.clone());
+    }
+    if !doc.meta.author.is_empty() {
+        meta = meta.authors(vec![doc.meta.author.clone()]);
+    }
+    kd.set_metadata(meta);
+
+    // Sheets: each is a list of (page index or blank, x offset) placed side by side.
+    let sheets: Vec<Vec<Option<usize>>> = match opts.imposition {
+        Imposition::None => indices.iter().map(|i| vec![Some(*i)]).collect(),
+        Imposition::Booklet => booklet_order(indices.len())
+            .into_iter()
+            .map(|side| side.into_iter().map(|k| k.map(|k| indices[k])).collect())
+            .collect(),
+    };
+    for sheet in sheets {
+        let n = sheet.len() as f64;
+        let (sw, sh) = (w * n, h);
+        let (mw, mh) = (sw + 2.0 * pad, sh + 2.0 * pad);
+        let r = |x: f64, y: f64, w: f64, h: f64| KRect::from_xywh(x as f32, y as f32, w as f32, h as f32);
+        let settings = PageSettings::from_wh(mw as f32, mh as f32)
+            .ok_or(PdfError::Empty)?
+            .with_trim_box(r(pad, pad, sw, sh))
+            .with_bleed_box(r(pad - bleed, pad - bleed, sw + 2.0 * bleed, sh + 2.0 * bleed));
+        let mut page = kd.start_page_with(settings);
+        let mut s = page.surface();
+        for (k, slot) in sheet.iter().enumerate() {
+            let Some(pi) = slot else { continue };
+            let disp = page_display(doc, layout, *pi);
+            let ox = pad + k as f64 * w;
+            // Clip to the page's trim plus bleed (bleed only on outer edges of an imposed sheet).
+            let (cl, cr) = (if k == 0 { bleed } else { 0.0 }, if k + 1 == sheet.len() { bleed } else { 0.0 });
+            let Some(clip) = r(ox - cl, pad - bleed, w + cl + cr, h + 2.0 * bleed) else { continue };
+            let mut pb = PathBuilder::new();
+            pb.push_rect(clip);
+            if let Some(cp) = pb.finish() {
+                s.push_clip_path(&cp, &FillRule::NonZero);
+                s.push_transform(&Transform::from_translate(ox as f32, pad as f32));
+                ctx.draw(&mut s, &disp);
+                s.pop();
+                s.pop();
+            }
+        }
+        if opts.crop_marks {
+            crop_marks(&mut s, pad, pad, sw, sh, bleed + MARK_GAP);
+        }
+        s.finish();
+        page.finish();
+    }
+    kd.finish().map_err(|e| PdfError::Krilla(format!("{e:?}")))
+}
+
+/// Saddle-stitch page order. Returns sheet sides, each `[left, right]` as indices into the
+/// page list (or `None` for blank padding pages).
+pub fn booklet_order(n: usize) -> Vec<Vec<Option<usize>>> {
+    let total = n.div_ceil(4).max(1) * 4;
+    let at = |k: usize| (k < n).then_some(k);
+    let mut sides = vec![];
+    for s in 0..total / 4 {
+        sides.push(vec![at(total - 1 - 2 * s), at(2 * s)]);
+        sides.push(vec![at(2 * s + 1), at(total - 2 - 2 * s)]);
+    }
+    sides
+}

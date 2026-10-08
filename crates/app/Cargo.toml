@@ -1,0 +1,12 @@
+[package]
+name = "newpub-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+newpub-core.workspace = true
+newpub-engine.workspace = true
+eframe.workspace = true
+egui.workspace = true
+serde_json.workspace = true

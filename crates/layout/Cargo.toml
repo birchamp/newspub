@@ -1,0 +1,15 @@
+[package]
+name = "newpub-layout"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+newpub-core.workspace = true
+rustybuzz.workspace = true
+ttf-parser.workspace = true
+fontdb.workspace = true
+unicode-linebreak.workspace = true
+unicode-segmentation.workspace = true
+hyphenation.workspace = true
+serde.workspace = true

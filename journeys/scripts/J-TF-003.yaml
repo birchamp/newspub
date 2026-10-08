@@ -1,0 +1,30 @@
+id: J-TF-003
+title: Unlink and relink frames; text reflows
+covers: [TF-04]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 3in, 3in]}
+    as: f1
+  - add_text_frame: {page: 0, rect: [4.5in, 1in, 3in, 3in]}
+    as: f2
+  - link_frames: {from: $f1, to: $f2}
+  - insert_text: {target: $f1, text: "@repeat:40:Lanterns for the winter market. "}
+  - expect: {query: {q: frame_text, frame: $f2}, contains: "Lanterns"}
+  - let: {before: {q: story_text, target: $f1}}
+  # break the chain: f2 is emptied, its text stays in the story as overflow of f1
+  - unlink_frame: {frame: $f1}
+  - expect: {query: {q: frame_text, frame: $f2}, equals: ""}
+  - expect: {query: {q: overflow, target: $f1}, equals: true}
+  - expect: {query: {q: story_text, target: $f1}, equals: $before}
+  - expect: {query: {q: story_frames, target: $f1}, equals: [$f1]}
+  - expect: {query: {q: story_frames, target: $f2}, equals: [$f2]}
+  # relink: text flows back
+  - link_frames: {from: $f1, to: $f2}
+  - expect: {query: {q: overflow, target: $f1}, equals: false}
+  - expect: {query: {q: frame_text, frame: $f2}, contains: "Lanterns"}
+  # deleting the second frame of a chain keeps the story in the first frame
+  - delete_objects: {ids: [$f2]}
+  - expect: {query: {q: story_text, target: $f1}, equals: $before}
+  - expect: {query: {q: overflow, target: $f1}, equals: true}
+  - undo: {}
+  - expect: {query: {q: overflow, target: $f1}, equals: false}

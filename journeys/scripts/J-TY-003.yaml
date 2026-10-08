@@ -1,0 +1,26 @@
+id: J-TY-003
+title: Line spacing (multiple and exact) and space before/after paragraphs
+covers: [TY-03]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 2in, 8in]}
+    as: f
+  - insert_text: {target: $f, text: "One two three four five six seven eight nine ten eleven twelve\nSecond paragraph starts here"}
+  - let: {single: {q: frame_lines, frame: $f}}
+  # exact 20pt: baselines are 20pt apart
+  - format_paras: {target: $f, start: 0, end: 1, attrs: {line_spacing: {exactly: 20}}}
+  - expect: {query: {q: para_attrs, target: $f, at: 0}, path: /line_spacing, equals: {exactly: 20.0}}
+  - let: {l: {q: frame_lines, frame: $f}}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /1/top, approx: [25.76, 0.01]}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /2/top, approx: [45.76, 0.01]}
+  # double spacing: line pitch is twice the single pitch (Carlito 11pt natural ≈ 13.43pt)
+  - format_paras: {target: $f, start: 0, end: 1, attrs: {line_spacing: {multiple: 2.0}}}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/height, approx: [26.86, 0.1]}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /1/top, approx: [32.62, 0.1]}
+  # space after paragraph 1 and before paragraph 2 add up
+  - format_paras: {target: $f, start: 0, end: 1, attrs: {line_spacing: {multiple: 1.0}, space_after: 12}}
+  - format_paras: {target: $f, start: 70, end: 70, attrs: {space_before: 6}}
+  - let: {n: {q: frame_lines, frame: $f}}
+  - expect: {query: {q: para_attrs, target: $f, at: 70}, path: /space_before, equals: 6}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /3/text, starts_with: "Second"}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /3/top, approx: [64.04, 0.1]}

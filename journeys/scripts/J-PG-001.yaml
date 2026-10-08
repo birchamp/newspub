@@ -1,0 +1,23 @@
+id: J-PG-001
+title: New publication from page size, orientation, and margins
+covers: [PG-01, PG-02]
+steps:
+  - new_document: {width: 8.5in, height: 11in, margins: {top: 1in, bottom: 0.75in, inside: 0.5in, outside: 0.6in}}
+  - expect: {query: {q: page_count}, equals: 1}
+  - expect: {query: {q: document}, path: /setup/width, approx: [612, 0.01]}
+  - expect: {query: {q: document}, path: /setup/height, approx: [792, 0.01]}
+  - expect: {query: {q: document}, path: /setup/margins/top, approx: [72, 0.01]}
+  - expect: {query: {q: document}, path: /setup/margins/left, approx: [36, 0.01]}
+  - expect: {query: {q: document}, path: /setup/margins/right, approx: [43.2, 0.01]}
+  # A4 landscape, 3 pages
+  - new_document: {width: 297mm, height: 210mm, pages: 3}
+  - expect: {query: {q: page_count}, equals: 3}
+  - expect: {query: {q: document}, path: /setup/width, approx: [841.89, 0.01]}
+  - export_pdf: {path: a4-landscape.pdf}
+  - expect_pdf: {file: a4-landscape.pdf, pages: 3, page_size: {w: 841.89, h: 595.28}}
+  # A5 then change to a custom size
+  - new_document: {width: 148mm, height: 210mm}
+  - set_page_setup: {width: 5in, height: 7in, margins: {top: 0.25in, bottom: 0.25in, left: 0.25in, right: 0.25in}}
+  - export_pdf: {path: custom.pdf}
+  - expect_pdf: {file: custom.pdf, pages: 1, page_size: {w: 360, h: 504}, boxes: [{page: 1, trim: [0, 0, 360, 504]}]}
+  - expect_error: {set_page_setup: {width: 0}}

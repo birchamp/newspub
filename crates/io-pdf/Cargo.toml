@@ -1,0 +1,13 @@
+[package]
+name = "newpub-io-pdf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+newpub-render.workspace = true
+serde.workspace = true
+newpub-core.workspace = true
+newpub-layout.workspace = true
+krilla.workspace = true
+thiserror.workspace = true

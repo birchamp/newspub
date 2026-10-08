@@ -1,0 +1,17 @@
+[package]
+name = "newpub-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+newpub-core.workspace = true
+newpub-layout.workspace = true
+newpub-render.workspace = true
+newpub-io-pdf.workspace = true
+newpub-io-native.workspace = true
+newpub-io-pub.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+image.workspace = true

@@ -1,0 +1,29 @@
+id: J-TF-002
+title: Linked frames across pages; text flows frame to frame
+covers: [TF-03]
+steps:
+  - new_document: {width: 8.5in, height: 11in, pages: 2}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 6.5in, 4in]}
+    as: f1
+  - add_text_frame: {page: 1, rect: [1in, 1in, 6.5in, 9in]}
+    as: f2
+  - link_frames: {from: $f1, to: $f2}
+  - expect: {query: {q: story_frames, target: $f1}, equals: [$f1, $f2]}
+  - insert_text: {target: $f1, text: "@file:fixtures/three-pages.txt"}
+  - expect: {query: {q: frame_text, frame: $f1}, len: {gt: 500}}
+  - expect: {query: {q: frame_text, frame: $f2}, len: {gt: 500}}
+  # the first word of the story is in frame 1, the text continues in frame 2 where frame 1 stopped
+  - expect: {query: {q: char_frame, target: $f1, at: 0}, equals: $f1}
+  - expect: {query: {q: char_page, target: $f1, at: 0}, equals: 0}
+  - expect: {query: {q: frame_lines, frame: $f2}, path: /0/start, gt: 400}
+  # linking cannot target a frame that already has text
+  - add_text_frame: {page: 1, rect: [1in, 10in, 2in, 0.5in]}
+    as: f3
+  - insert_text: {target: $f3, text: "not empty"}
+  - expect_error: {link_frames: {from: $f2, to: $f3}}
+  - export_pdf: {path: linked.pdf}
+  - expect_pdf:
+      file: linked.pdf
+      pages: 2
+      page_text:
+        - {page: 1, contains: "New mayor library hall"}

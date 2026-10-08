@@ -1,0 +1,10 @@
+[package]
+name = "newpub-io-pub"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+newpub-core.workspace = true
+cfb.workspace = true
+thiserror.workspace = true

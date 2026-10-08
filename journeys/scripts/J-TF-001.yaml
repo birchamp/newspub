@@ -1,0 +1,30 @@
+id: J-TF-001
+title: Text frame wraps typed text to its width and flags overflow
+covers: [TF-01, TF-02]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 3in, 2in]}
+    as: f
+  - type_text: {target: $f, text: "The quick brown fox jumps over the lazy dog while the choir sings in the hall next door."}
+  - expect: {query: {q: story_text, target: $f}, equals: "The quick brown fox jumps over the lazy dog while the choir sings in the hall next door."}
+  - expect: {query: {q: frame_lines, frame: $f}, len: {gte: 2}}
+  # every line stays inside the frame's text area (3in wide minus 0.08in insets each side)
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/ink_right, lte: 210.25}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /1/ink_right, lte: 210.25}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/ink_left, approx: [5.76, 0.5]}
+  - expect: {query: {q: frame_text, frame: $f}, contains: "next door."}
+  - expect: {query: {q: overflow, target: $f}, equals: false}
+  # fill it past the bottom: overflow is flagged and the tail is not shown
+  - insert_text: {target: $f, text: "@repeat:30: Another sentence about the bake sale."}
+  - insert_text: {target: $f, text: " FINALWORD"}
+  - expect: {query: {q: overflow, target: $f}, equals: true}
+  - expect: {query: {q: frame_text, frame: $f}, not_contains: "FINALWORD"}
+  - expect: {query: {q: overflow_at, target: $f}, gt: 50}
+  # widening the frame shows more text per line
+  - let: {narrow: {q: frame_lines, frame: $f}}
+  - set_object: {id: $f, patch: {rect: [1in, 1in, 6in, 8in]}}
+  - expect: {query: {q: overflow, target: $f}, equals: false}
+  - expect: {query: {q: frame_text, frame: $f}, contains: "FINALWORD"}
+  - export_pdf: {path: frame.pdf}
+  - expect_pdf: {file: frame.pdf, text_contains: ["The quick brown fox jumps over the lazy dog", "FINALWORD"]}
+  - expect_png: {page: 0, ink: [{rect: [72, 72, 400, 14], min: 0.02}, {rect: [72, 600, 400, 100], max: 0.0}]}

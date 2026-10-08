@@ -1,0 +1,52 @@
+id: J-PG-003
+title: Master pages apply to pages; ignore master; multiple masters
+covers: [PG-04, PG-07]
+steps:
+  - new_document: {width: 8.5in, height: 11in, pages: 3}
+  - add_master: {name: "Main"}
+    as: main
+  - add_text_frame: {master: $main, rect: [0.5in, 0.4in, 7.5in, 0.5in]}
+    as: head
+  - insert_text: {target: $head, text: "Parish Newsletter Masthead"}
+  - add_shape: {master: $main, rect: [0.5in, 10.2in, 7.5in, 0.1in], kind: rect, fill: "#000000"}
+  - apply_master: {master: $main}
+  - expect: {query: {q: page, page: 2}, path: /master, equals: $main}
+  - export_pdf: {path: masters.pdf}
+  - expect_pdf:
+      file: masters.pdf
+      pages: 3
+      page_text:
+        - {page: 1, contains: "Parish Newsletter Masthead"}
+        - {page: 2, contains: "Parish Newsletter Masthead"}
+        - {page: 3, contains: "Parish Newsletter Masthead"}
+      ink:
+        - {page: 2, rect: [40, 735, 530, 5], min: 0.9}
+  # page 2 ignores the master
+  - set_ignore_master: {page: 1, ignore: true}
+  - export_pdf: {path: ignore.pdf}
+  - expect_pdf:
+      file: ignore.pdf
+      page_text:
+        - {page: 2, not_contains: "Masthead"}
+        - {page: 3, contains: "Masthead"}
+      ink:
+        - {page: 2, rect: [40, 735, 530, 5], max: 0.0}
+  # a second master on page 3 only
+  - add_master: {name: "Back cover"}
+    as: back
+  - add_text_frame: {master: $back, rect: [1in, 9in, 6in, 1in]}
+    as: backtext
+  - insert_text: {target: $backtext, text: "Mailing panel"}
+  - apply_master: {pages: [2], master: $back}
+  - expect: {query: {q: masters}, len: 2}
+  - export_pdf: {path: two-masters.pdf}
+  - expect_pdf:
+      file: two-masters.pdf
+      page_text:
+        - {page: 1, contains: "Masthead", not_contains: "Mailing panel"}
+        - {page: 3, contains: "Mailing panel", not_contains: "Masthead"}
+  # editing the master updates every page that uses it
+  - insert_text: {target: $head, text: " — Spring"}
+  - export_pdf: {path: edited.pdf}
+  - expect_pdf: {file: edited.pdf, page_text: [{page: 1, contains: "Masthead — Spring"}]}
+  - expect_roundtrip: {}
