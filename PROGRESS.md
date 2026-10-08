@@ -84,3 +84,11 @@ The dashboard parses this file:
 - Batch 3 dispatched (all Sonnet, base 4a2fcc8): BLOCKS (BB-03, on the new core `Fragment` API), PICKPRINT (UI-08, PR-07), VIEWAX (GD-04, UI-06, AX-04).
 - Journey fix (lead): UI-AX-001 tool name is "TextBox" (the app's `Tool` debug name), not "Text".
 - Local: 95/100.
+
+### 2026-10-08 22:05 — First PARITY check-off (CI addfc94)
+- CI run 37839317947 at commit addfc94: clippy and build are green on Linux, macOS and Windows. Journeys pass 93/97 on each OS, and the failing set is identical everywhere: J-AX-003, J-BB-003, J-BB-004, UI-SH-007, all unimplemented at that commit.
+- 105 of 128 PARITY items are checked off: those whose listed journeys all passed on every OS.
+- Unchecked:
+  - Since fixed by the lead and awaiting CI: BB-04, AX-03.
+  - In Batch 3: BB-03, UI-08, PR-07, GD-04, UI-06, AX-04.
+  - P3 items without implementations: 15.
