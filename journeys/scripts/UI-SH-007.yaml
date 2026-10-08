@@ -1,0 +1,20 @@
+id: UI-SH-007
+title: Template picker at startup; new publication from a built-in template
+covers: [UI-08]
+ui: true
+startup_template_picker: true
+steps:
+  - expect_ui: {label: "Choose a template"}
+  - expect_ui: {label: "Newsletter"}
+  - expect_ui: {label: "Blank publication"}
+  - click: {label: "Newsletter"}
+  - click: {label: "Create"}
+  - expect_ui: {label: "Choose a template", exists: false}
+  - expect: {query: {q: page_count}, equals: 4}
+  - expect_ui: {label: "Page 4"}
+  # File > New brings the picker back
+  - click: {label: "New"}
+  - expect_ui: {label: "Choose a template"}
+  - click: {label: "Blank publication"}
+  - click: {label: "Create"}
+  - expect: {query: {q: page_count}, equals: 1}

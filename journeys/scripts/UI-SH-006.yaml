@@ -1,0 +1,45 @@
+id: UI-SH-006
+title: Keyboard shortcuts carried over from NewsPub
+covers: [UI-07]
+ui: true
+steps:
+  - click: {label: "Rectangle"}
+  - drag: {from: [1in, 1in], to: [2in, 2in]}
+  - expect: {query: {q: document}, path: /pages/0/objects/0, gt: 0, as: a}
+  # Ctrl/Cmd+D duplicates the selected object, offset by 12 pt, and selects the copy
+  - key: {key: "D", command: true}
+  - expect: {query: {q: object_count, page: 0}, equals: 2}
+  - expect: {query: {q: document}, path: /pages/0/objects/1, gt: 0, as: b}
+  - expect: {query: {q: object, id: $b}, path: /rect/x, approx: [84, 1.5]}
+  # Ctrl+[ sends the selection to the back, Ctrl+] brings it to the front
+  - key: {key: "OpenBracket", command: true}
+  - expect: {query: {q: page_objects, page: 0}, equals: [$b, $a]}
+  - key: {key: "CloseBracket", command: true}
+  - expect: {query: {q: page_objects, page: 0}, equals: [$a, $b]}
+  # held nudges: several arrow presses in a row are one undo step
+  - key: {key: "ArrowRight"}
+  - key: {key: "ArrowRight"}
+  - key: {key: "ArrowRight"}
+  - expect: {query: {q: object, id: $b}, path: /rect/x, approx: [87, 1.5]}
+  - key: {key: "Z", command: true}
+  - expect: {query: {q: object, id: $b}, path: /rect/x, approx: [84, 1.5]}
+  # zoom stops and fit
+  - key: {key: "0", command: true}
+  - expect: {query: {q: view}, path: /fit, equals: true}
+  - key: {key: "Equals", command: true}
+  - expect: {query: {q: view}, path: /zoom_stop, equals: true}
+  # Escape deselects
+  - key: {key: "Escape"}
+  - expect: {query: {q: view}, path: /selection, len: 0}
+  # Tab cycles through the frames of the selected story
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 4in], to: [3in, 5in]}
+  - key: {key: "Escape"}
+  - click: {label: "Text Box"}
+  - drag: {from: [4in, 4in], to: [6in, 5in]}
+  - key: {key: "Escape"}
+  - expect: {query: {q: document}, path: /pages/0/objects/2, gt: 0, as: t1}
+  - expect: {query: {q: document}, path: /pages/0/objects/3, gt: 0, as: t2}
+  # Ctrl/Cmd+E opens Export PDF
+  - key: {key: "E", command: true}
+  - expect_ui: {label: "PDF file"}

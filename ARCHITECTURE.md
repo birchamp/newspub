@@ -173,3 +173,43 @@ images) → PI-04 (formatting). Stop and ask a human if the approach needs code 
 | Date | Change | Reason |
 |------|--------|--------|
 | 2026-10-08 | Initial `Command`/`Action`/`Query` sets defined (see crates/core/src/command.rs, crates/engine/src/action.rs) | Phase 0 |
+
+## 12. Predecessor survey (NewsPub, Electron + React + TS) and what we adopt
+
+Source: `birchamp/newspub` branches `master` and `claude/ui-testing-responsiveness-smep9u`, surveyed read-only on 2026-10-08.
+
+**Target users (from its spec).** Non-technical users making multi-page newsletters on desktop. Their workflow: start from a
+template, type into linked frames that flow across pages, place images with text wrap, export PDF. This confirms the P0/P1
+ordering in PARITY.md.
+
+**Same as ours already:** points with y down; text lives in stories ("threads") that frames display in order; z-order is the
+order of the page's object list; zip file with `document.json` plus separate asset bytes and an atomic save; one layout feeding
+both screen and PDF.
+
+**Adopted (no conflict with Publisher):**
+- File extension **`.newspub`** for native files (our format, version 1). We also **open the predecessor's `.newspub`**
+  (`metadata.json` + `document.json` with `threads`/`runs` + `assets/`) by converting it on load. See FI-05.
+- Keyboard: Ctrl/Cmd+Z, Shift+Z / Y redo; B / I; **D duplicate (+12, +12 pt)**; **] front, [ back**; = / - zoom to the next
+  or previous stop (25, 50, 75, 100, 150, 200, 300, 400 %); **0 fit**; N / O / S / Shift+S / **E export PDF**.
+  Arrows nudge 1 pt, Shift+arrows 10 pt, and held nudges within 600 ms are one undo step. Delete / Backspace deletes;
+  **Tab cycles through the frames of the selected story**; Esc deselects or leaves text editing; Enter starts editing. See UI-07.
+- Snapping tolerance is 6 screen px. Targets are page edges, margins, page centre, and sibling objects' edges and centres. When
+  moving, the closest match per axis wins; when resizing, only the dragged edges snap. No snapping while nudging. Same as GD-03 plus
+  the page-centre target.
+- Undo grouping: a typing burst is one step (we coalesce on contiguous insertion; the predecessor used 900 ms), and a drag
+  gesture is one step.
+- Spread view: page 1 alone on the right, then 2+3, 4+5 (matches Publisher's facing-pages display and our `spreads` query).
+- The template picker opens at startup (UI-08). Its "Classic 4-Page Newsletter" layout (headline frame, two-column body
+  threaded across pages 1–3, image band on page 3, contact block on page 4) becomes our built-in **newsletter** template (BB-02).
+- Save As Template options: keep article text (off), keep placed images (off), keep background images (on).
+- Empty frames show a dashed placeholder ("Text" / "Image"). Overflow shows a red "+" marker at the frame's bottom-right.
+
+**Not adopted (Publisher parity wins):**
+- Default text 14 pt sans with line height 1.4 → we use Publisher-like 11 pt Carlito with font metrics.
+- 8 pt frame padding → 0.08 in, Publisher's default.
+- "Cont. pg N" → "(Continued on page N)" / "(Continued from page N)".
+- No named styles → we have paragraph and character styles (TY-04).
+- Rect-wrap-one-side → wrap on both sides (IM-03).
+- Fixed 36 pt margins → per-publication margins (PG-02).
+
+Known predecessor bugs we do not reproduce: image wrap leaked across pages; PDF used only standard-14 fonts; WebP was skipped in PDF.

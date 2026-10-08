@@ -1,0 +1,32 @@
+id: J-FI-005
+title: Open a predecessor NewsPub (Electron) .newspub file
+covers: [FI-05]
+steps:
+  - open: {path: fixtures/legacy-newsletter.newspub}
+  - expect: {query: {q: page_count}, equals: 2}
+  - expect: {query: {q: document}, path: /setup/width, equals: 612}
+  - expect: {query: {q: document}, path: /meta/title, equals: "Legacy newsletter"}
+  # threads become stories; frames keep their thread order across pages
+  - expect: {query: {q: page_objects, page: 0}, len: 3}
+  - expect: {query: {q: document}, path: /pages/0/objects/1, gt: 0, as: body}
+  - expect: {query: {q: story_frames, target: $body}, len: 2}
+  - expect: {query: {q: story_text, target: $body}, starts_with: "The harvest supper was a great success.\nThanks to every volunteer."}
+  # run styles: italic run kept; a missing font family falls back but keeps the requested name
+  - expect: {query: {q: char_attrs, target: $body, at: 26}, path: /italic, equals: true}
+  - expect: {query: {q: char_attrs, target: $body, at: 0}, path: /size, equals: 11}
+  - expect: {query: {q: para_attrs, target: $body, at: 45}, path: /align, equals: justify}
+  # the headline thread is bold 28
+  - expect: {query: {q: document}, path: /pages/0/objects/0, gt: 0, as: head}
+  - expect: {query: {q: char_attrs, target: $head, at: 0}, path: /bold, equals: true}
+  - expect: {query: {q: char_attrs, target: $head, at: 0}, path: /size, equals: 28}
+  # the picture with its fit and rect-wrap mode
+  - expect: {query: {q: document}, path: /pages/0/objects/2, gt: 0, as: pic}
+  - expect: {query: {q: object, id: $pic}, path: /kind/fit, equals: fit}
+  - expect: {query: {q: object, id: $pic}, path: /wrap/mode, equals: square}
+  - expect: {query: {q: assets}, len: 1}
+  - expect: {query: {q: overflow, target: $body}, equals: false}
+  # saving writes the new format; reopening gives the same document
+  - save: {path: converted.newspub}
+  - expect_roundtrip: {}
+  - export_pdf: {path: legacy.pdf}
+  - expect_pdf: {file: legacy.pdf, pages: 2, images: 1, page_text: [{page: 1, contains: "Harvest News"}]}

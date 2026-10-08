@@ -181,6 +181,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | FI-02 | P1 | Embedded images and fonts list survive round-trip | J-FI-002 | [ ] |
 | FI-03 | P2 | Autosave and crash recovery | J-FI-003 | [ ] |
 | FI-04 | P2 | File format versioning and forward migration | J-FI-004 | [ ] |
+| FI-05 | P1 | Open predecessor NewsPub (Electron) `.newspub` files, converting threads, runs, and assets | J-FI-005 | [ ] |
 
 ## PI: .pub import (research track; see ARCHITECTURE.md §9)
 
@@ -233,3 +234,5 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | UI-04 | P1 | Format panels (font, paragraph, object) wired to commands | UI-SH-004 | [ ] |
 | UI-05 | P1 | Open/save dialogs, recent files | UI-SH-005 | [ ] |
 | UI-06 | P2 | Zoom, scroll, two-page spread view, rulers | UI-GD-001 | [ ] |
+| UI-07 | P1 | Keyboard shortcuts carried over from NewsPub (duplicate, z-order, zoom stops, fit, nudge, Tab through story frames) | UI-SH-006 | [ ] |
+| UI-08 | P2 | Template picker at startup; new publication from a built-in or saved template | UI-SH-007 | [ ] |

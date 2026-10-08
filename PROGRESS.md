@@ -7,7 +7,7 @@ The dashboard parses this file:
 
 ## Open blockers (need human input)
 
-- [B-001] Partly answered: the existing source is birchamp/newspub (Electron + React + TypeScript on branches `master` and `claude/ui-testing-responsiveness-smep9u`). Still open: target users (assumed: small-org newsletters, bulletins, and booklets, unless the predecessor's spec says otherwise) and the dashboard location (assumed: GitHub Pages, which already deploys from CI).
+- [B-001] Partly answered: the existing source is birchamp/newspub (Electron + React + TypeScript on branches `master` and `claude/ui-testing-responsiveness-smep9u`). Target users are now taken from the predecessor's spec (non-technical users making multi-page newsletters). Still open: the dashboard location (assumed: GitHub Pages, which already deploys from CI). Reply only to change it.
 
 ## Log
 
@@ -22,3 +22,7 @@ The dashboard parses this file:
 - User: the existing repo is birchamp/newspub. Beyond the initial-commit `main` it has two branches: `master` (design spec, implementation plan, Electron + React + Vite scaffold, model types) and `claude/ui-testing-responsiveness-smep9u` (a fuller TypeScript app: images, typography, snapping, arrange, thumbnails, shared undo). Phase 0 started from `main` alone and missed these.
 - Decision: survey the predecessor's document model and UX now, adopt its decisions where they don't conflict with Publisher parity, and record each adoption in ARCHITECTURE.md §0.
 - B-002 resolved: GitHub Pages was already enabled; the CI deploy-pages step succeeded.
+
+### 2026-10-08 18:20 — Predecessor surveyed; decisions adopted (lead)
+- An Explore agent surveyed the NewsPub TypeScript app (model, UX, shortcuts, snapping, templates, pretext layout). Results and adopt/not-adopt decisions are in ARCHITECTURE.md §12.
+- New parity items: FI-05 (open predecessor `.newspub` files), UI-07 (carried-over shortcuts), UI-08 (template picker at startup). Native files use the `.newspub` extension.
