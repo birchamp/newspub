@@ -2394,6 +2394,7 @@ dependencies = [
  "rustybuzz",
  "serde",
  "ttf-parser",
+ "unicode-bidi",
  "unicode-linebreak",
  "unicode-segmentation",
 ]

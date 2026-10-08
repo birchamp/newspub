@@ -38,3 +38,9 @@ The dashboard parses this file:
   - Name the exact base commit in each spec.
   - Give every task its own placeholder arm.
 - Items are checked off in PARITY.md only once CI is green on all three OSes for this merge.
+
+### 2026-10-08 19:50 — Lead layout work during Batch 2
+- Done by the lead: fields and sections (PG-06, PG-09); continued notices (TF-09); autofit fixups (TF-08); tables (TB-01..TB-04); vertical text and rotated frames (TF-10); text inside shapes (SH-06); glyph queries (TY-13 ligatures, TY-16 special characters); keep-with-next / keep-together / widow-orphan control with paragraph rollback (TY-15); baseline grid (TY-14); bidi shaping and visual reordering (TY-17).
+- Known gap (TY-17): the PDF text layer of right-to-left runs is in visual order, so copy/paste reverses Hebrew/Arabic. Fix: emit /ActualText spans (krilla marked content) — follow-up item.
+- Journey corrections (lead's own arithmetic, not behaviour changes): TF-007/TF-008 story lengths now queried; TF-009 frame too short for 24 pt; TY-013 frame b moved so its first baseline can reach the grid; SH-006 shape text wraps; TY-016 char positions compared relatively.
+- Decision: widow/orphan control is on by default (Publisher default); every earlier journey still passes.

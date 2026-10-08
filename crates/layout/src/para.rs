@@ -100,6 +100,8 @@ pub struct G {
     pub leader: Option<char>,
     /// Displayed text of a field glyph (the story holds one FIELD_CHAR).
     pub field: Option<std::sync::Arc<str>>,
+    /// Bidi embedding level (odd = right-to-left).
+    pub level: u8,
 }
 
 /// Text between two break opportunities.
@@ -157,6 +159,7 @@ pub fn build(
     let mark_rc = doc.resolve_char(pattrs, &mark_attrs);
     styles.push(RunStyle::new(fonts, &mark_rc, scale, None));
     let mark = 0;
+    let levels = bidi_levels(story.slice(range.clone()), doc.resolve_para(pattrs).rtl);
 
     for (rr, attrs) in story.runs() {
         let (s, e) = (rr.start.max(range.start), rr.end.min(range.end));
@@ -172,7 +175,7 @@ pub fn build(
             for ci in s..e {
                 let start = glyphs.len();
                 let orig: Vec<char> = shown.chars().collect();
-                shape_chunk(&mut glyphs, &styles[si], si, &shown, ci, &rc, false, &orig);
+                shape_chunk(&mut glyphs, &styles[si], si, &shown, ci, &rc, false, &orig, &[]);
                 for g in &mut glyphs[start..] {
                     g.chars = ci..ci + 1;
                     g.field = Some(shown.clone());
@@ -226,7 +229,8 @@ pub fn build(
                 };
                 let si = styles.len();
                 styles.push(RunStyle::new(fonts, &rc2, scale, fb));
-                shape_chunk(&mut glyphs, &styles[si], si, &chunk, s + k, &rc2, native_smcp, &text[k..m]);
+                let lv: &[u8] = if levels.is_empty() { &[] } else { &levels[s + k - range.start..s + m - range.start] };
+                shape_chunk(&mut glyphs, &styles[si], si, &chunk, s + k, &rc2, native_smcp, &text[k..m], lv);
                 k = m;
             }
             i = j;
@@ -245,6 +249,8 @@ fn single_upper(c: char) -> char {
     }
 }
 
+/// Shapes a chunk of one style and font. `levels` (bidi embedding level per char, may be empty = all
+/// left-to-right) splits it into direction runs; glyphs are emitted in logical order with their level.
 #[allow(clippy::too_many_arguments)]
 fn shape_chunk(
     out: &mut Vec<G>,
@@ -255,14 +261,47 @@ fn shape_chunk(
     rc: &ResolvedChar,
     smcp: bool,
     orig: &[char],
+    levels: &[u8],
 ) {
+    if levels.is_empty() || levels.iter().all(|l| *l == 0) {
+        shape_piece(out, st, si, text, first_char, rc, smcp, orig, 0);
+        return;
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        let lvl = levels.get(i).copied().unwrap_or(0);
+        let mut j = i + 1;
+        while j < chars.len() && levels.get(j).copied().unwrap_or(0) == lvl {
+            j += 1;
+        }
+        let piece: String = chars[i..j].iter().collect();
+        shape_piece(out, st, si, &piece, first_char + i, rc, smcp, &orig[i.min(orig.len())..j.min(orig.len())], lvl);
+        i = j;
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn shape_piece(
+    out: &mut Vec<G>,
+    st: &RunStyle,
+    si: usize,
+    text: &str,
+    first_char: usize,
+    rc: &ResolvedChar,
+    smcp: bool,
+    orig: &[char],
+    level: u8,
+) {
+    let rtl = level % 2 == 1;
+    let start = out.len();
     let opts = ShapeOpts {
         kerning: rc.kerning,
         ligatures: rc.ligatures,
         dlig: rc.dlig,
         small_caps: smcp,
         extra: &rc.features,
-        rtl: false,
+        rtl,
     };
     let shaped = shape(&st.face, text, &opts);
     // byte offset → char index within chunk
@@ -295,8 +334,26 @@ fn shape_chunk(
             decimal: ch == '.',
             leader: None,
             field: None,
+            level,
         });
     }
+    if rtl {
+        // rustybuzz returns right-to-left glyphs in visual order; store them logically.
+        out[start..].reverse();
+    }
+}
+
+/// Bidi embedding level per char of a paragraph (empty when the paragraph is plain left-to-right).
+pub fn bidi_levels(text: &str, rtl_base: bool) -> Vec<u8> {
+    use unicode_bidi::{BidiClass, BidiInfo, Level};
+    let has_rtl =
+        text.chars().any(|c| matches!(unicode_bidi::bidi_class(c), BidiClass::R | BidiClass::AL | BidiClass::AN));
+    if !rtl_base && !has_rtl {
+        return vec![];
+    }
+    let base = if rtl_base { Level::rtl() } else { Level::ltr() };
+    let info = BidiInfo::new(text, Some(base));
+    text.char_indices().map(|(b, _)| info.levels[b].number()).collect()
 }
 
 /// Splits glyphs at UAX #14 break opportunities (and around tabs).
@@ -415,7 +472,7 @@ pub fn shape_marker(
     let si = p.styles.len();
     p.styles.push(RunStyle::new(fonts, &rc, scale, fb));
     let mut glyphs = vec![];
-    shape_chunk(&mut glyphs, &p.styles[si], si, text, 0, &rc, false, &chars);
+    shape_chunk(&mut glyphs, &p.styles[si], si, text, 0, &rc, false, &chars, &[]);
     (!glyphs.is_empty()).then(|| Marker { style: si, text: text.to_string(), glyphs })
 }
 
@@ -469,7 +526,7 @@ pub fn drop_cap(
     let si = p.styles.len();
     p.styles.push(RunStyle::new(fonts, &rc, scale, None));
     let mut glyphs = vec![];
-    shape_chunk(&mut glyphs, &p.styles[si], si, &text, range.start, &rc, false, &chars);
+    shape_chunk(&mut glyphs, &p.styles[si], si, &text, range.start, &rc, false, &chars, &[]);
     if glyphs.is_empty() {
         p.styles.pop();
         return None;

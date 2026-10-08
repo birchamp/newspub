@@ -11,5 +11,6 @@ ttf-parser.workspace = true
 fontdb.workspace = true
 unicode-linebreak.workspace = true
 unicode-segmentation.workspace = true
+unicode-bidi = "0.3"
 hyphenation.workspace = true
 serde.workspace = true

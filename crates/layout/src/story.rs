@@ -49,6 +49,8 @@ impl Exclusion {
 
 struct FrameGeom {
     id: Id,
+    /// Page y of the frame's top (for the baseline grid); None when not on a page grid (table cells).
+    origin_y: Option<f64>,
     tf: TextFrame,
     /// Columns as (x0, x1) frame-local.
     cols: Vec<(f64, f64)>,
@@ -177,6 +179,7 @@ fn frame_geom(doc: &Document, id: Id) -> Option<FrameGeom> {
         // Vertical text: one character per line, stacked top to bottom (a hair-wide column forces a break after every glyph).
         return Some(FrameGeom {
             id,
+            origin_y: None,
             tf: tf.clone(),
             cols: vec![(content.x, content.x + 0.01)],
             top: content.y,
@@ -190,6 +193,7 @@ fn frame_geom(doc: &Document, id: Id) -> Option<FrameGeom> {
     });
     Some(FrameGeom {
         id,
+        origin_y: (obj.rotation == 0.0).then_some(obj.rect.y),
         tf: tf.clone(),
         cols: cols.collect(),
         top: content.y,
@@ -465,6 +469,7 @@ pub fn layout_cell(
     let content = rect.inset(ins.left.0, ins.top.0, ins.right.0, ins.bottom.0);
     let geom = FrameGeom {
         id: story.id,
+        origin_y: None,
         tf,
         cols: vec![(content.x, content.x + content.w.max(1.0))],
         top: content.y,
@@ -506,8 +511,25 @@ fn layout_in(
     let ranges = story.para_ranges();
     // Number of the previous paragraph when it was numbered.
     let mut prev_number: Option<u32> = None;
-    'paras: for (pi, range) in ranges.iter().enumerate() {
+    // Paragraph-level keeps (TY-15): snapshots let a paragraph be rolled back and pushed to the next column.
+    let n_paras = ranges.len();
+    let mut snaps: Vec<Option<Snap>> = vec![None; n_paras];
+    let mut pushed = vec![false; n_paras];
+    let mut widow_limit: Vec<Option<usize>> = vec![None; n_paras];
+    let mut para_pos: Vec<Vec<(usize, usize)>> = vec![vec![]; n_paras];
+    let mut kwn = vec![false; n_paras];
+    let mut pi = 0;
+    'paras: while pi < n_paras {
+        let range = &ranges[pi];
         let rp = doc.resolve_para(&story.paras[pi]);
+        kwn[pi] = rp.keep_with_next;
+        let snap = Snap::take(&flow, &outs, prev_number);
+        let started_top = flow.col_empty;
+        snaps[pi] = Some(snap);
+        if pushed[pi] && !flow.col_empty && !flow.done() {
+            flow.next_column();
+        }
+        para_pos[pi].clear();
         let cur_page = page_override.or_else(|| flow.frames.get(flow.fi).and_then(|f| doc.page_of(f.id)));
         let mut p = para::build(doc, fonts, story, pi, range.clone(), scale, cur_page);
         if !flow.col_empty || pi > 0 {
@@ -552,6 +574,13 @@ fn layout_in(
         let drop_lines = rp.drop_cap.as_ref().map(|d| d.lines as usize).unwrap_or(0);
         let mut emitted = 0usize;
         loop {
+            // Widow control: stop the paragraph's first column early so its last line has company.
+            if let (Some(lim), Some(first)) = (widow_limit[pi], para_pos[pi].first().copied())
+                && (flow.fi, flow.ci) == first
+                && para_pos[pi].iter().filter(|p| **p == first).count() >= lim
+            {
+                flow.next_column();
+            }
             // Estimate the line height from the next segment's style (or the paragraph mark).
             let est_styles: Vec<&RunStyle> = match p.segs.front() {
                 Some(s) if !s.glyphs.is_empty() => {
@@ -622,11 +651,21 @@ fn layout_in(
                 }
                 break Some((slot, lines, h2.max(h), asc + (h.max(h2) - h2)));
             };
-            let Some((slot, lines, lh, asc)) = placed else {
+            let Some((mut slot, lines, lh, asc)) = placed else {
                 // Out of frames: the rest of the story overflows.
                 sl.overflow_at = Some(p.segs.front().map(|s| s.start).unwrap_or(range.start));
                 break 'paras;
             };
+            // Baseline grid (TY-14): move the line down so its baseline sits on the page's grid.
+            if rp.align_to_baseline
+                && let (Some(grid), Some(oy)) = (&doc.baseline_grid, flow.frames[slot.frame].origin_y)
+                && grid.spacing.0 > 0.0
+            {
+                let (sp, off) = (grid.spacing.0, grid.offset.0);
+                let bp = oy + slot.y + asc;
+                let snapped = off + ((bp - off) / sp - 1e-9).ceil() * sp;
+                slot.y += (snapped - bp).max(0.0);
+            }
             let out = &mut outs[slot.frame];
             for (col, fill, x, w, _) in lines {
                 let justify = match rp.align {
@@ -670,6 +709,7 @@ fn layout_in(
                 }
                 out.lines.push(line);
                 emitted += 1;
+                para_pos[pi].push((slot.frame, col));
             }
             flow.y = slot.y + lh;
             flow.col_empty = false;
@@ -678,7 +718,57 @@ fn layout_in(
                 break;
             }
         }
+        // Check keep rules; on a violation roll back and lay out again.
+        let pos = &para_pos[pi];
+        let distinct = {
+            let mut d = pos.clone();
+            d.dedup();
+            d.len()
+        };
+        let count_at = |p: Option<&(usize, usize)>| p.map(|p| pos.iter().filter(|q| *q == p).count()).unwrap_or(0);
+        let (first_n, last_n) = (count_at(pos.first()), count_at(pos.last()));
+        if distinct > 1
+            && !started_top
+            && !pushed[pi]
+            && (rp.keep_together || (rp.widow_control && pos.len() >= 2 && first_n == 1))
+        {
+            // Keep lines together / orphan: start the paragraph in the next column.
+            pushed[pi] = true;
+            if let Some(sn) = &snaps[pi] {
+                sn.restore(&mut flow, &mut outs, &mut prev_number, &mut sl);
+            }
+            continue;
+        }
+        if distinct > 1
+            && rp.widow_control
+            && pos.len() >= 3
+            && last_n == 1
+            && first_n >= 2
+            && widow_limit[pi].is_none()
+        {
+            // Widow: move one more line to the next column.
+            widow_limit[pi] = Some(first_n - 1);
+            if let Some(sn) = &snaps[pi] {
+                sn.restore(&mut flow, &mut outs, &mut prev_number, &mut sl);
+            }
+            continue;
+        }
+        if pi > 0
+            && kwn[pi - 1]
+            && !pushed[pi - 1]
+            && !para_pos[pi - 1].is_empty()
+            && para_pos[pi - 1].last() != pos.first()
+        {
+            // Keep with next: the previous paragraph moves to the column where this one starts.
+            pushed[pi - 1] = true;
+            if let Some(sn) = &snaps[pi - 1] {
+                sn.restore(&mut flow, &mut outs, &mut prev_number, &mut sl);
+            }
+            pi -= 1;
+            continue;
+        }
         flow.y += rp.space_after;
+        pi += 1;
     }
     // Char ranges, overflow flags, vertical alignment.
     for (i, out) in outs.iter_mut().enumerate() {
@@ -710,6 +800,43 @@ fn layout_in(
     }
     add_continued_notices(doc, fonts, &notice, &flow.frames, &mut outs, sl.overflow_at.is_some());
     (sl, outs)
+}
+
+/// Layout state at the start of a paragraph.
+#[derive(Clone)]
+struct Snap {
+    fi: usize,
+    ci: usize,
+    y: f64,
+    col_empty: bool,
+    lens: Vec<(usize, usize)>,
+    prev_number: Option<u32>,
+}
+
+impl Snap {
+    fn take(flow: &Flow, outs: &[FrameLayout], prev_number: Option<u32>) -> Snap {
+        Snap {
+            fi: flow.fi,
+            ci: flow.ci,
+            y: flow.y,
+            col_empty: flow.col_empty,
+            lens: outs.iter().map(|o| (o.lines.len(), o.decorations.len())).collect(),
+            prev_number,
+        }
+    }
+
+    fn restore(&self, flow: &mut Flow, outs: &mut [FrameLayout], prev_number: &mut Option<u32>, sl: &mut StoryLayout) {
+        flow.fi = self.fi;
+        flow.ci = self.ci;
+        flow.y = self.y;
+        flow.col_empty = self.col_empty;
+        for (o, (l, d)) in outs.iter_mut().zip(&self.lens) {
+            o.lines.truncate(*l);
+            o.decorations.truncate(*d);
+        }
+        *prev_number = self.prev_number;
+        sl.overflow_at = None;
+    }
 }
 
 /// Style of "(Continued on page N)" notices: the story's font, italic, 9 pt.
@@ -968,7 +1095,29 @@ fn emit_line(
         });
     };
     let mut deco_spans: Vec<(DecorationKind, usize, f64, f64)> = vec![];
-    for (i, g) in glyphs.iter().enumerate() {
+    // Visual order (UAX #9 rule L2): reverse runs at each level from the highest down to the lowest odd level.
+    let mut order: Vec<usize> = (0..glyphs.len()).collect();
+    let max_level = glyphs.iter().map(|g| g.level).max().unwrap_or(0);
+    if max_level > 0 {
+        let min_odd = glyphs.iter().map(|g| g.level).filter(|l| l % 2 == 1).min().unwrap_or(1);
+        for lvl in (min_odd.max(1)..=max_level).rev() {
+            let mut k = 0;
+            while k < order.len() {
+                if glyphs[order[k]].level >= lvl {
+                    let mut e = k;
+                    while e < order.len() && glyphs[order[e]].level >= lvl {
+                        e += 1;
+                    }
+                    order[k..e].reverse();
+                    k = e;
+                } else {
+                    k += 1;
+                }
+            }
+        }
+    }
+    for &i in &order {
+        let g = glyphs[i];
         let st = &p.styles[g.style];
         let gx = pen + g.dx;
         let gy = baseline - st.shift - g.dy;

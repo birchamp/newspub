@@ -7,7 +7,7 @@ steps:
   # two frames side by side with different sizes; aligned paragraphs sit on the shared grid
   - add_text_frame: {page: 0, rect: [1in, 1in, 3in, 4in]}
     as: a
-  - add_text_frame: {page: 0, rect: [4.5in, 1.1in, 3in, 4in]}
+  - add_text_frame: {page: 0, rect: [4.5in, 0.95in, 3in, 4in]}
     as: b
   - insert_text: {target: $a, text: "@repeat:6:Grid aligned text. "}
   - insert_text: {target: $b, text: "@repeat:6:Other column text here. "}
