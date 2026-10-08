@@ -652,6 +652,7 @@ impl NewpubApp {
                                     newpub_engine::Imposition::None
                                 },
                                 pages: None,
+                                standard: None,
                             };
                             if self.act(SessionAction::ExportPdf { path: path.clone(), options }).is_some() {
                                 self.status = format!("Exported {path}");

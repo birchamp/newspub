@@ -3,6 +3,15 @@
 //! [`Session::query`] or exported files.
 
 pub mod action;
+mod autosave;
+mod guides;
+mod html;
+mod layersq;
+mod pdfq;
+mod pictures;
+mod pubimport;
+mod spell;
+mod templates;
 
 pub use action::{Action, Query, SessionAction};
 pub use newpub_core as core;
@@ -59,6 +68,13 @@ pub struct Session {
     pub base_dir: PathBuf,
     /// Incremented on every document change (for view caches).
     revision: u64,
+    pub(crate) guides: guides::State,
+    #[allow(dead_code)] // used once SP-01 lands
+    pub(crate) spell: spell::State,
+    #[allow(dead_code)] // used once PI-01 lands
+    pub(crate) pub_import: pubimport::State,
+    #[allow(dead_code)] // used once FI-03 lands
+    pub(crate) autosave: autosave::State,
 }
 
 impl Session {
@@ -75,6 +91,10 @@ impl Session {
             dirty: false,
             base_dir: PathBuf::from("."),
             revision: 0,
+            guides: Default::default(),
+            spell: Default::default(),
+            pub_import: Default::default(),
+            autosave: Default::default(),
         }
     }
 
@@ -116,6 +136,7 @@ impl Session {
         self.layout = None;
         self.dirty = true;
         self.revision += 1;
+        self.autosave_tick();
     }
 
     /// Changes whenever the document changes.
@@ -286,6 +307,13 @@ impl Session {
                 std::fs::write(self.resolve(path), bytes)?;
                 Ok(Outcome::default())
             }
+            SetSnapping { .. } | SetUnits { .. } | SetGeometry { .. } => self.guides_action(s),
+            SaveTemplate { .. } | NewFromTemplate { .. } | NewFromBuiltin { .. } => self.templates_action(s),
+            IgnoreWord { .. } => self.spell_action(s),
+            RelinkPicture { .. } | EmbedPicture { .. } => self.pictures_action(s),
+            ExportHtml { .. } => self.html_action(s),
+            ImportPub { .. } => self.pub_action(s),
+            SetAutosave { .. } | RecoverAutosave { .. } => self.autosave_action(s),
             ExportPng { path, page, dpi } => {
                 let png = self.page_png(*page, *dpi)?;
                 std::fs::write(self.resolve(path), png)?;
@@ -697,6 +725,23 @@ impl Session {
                 Value::Array(out)
             }
             AccessibilityCheck => self.accessibility_check(),
+            Session => json!({
+                "path": self.path.as_ref().map(|p| p.to_string_lossy().to_string()),
+                "dirty": self.dirty,
+                "units": self.guides.units,
+            }),
+            AllStoryText => json!(self.doc.stories.values().map(|s| s.text.clone()).collect::<Vec<_>>().join("\n")),
+            GlyphCount { .. } | MissingGlyphs { .. } | PageLabel { .. } | PageBaselines { .. } | ShapeKinds => {
+                return Err(EngineError::Other(format!("query {q:?} is not implemented yet")));
+            }
+            Guides { .. } | Snap { .. } | ObjectGeometry { .. } => self.guides_query(q)?,
+            BuiltinTemplates => self.templates_query(q)?,
+            Spelling | SpellingLanguages => self.spell_query(q)?,
+            Layers => self.layers_query(q)?,
+            MissingLinks | NpubEntries { .. } | OffPageObjects => self.pictures_query(q)?,
+            ColorsUsed | NUpLayout { .. } | Hyperlinks => self.pdf_query(q)?,
+            PubReport { .. } | ImportReport => self.pub_query(q)?,
+            Autosaves { .. } => self.autosave_query(q)?,
             TextBounds { frame } => {
                 let o = self.doc.object(*frame)?.clone();
                 let l = self.layout();

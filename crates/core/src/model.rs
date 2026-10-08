@@ -107,6 +107,9 @@ pub struct TextFrame {
     /// Show "Continued from page …" at the top when the story starts earlier.
     #[serde(default)]
     pub continued_from: bool,
+    /// Vertical text direction: characters stacked top to bottom (TF-10).
+    #[serde(default)]
+    pub vertical: bool,
 }
 fn one() -> u32 {
     1
@@ -135,6 +138,7 @@ impl TextFrame {
             stroke: None,
             continued_on: false,
             continued_from: false,
+            vertical: false,
         }
     }
 }
@@ -215,6 +219,10 @@ pub enum ShapeKind {
         sides: u32,
     },
     Arrow,
+    /// Speech-bubble rectangle with a tail ending at `tail` (rect-relative; may lie outside 0..1).
+    Callout {
+        tail: [f64; 2],
+    },
     /// Free-form path in rect-relative unit coordinates (0..1).
     Path {
         points: Vec<[f64; 2]>,
@@ -233,6 +241,49 @@ pub struct Shape {
     pub arrow_start: Arrow,
     #[serde(default)]
     pub arrow_end: Arrow,
+    /// Gradient fill; overrides `fill` when present (SH-07).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gradient: Option<Gradient>,
+    /// Story shown inside the shape (SH-06), laid out in the shape's text area.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub story: Option<Id>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GradientKind {
+    #[default]
+    Linear,
+    Radial,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct GradientStop {
+    /// Position 0–1 along the gradient.
+    pub at: f64,
+    pub color: Color,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Gradient {
+    #[serde(default)]
+    pub kind: GradientKind,
+    /// Degrees; 0 = left to right, 90 = top to bottom (linear only).
+    #[serde(default)]
+    pub angle: f64,
+    pub stops: Vec<GradientStop>,
+}
+
+/// Drop shadow behind an object (SH-07, IM-07).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Shadow {
+    #[serde(default)]
+    pub dx: Length,
+    #[serde(default)]
+    pub dy: Length,
+    #[serde(default)]
+    pub blur: Length,
+    pub color: Color,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -258,6 +309,46 @@ pub struct ImageFrame {
     pub fit: Fit,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stroke: Option<Stroke>,
+    /// Colour adjustments (IM-06), applied when rendering and baked into PDF images.
+    #[serde(default, skip_serializing_if = "ImageAdjust::is_identity")]
+    pub adjust: ImageAdjust,
+    /// Shape the picture is cropped to (IM-07).
+    #[serde(default)]
+    pub mask: ImageMask,
+    /// Width of the soft (feathered) edge; 0 = hard edges (IM-07).
+    #[serde(default)]
+    pub soft_edges: Length,
+    /// Mail-merge picture field: the data-source column holding a picture path (MM-04).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merge_field: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ImageAdjust {
+    pub greyscale: bool,
+    /// −1..1: c' = c + (255 − c)·b for b > 0, c·(1 + b) for b < 0.
+    pub brightness: f64,
+    /// −1..1: c' = 128 + (c − 128)·(1 + k).
+    pub contrast: f64,
+    /// Recolour: luminance L (0–1) maps to the colour scaled by L.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recolor: Option<Color>,
+}
+
+impl ImageAdjust {
+    pub fn is_identity(&self) -> bool {
+        *self == ImageAdjust::default()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ImageMask {
+    #[default]
+    Rect,
+    Ellipse,
+    RoundRect,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -333,6 +424,8 @@ pub struct Object {
     /// Group containing this object, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<Id>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shadow: Option<Shadow>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -423,7 +516,75 @@ pub struct Document {
     pub assets: BTreeMap<Id, Asset>,
     #[serde(default)]
     pub layers: Vec<Layer>,
+    /// Ruler guides on pages and masters, and the margin grid (GD-01, GD-02).
+    #[serde(default)]
+    pub guides: Guides,
+    /// User dictionary words stored with the publication (SP-02).
+    #[serde(default)]
+    pub custom_words: Vec<String>,
+    /// PDF bookmarks (EX-05).
+    #[serde(default)]
+    pub bookmarks: Vec<Bookmark>,
+    /// Reading order for accessibility (AX-03): page id → object ids. Pages not listed use z-order.
+    #[serde(default)]
+    pub reading_order: BTreeMap<Id, Vec<Id>>,
+    /// Sections restart page numbering (PG-09).
+    #[serde(default)]
+    pub sections: Vec<crate::field::Section>,
+    /// Baseline grid (TY-14).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub baseline_grid: Option<BaselineGrid>,
     pub next_id: u64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Orientation {
+    Horizontal,
+    Vertical,
+}
+
+/// A ruler guide. Exactly one of `page` / `master` is set.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Guide {
+    pub id: Id,
+    pub orientation: Orientation,
+    /// Distance from the page's left (vertical) or top (horizontal) edge.
+    pub pos: Length,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<Id>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub master: Option<Id>,
+}
+
+/// Column/row grid inside the margins, on every page.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct GridGuides {
+    pub columns: u32,
+    pub rows: u32,
+    pub gutter: Length,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Guides {
+    #[serde(default)]
+    pub ruler: Vec<Guide>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grid: Option<GridGuides>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Bookmark {
+    pub title: String,
+    /// Target page id.
+    pub page: Id,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BaselineGrid {
+    pub spacing: Length,
+    /// First baseline, from the page top.
+    pub offset: Length,
 }
 
 impl Default for Document {
@@ -454,6 +615,12 @@ impl Document {
             styles: Styles::default(),
             assets: BTreeMap::new(),
             layers: vec![],
+            guides: Guides::default(),
+            custom_words: vec![],
+            bookmarks: vec![],
+            reading_order: BTreeMap::new(),
+            sections: vec![],
+            baseline_grid: None,
             next_id: 1,
         };
         for _ in 0..pages.max(1) {

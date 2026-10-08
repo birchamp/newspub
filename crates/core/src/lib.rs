@@ -4,11 +4,16 @@ pub mod attrs;
 pub mod color;
 pub mod command;
 pub mod field;
+pub mod guides;
 pub mod history;
+pub mod layers;
+pub mod links;
 pub mod model;
 pub mod story;
 pub mod table;
+pub mod textops;
 pub mod units;
+pub mod words;
 
 pub use attrs::*;
 pub use color::Color;

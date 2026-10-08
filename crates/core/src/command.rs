@@ -7,7 +7,7 @@
 //! - `target` on text commands may name a story or any text frame of the story.
 //! - Text positions are char indices into the story; `start`/`end` default to the whole story.
 
-use crate::attrs::{CharAttrs, ParaAttrs};
+use crate::attrs::{CharAttrs, NumberFormat, ParaAttrs};
 use crate::color::Color;
 use crate::model::*;
 use crate::units::{Insets, Length, Rect};
@@ -75,6 +75,9 @@ pub struct ObjectPatch {
     pub locked: Option<bool>,
     pub name: Option<String>,
     pub layer: Option<Id>,
+    pub shadow: Option<Shadow>,
+    /// Remove the shadow.
+    pub no_shadow: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -89,6 +92,7 @@ pub struct TextFramePatch {
     pub stroke: Option<Stroke>,
     pub continued_on: Option<bool>,
     pub continued_from: Option<bool>,
+    pub vertical: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -99,6 +103,7 @@ pub struct ShapePatch {
     pub stroke: Option<Stroke>,
     pub arrow_start: Option<Arrow>,
     pub arrow_end: Option<Arrow>,
+    pub gradient: Option<Gradient>,
     /// Remove the fill.
     pub no_fill: bool,
     /// Remove the stroke.
@@ -112,6 +117,9 @@ pub struct ImagePatch {
     pub fit: Option<Fit>,
     pub asset: Option<Id>,
     pub stroke: Option<Stroke>,
+    pub adjust: Option<ImageAdjust>,
+    pub mask: Option<ImageMask>,
+    pub soft_edges: Option<Length>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -370,9 +378,109 @@ pub enum Command {
         style: Option<StyleRef>,
     },
 
+    // ---- guides (GD-01, GD-02; implemented in core/src/guides.rs) ----
+    /// Ruler guide on a page or a master. Created id is the guide id.
+    AddGuide {
+        #[serde(default)]
+        page: Option<usize>,
+        #[serde(default)]
+        master: Option<Id>,
+        orientation: Orientation,
+        pos: Length,
+    },
+    MoveGuide {
+        guide: Id,
+        pos: Length,
+    },
+    DeleteGuide {
+        guide: Id,
+    },
+    /// Column/row grid guides inside the margins (columns or rows of 1 with no gutter = none).
+    SetGridGuides {
+        columns: u32,
+        rows: u32,
+        #[serde(default)]
+        gutter: Length,
+    },
+
+    // ---- spelling (SP-02; core/src/words.rs) ----
+    AddToDictionary {
+        word: String,
+    },
+    RemoveFromDictionary {
+        word: String,
+    },
+
+    // ---- links, bookmarks, reading order (EX-05, AX-03; core/src/links.rs) ----
+    /// Hyperlink on chars start..end: exactly one of `url` / `page` (0-based page index); neither removes it.
+    SetHyperlink {
+        target: Id,
+        start: usize,
+        end: usize,
+        #[serde(default)]
+        url: Option<String>,
+        #[serde(default)]
+        page: Option<usize>,
+    },
+    AddBookmark {
+        title: String,
+        page: usize,
+    },
+    RemoveBookmark {
+        index: usize,
+    },
+    /// Accessibility reading order of the given page's objects (others follow in z-order).
+    SetReadingOrder {
+        page: usize,
+        ids: Vec<Id>,
+    },
+
+    // ---- fields, sections, baseline grid, special characters, shape text (lead; core/src/textops.rs) ----
+    /// Insert a field character at `at` (default end).
+    InsertField {
+        target: Id,
+        #[serde(default)]
+        at: Option<usize>,
+        field: crate::field::Field,
+    },
+    SetSection {
+        page: usize,
+        #[serde(default = "one_u32")]
+        start_at: u32,
+        #[serde(default = "decimal")]
+        format: NumberFormat,
+    },
+    RemoveSection {
+        page: usize,
+    },
+    SetBaselineGrid {
+        spacing: Length,
+        offset: Length,
+    },
+    ClearBaselineGrid,
+    InsertSpecialChar {
+        target: Id,
+        #[serde(default)]
+        at: Option<usize>,
+        char: SpecialChar,
+    },
+    /// Give a shape a story so it holds text; created id is the story.
+    AddShapeText {
+        id: Id,
+    },
+
     // ---- layers ----
     AddLayer {
         name: String,
+    },
+    /// Move a layer to position `to` in the layer list (0 = bottom).
+    MoveLayer {
+        layer: Id,
+        to: usize,
+    },
+    /// Delete a layer; its objects move to no layer.
+    DeleteLayer {
+        layer: Id,
     },
     SetLayer {
         layer: Id,
@@ -387,6 +495,42 @@ pub enum Command {
 
 fn one() -> usize {
     1
+}
+fn one_u32() -> u32 {
+    1
+}
+fn decimal() -> NumberFormat {
+    NumberFormat::Decimal
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpecialChar {
+    NonBreakingSpace,
+    EmSpace,
+    EnSpace,
+    EmDash,
+    EnDash,
+    OptionalHyphen,
+    NonBreakingHyphen,
+    LineBreak,
+    Tab,
+}
+
+impl SpecialChar {
+    pub fn char(self) -> char {
+        match self {
+            SpecialChar::NonBreakingSpace => '\u{00A0}',
+            SpecialChar::EmSpace => '\u{2003}',
+            SpecialChar::EnSpace => '\u{2002}',
+            SpecialChar::EmDash => '\u{2014}',
+            SpecialChar::EnDash => '\u{2013}',
+            SpecialChar::OptionalHyphen => '\u{00AD}',
+            SpecialChar::NonBreakingHyphen => '\u{2011}',
+            SpecialChar::LineBreak => crate::story::LINE_SEP,
+            SpecialChar::Tab => '\t',
+        }
+    }
 }
 
 /// Result of applying a command.
@@ -468,6 +612,7 @@ impl Document {
             locked: false,
             layer: None,
             parent: None,
+            shadow: None,
         }
     }
 
@@ -789,6 +934,8 @@ impl Document {
                     stroke: stroke.clone(),
                     arrow_start: Arrow::None,
                     arrow_end: Arrow::None,
+                    gradient: None,
+                    story: None,
                 };
                 let obj = self.new_object(*rect, ObjectKind::Shape(shape));
                 let id = self.place(*page, *master, obj)?;
@@ -800,7 +947,16 @@ impl Document {
                 {
                     return Err(CoreError::NoSuchAsset(*a));
                 }
-                let img = ImageFrame { asset: *asset, crop: CropFrac::default(), fit: Fit::Stretch, stroke: None };
+                let img = ImageFrame {
+                    asset: *asset,
+                    crop: CropFrac::default(),
+                    fit: Fit::Stretch,
+                    stroke: None,
+                    adjust: ImageAdjust::default(),
+                    mask: ImageMask::Rect,
+                    soft_edges: Length(0.0),
+                    merge_field: None,
+                };
                 let mut obj = self.new_object(*rect, ObjectKind::Image(img));
                 obj.wrap = Wrap { mode: WrapMode::Square, distance: Length(7.2) };
                 let id = self.place(*page, *master, obj)?;
@@ -846,6 +1002,12 @@ impl Document {
                 }
                 if let Some(v) = p.layer {
                     o.layer = Some(v);
+                }
+                if let Some(v) = p.shadow {
+                    o.shadow = Some(v);
+                }
+                if p.no_shadow {
+                    o.shadow = None;
                 }
                 Ok(Applied::default())
             }
@@ -937,6 +1099,9 @@ impl Document {
                 if let Some(v) = p.continued_from {
                     t.continued_from = v;
                 }
+                if let Some(v) = p.vertical {
+                    t.vertical = v;
+                }
                 Ok(Applied::default())
             }
             SetShape { id, patch } => {
@@ -958,6 +1123,9 @@ impl Document {
                 }
                 if let Some(v) = p.arrow_end {
                     s.arrow_end = v;
+                }
+                if let Some(v) = p.gradient {
+                    s.gradient = Some(v);
                 }
                 if p.no_fill {
                     s.fill = None;
@@ -995,6 +1163,15 @@ impl Document {
                 }
                 if let Some(v) = p.stroke {
                     im.stroke = Some(v);
+                }
+                if let Some(v) = p.adjust {
+                    im.adjust = v;
+                }
+                if let Some(v) = p.mask {
+                    im.mask = v;
+                }
+                if let Some(v) = p.soft_edges {
+                    im.soft_edges = v;
                 }
                 Ok(Applied::default())
             }
@@ -1301,6 +1478,21 @@ impl Document {
                 }
                 Ok(Applied::default())
             }
+            AddGuide { .. } | MoveGuide { .. } | DeleteGuide { .. } | SetGridGuides { .. } => {
+                crate::guides::apply(self, cmd)
+            }
+            AddToDictionary { .. } | RemoveFromDictionary { .. } => crate::words::apply(self, cmd),
+            SetHyperlink { .. } | AddBookmark { .. } | RemoveBookmark { .. } | SetReadingOrder { .. } => {
+                crate::links::apply(self, cmd)
+            }
+            MoveLayer { .. } | DeleteLayer { .. } => crate::layers::apply(self, cmd),
+            InsertField { .. }
+            | SetSection { .. }
+            | RemoveSection { .. }
+            | SetBaselineGrid { .. }
+            | ClearBaselineGrid
+            | InsertSpecialChar { .. }
+            | AddShapeText { .. } => crate::textops::apply(self, cmd),
             AddLayer { name } => {
                 let id = self.alloc();
                 self.layers.push(Layer { id, name: name.clone(), visible: true, locked: false });

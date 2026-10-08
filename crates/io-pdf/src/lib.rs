@@ -13,15 +13,21 @@ use newpub_render::{Item, PageDisplay, PathEl, StrokeStyle, page_display};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+pub mod impose;
+pub mod links;
+pub mod standards;
+
 #[derive(Debug, thiserror::Error)]
 pub enum PdfError {
+    #[error("unsupported: {0}")]
+    Unsupported(String),
     #[error("pdf: {0}")]
     Krilla(String),
     #[error("no pages to export")]
     Empty,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Imposition {
     /// One page per PDF page.
@@ -29,6 +35,24 @@ pub enum Imposition {
     None,
     /// Saddle-stitch booklet: two pages side by side per sheet side, in fold order.
     Booklet,
+    /// Several pages per sheet in a grid (PR-04), see `impose.rs`.
+    NUp {
+        sheet_width: newpub_core::Length,
+        sheet_height: newpub_core::Length,
+        #[serde(default)]
+        gap: newpub_core::Length,
+        /// Repeat each page across a whole sheet (business cards) instead of filling slots in order.
+        #[serde(default)]
+        repeat: bool,
+    },
+}
+
+/// Output standard (EX-03, AX-03), applied by `standards.rs`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PdfStandard {
+    PdfX4,
+    PdfUa1,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -41,6 +65,8 @@ pub struct PdfOptions {
     pub imposition: Imposition,
     /// 0-based page indices to export (default all).
     pub pages: Option<Vec<usize>>,
+    /// PDF/X-4 or PDF/UA-1 output.
+    pub standard: Option<PdfStandard>,
 }
 
 /// Distance from the trim/bleed edge to where crop marks start, and their length.
@@ -287,17 +313,9 @@ pub fn export_pdf(
     }
     kd.set_metadata(meta);
 
-    // Sheets: each is a list of (page index or blank, x offset) placed side by side.
-    let sheets: Vec<Vec<Option<usize>>> = match opts.imposition {
-        Imposition::None => indices.iter().map(|i| vec![Some(*i)]).collect(),
-        Imposition::Booklet => booklet_order(indices.len())
-            .into_iter()
-            .map(|side| side.into_iter().map(|k| k.map(|k| indices[k])).collect())
-            .collect(),
-    };
-    for sheet in sheets {
-        let n = sheet.len() as f64;
-        let (sw, sh) = (w * n, h);
+    let sheets = impose::plan(w, h, &indices, &opts.imposition)?;
+    for sheet in &sheets {
+        let (sw, sh) = (sheet.width, sheet.height);
         let (mw, mh) = (sw + 2.0 * pad, sh + 2.0 * pad);
         let r = |x: f64, y: f64, w: f64, h: f64| KRect::from_xywh(x as f32, y as f32, w as f32, h as f32);
         let settings = PageSettings::from_wh(mw as f32, mh as f32)
@@ -306,18 +324,22 @@ pub fn export_pdf(
             .with_bleed_box(r(pad - bleed, pad - bleed, sw + 2.0 * bleed, sh + 2.0 * bleed));
         let mut page = kd.start_page_with(settings);
         let mut s = page.surface();
-        for (k, slot) in sheet.iter().enumerate() {
-            let Some(pi) = slot else { continue };
-            let disp = page_display(doc, layout, *pi);
-            let ox = pad + k as f64 * w;
-            // Clip to the page's trim plus bleed (bleed only on outer edges of an imposed sheet).
-            let (cl, cr) = (if k == 0 { bleed } else { 0.0 }, if k + 1 == sheet.len() { bleed } else { 0.0 });
-            let Some(clip) = r(ox - cl, pad - bleed, w + cl + cr, h + 2.0 * bleed) else { continue };
+        for slot in &sheet.slots {
+            let Some(pi) = slot.page else { continue };
+            let disp = page_display(doc, layout, pi);
+            let (ox, oy) = (pad + slot.x, pad + slot.y);
+            // Clip to the page's trim, plus bleed on the sheet's outer edges.
+            let eps = 0.01;
+            let cl = if slot.x < eps { bleed } else { 0.0 };
+            let ct = if slot.y < eps { bleed } else { 0.0 };
+            let cr = if slot.x + w > sw - eps { bleed } else { 0.0 };
+            let cb = if slot.y + h > sh - eps { bleed } else { 0.0 };
+            let Some(clip) = r(ox - cl, oy - ct, w + cl + cr, h + ct + cb) else { continue };
             let mut pb = PathBuilder::new();
             pb.push_rect(clip);
             if let Some(cp) = pb.finish() {
                 s.push_clip_path(&cp, &FillRule::NonZero);
-                s.push_transform(&Transform::from_translate(ox as f32, pad as f32));
+                s.push_transform(&Transform::from_translate(ox as f32, oy as f32));
                 ctx.draw(&mut s, &disp);
                 s.pop();
                 s.pop();
@@ -327,9 +349,16 @@ pub fn export_pdf(
             crop_marks(&mut s, pad, pad, sw, sh, bleed + MARK_GAP);
         }
         s.finish();
+        for slot in &sheet.slots {
+            if let Some(pi) = slot.page {
+                links::annotate_page(&mut page, doc, layout, pi, (pad + slot.x, pad + slot.y));
+            }
+        }
         page.finish();
     }
-    kd.finish().map_err(|e| PdfError::Krilla(format!("{e:?}")))
+    links::outline(&mut kd, doc, &sheets);
+    let bytes = kd.finish().map_err(|e| PdfError::Krilla(format!("{e:?}")))?;
+    standards::finish(bytes, doc, opts)
 }
 
 /// Saddle-stitch page order. Returns sheet sides, each `[left, right]` as indices into the

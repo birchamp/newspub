@@ -134,6 +134,82 @@ pub enum SessionAction {
         #[serde(default = "quality")]
         quality: u8,
     },
+    // ---- GUIDES task (engine/src/guides.rs) ----
+    /// Turn snapping on or off (default on).
+    SetSnapping {
+        enabled: bool,
+    },
+    /// Display unit for geometry shown to the user.
+    SetUnits {
+        units: Units,
+    },
+    /// Set geometry from text in any unit ("2in", "50 mm", "6p", "12pt"); omitted fields keep their value.
+    SetGeometry {
+        id: Id,
+        #[serde(default)]
+        x: Option<String>,
+        #[serde(default)]
+        y: Option<String>,
+        #[serde(default)]
+        w: Option<String>,
+        #[serde(default)]
+        h: Option<String>,
+        #[serde(default)]
+        rotation: Option<String>,
+    },
+    // ---- TEMPLATES task (engine/src/templates.rs) ----
+    /// Save the publication as a template file (a .newspub flagged as a template, with a name).
+    SaveTemplate {
+        path: String,
+        name: String,
+        #[serde(default)]
+        keep_text: bool,
+        #[serde(default)]
+        keep_images: bool,
+    },
+    /// New untitled publication copied from a template file.
+    NewFromTemplate {
+        path: String,
+    },
+    /// New untitled publication from a built-in template (see query builtin_templates).
+    NewFromBuiltin {
+        id: String,
+    },
+    // ---- SPELL task (engine/src/spell.rs) ----
+    /// Ignore a word for the rest of the session (not stored in the document).
+    IgnoreWord {
+        word: String,
+    },
+    // ---- PICTURES task (engine/src/pictures.rs) ----
+    /// Point a (missing) linked picture asset at another file.
+    RelinkPicture {
+        asset: Id,
+        path: String,
+    },
+    /// Store a linked picture's bytes in the publication.
+    EmbedPicture {
+        asset: Id,
+    },
+    // ---- HTML task (engine/src/html.rs) ----
+    /// Export the publication as HTML into directory `path` (index.html, page-2.html, …, assets).
+    ExportHtml {
+        path: String,
+    },
+    // ---- PUB task (engine/src/pubimport.rs) ----
+    /// Import a Microsoft Publisher .pub file as a new publication.
+    ImportPub {
+        path: String,
+    },
+    // ---- MISC task (engine/src/autosave.rs) ----
+    /// Autosave into `dir` every `every_actions` document changes.
+    SetAutosave {
+        dir: String,
+        every_actions: u32,
+    },
+    /// Replace the session document with the newest autosave in `dir` (marked dirty).
+    RecoverAutosave {
+        dir: String,
+    },
     /// Replace every match in every story; one undo step. Outcome is empty; query `find` to verify.
     ReplaceAll {
         find: String,
@@ -143,6 +219,17 @@ pub enum SessionAction {
         #[serde(default)]
         whole_word: bool,
     },
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Units {
+    #[default]
+    In,
+    Cm,
+    Mm,
+    Pt,
+    Pi,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -181,6 +268,19 @@ impl SessionAction {
         "export_png",
         "export_image",
         "replace_all",
+        "set_snapping",
+        "set_units",
+        "set_geometry",
+        "save_template",
+        "new_from_template",
+        "new_from_builtin",
+        "ignore_word",
+        "relink_picture",
+        "embed_picture",
+        "export_html",
+        "import_pub",
+        "set_autosave",
+        "recover_autosave",
     ];
 }
 
@@ -299,6 +399,89 @@ pub enum Query {
     /// page background contrast ratio < 4.5), `small_text` (text under 8pt), `overflow` (story with
     /// hidden overflow text).
     AccessibilityCheck,
+    // ---- lead ----
+    /// `{path, dirty, units}` of the session.
+    Session,
+    /// All story text concatenated in story-id order, stories separated by "\n".
+    AllStoryText,
+    /// Number of glyphs laid out in a frame (ligatures make it smaller than the char count).
+    GlyphCount {
+        frame: Id,
+    },
+    /// Glyphs in a frame that are the font's missing-glyph (.notdef) glyph.
+    MissingGlyphs {
+        frame: Id,
+    },
+    /// Page label (respecting sections), e.g. "ii" or "3".
+    PageLabel {
+        page: usize,
+    },
+    /// Baselines of a frame's lines in page coordinates.
+    PageBaselines {
+        frame: Id,
+    },
+    /// Names of the shape kinds the model supports.
+    ShapeKinds,
+    // ---- GUIDES task ----
+    /// Guides on a page (margin grid, page and master ruler guides): `{vertical: [x…], horizontal: [y…]}` sorted, de-duplicated.
+    Guides {
+        page: usize,
+    },
+    /// Snap a proposed rect on a page: `{rect, lines: [{orientation, pos}]}`.
+    Snap {
+        page: usize,
+        rect: Rect,
+        #[serde(default)]
+        ignore: Vec<Id>,
+    },
+    /// Object geometry formatted in the display unit: `{x, y, w, h, rotation}` strings.
+    ObjectGeometry {
+        id: Id,
+    },
+    // ---- TEMPLATES task ----
+    /// Built-in templates: `[{id, name, pages}]`.
+    BuiltinTemplates,
+    // ---- SPELL task ----
+    /// Misspellings in story order: `[{story, start, end, word, suggestions}]`.
+    Spelling,
+    /// `{installed: [langs], missing: [langs used in text without a dictionary]}`.
+    SpellingLanguages,
+    // ---- LAYERS task ----
+    /// Layers bottom to top: `[{id, name, visible, locked}]`.
+    Layers,
+    // ---- PICTURES task ----
+    /// Linked picture assets whose file is missing: `[{asset, path}]`.
+    MissingLinks,
+    /// Entry names inside a saved .newspub file.
+    NpubEntries {
+        path: String,
+    },
+    /// Objects entirely outside their page: `[{id, page}]`.
+    OffPageObjects,
+    // ---- PDF task ----
+    /// Colours used by objects and text: `[Color]` de-duplicated.
+    ColorsUsed,
+    /// n-up grid for the current page size: `{columns, rows, per_sheet}`.
+    NUpLayout {
+        sheet_width: Length,
+        sheet_height: Length,
+        #[serde(default)]
+        gap: Length,
+    },
+    /// Hyperlinks: `[{story, start, end, url | page}]`.
+    Hyperlinks,
+    // ---- PUB task ----
+    /// Inspect a .pub file without importing: `{is_publisher, version, streams}`.
+    PubReport {
+        path: String,
+    },
+    /// Report of the last import: `{frames_placed, fonts, warnings}`.
+    ImportReport,
+    // ---- MISC task ----
+    /// Autosave files in a directory.
+    Autosaves {
+        dir: String,
+    },
     /// Bounding box of all glyphs in a frame, page coordinates: `{x, y, w, h}` or null.
     TextBounds {
         frame: Id,

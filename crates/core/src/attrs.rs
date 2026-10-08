@@ -70,16 +70,30 @@ pub struct CharAttrs {
     pub baseline: Option<Baseline>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub caps: Option<Caps>,
-    /// BCP-47 language tag for spelling and hyphenation.
+    /// BCP-47 language tag for spelling and hyphenation ("zxx" = do not proof).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
+    /// Hyperlink on this run (EX-05).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub link: Option<Link>,
+    /// This char is a field (it must be `field::FIELD_CHAR`); see core::field.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub field: Option<crate::field::Field>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Link {
+    Url(String),
+    /// Target page id.
+    Page(crate::Id),
 }
 
 impl CharAttrs {
     /// Fields set in `other` replace fields in `self`.
     pub fn overlay(&mut self, other: &CharAttrs) {
         overlay!(self, other; style, font, size, bold, italic, underline, strike, color, tracking,
-            scale, kerning, ligatures, dlig, features, baseline, caps, lang);
+            scale, kerning, ligatures, dlig, features, baseline, caps, lang, link, field);
     }
     pub fn is_empty(&self) -> bool {
         *self == CharAttrs::default()

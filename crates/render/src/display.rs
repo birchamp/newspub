@@ -132,6 +132,8 @@ pub fn shape_path(kind: &ShapeKind, w: f64, h: f64) -> Vec<PathEl> {
             let (sh, hx) = (h * 0.25, w * 0.65);
             poly(&[(0.0, sh), (hx, sh), (hx, 0.0), (w, h / 2.0), (hx, h), (hx, h - sh), (0.0, h - sh)], true)
         }
+        // The tail is drawn by SH-05 (Batch 2); until then the body is drawn alone.
+        ShapeKind::Callout { .. } => rect_path(0.0, 0.0, w, h),
         ShapeKind::Path { points, closed } => {
             let pts: Vec<(f64, f64)> = points.iter().map(|p| (p[0] * w, p[1] * h)).collect();
             poly(&pts, *closed)
@@ -395,8 +397,8 @@ pub fn page_display(doc: &Document, layout: &DocLayout, index: usize) -> PageDis
                 push_object(doc, layout, *id, Affine::IDENTITY, &mut items);
             }
         }
-        for id in &page.objects {
-            push_object(doc, layout, *id, Affine::IDENTITY, &mut items);
+        for id in doc.draw_order(index) {
+            push_object(doc, layout, id, Affine::IDENTITY, &mut items);
         }
     }
     PageDisplay { width: w, height: h, items }
