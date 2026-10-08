@@ -9,6 +9,9 @@ pub struct FaceId(pub u32);
 
 pub type FontData = Arc<dyn AsRef<[u8]> + Send + Sync>;
 
+/// `has_glyph` results keyed by face data address, length, face index and char.
+type GlyphCache = std::collections::HashMap<(usize, usize, u32, char), bool>;
+
 /// A loaded face with metrics normalised to 1 em.
 pub struct Face {
     pub id: FaceId,
@@ -39,9 +42,7 @@ impl Face {
     }
     pub fn has_glyph(&self, c: char) -> bool {
         // Cached per face data and char: parsing the face for every lookup dominated layout time.
-        static CACHE: std::sync::LazyLock<
-            std::sync::Mutex<std::collections::HashMap<(usize, usize, u32, char), bool>>,
-        > = std::sync::LazyLock::new(Default::default);
+        static CACHE: std::sync::LazyLock<std::sync::Mutex<GlyphCache>> = std::sync::LazyLock::new(Default::default);
         let key = (self.bytes().as_ptr() as usize, self.bytes().len(), self.index, c);
         if let Some(v) = CACHE.lock().ok().and_then(|m| m.get(&key).copied()) {
             return v;
