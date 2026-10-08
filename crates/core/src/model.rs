@@ -228,6 +228,26 @@ pub enum ShapeKind {
         points: Vec<[f64; 2]>,
         closed: bool,
     },
+    /// Bézier path (SH-08) in rect-relative unit coordinates (0..1); see core::freeform.
+    Bezier {
+        nodes: Vec<BezierNode>,
+        #[serde(default)]
+        closed: bool,
+    },
+}
+
+/// A Bézier path point with optional handles (rect-relative unit coordinates).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BezierNode {
+    pub at: [f64; 2],
+    /// Handle controlling the curve arriving at this point.
+    #[serde(default)]
+    pub ctrl_in: Option<[f64; 2]>,
+    /// Handle controlling the curve leaving this point.
+    #[serde(default)]
+    pub ctrl_out: Option<[f64; 2]>,
+    #[serde(default)]
+    pub smooth: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -374,6 +394,8 @@ pub enum ObjectKind {
     },
     /// Table (TB-01..TB-04); see core::table.
     Table(crate::table::Table),
+    /// WordArt-style text object (TY-19); see core::wordart.
+    WordArt(crate::wordart::WordArt),
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -430,6 +452,12 @@ pub struct Object {
     pub parent: Option<Id>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shadow: Option<Shadow>,
+    /// Hidden from view and output, still listed in the selection pane (LY-04).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hidden: bool,
+    /// Overprint instead of knocking out the inks beneath (PR-08).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub overprint: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -547,6 +575,12 @@ pub struct Document {
     /// Font scheme (BB-04); None = the default scheme.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub font_scheme: Option<crate::schemes::FontScheme>,
+    /// Sheet the publication is printed on, several copies per sheet (PG-11: business cards, labels).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sheet: Option<SheetLayout>,
+    /// Business information set filling business fields (BB-05).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub business_info: Option<BusinessInfo>,
     pub next_id: u64,
 }
 
@@ -605,6 +639,9 @@ pub struct MergeData {
     pub sort: Option<MergeSort>,
     #[serde(default)]
     pub skip_blank_lines: bool,
+    /// Catalog merge: several records per page (MM-05).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub catalog: Option<CatalogArea>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -671,6 +708,44 @@ impl MergeData {
     }
 }
 
+/// Grid of copies on a printer sheet (PG-11). Page size is the item size (card, label).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SheetLayout {
+    pub width: Length,
+    pub height: Length,
+    pub columns: u32,
+    pub rows: u32,
+    /// Distance from the sheet's left / top edge to the first item.
+    pub left: Length,
+    pub top: Length,
+    /// Gaps between items.
+    #[serde(default)]
+    pub col_gap: Length,
+    #[serde(default)]
+    pub row_gap: Length,
+}
+
+/// A business information set (BB-05): name plus field values keyed by `organization`, `name`,
+/// `job_title`, `address`, `phone`, `email`, `website`, `tagline` (other keys allowed).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct BusinessInfo {
+    pub name: String,
+    #[serde(default)]
+    pub fields: BTreeMap<String, String>,
+}
+
+/// Catalog merge repeating area (MM-05): the first item's cell on `page`, repeated `across` × `down`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CatalogArea {
+    /// Page id.
+    pub page: Id,
+    pub rect: Rect,
+    pub across: u32,
+    pub down: u32,
+    #[serde(default)]
+    pub gap: Length,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BaselineGrid {
     pub spacing: Length,
@@ -715,6 +790,8 @@ impl Document {
             merge: None,
             color_scheme: None,
             font_scheme: None,
+            sheet: None,
+            business_info: None,
             next_id: 1,
         };
         for _ in 0..pages.max(1) {

@@ -1,0 +1,35 @@
+id: J-PR-006
+title: Pack and Go — collect the publication, its linked pictures and fonts into a folder
+covers: [PR-09]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - set_meta: {title: "Spring News"}
+  # a linked picture from a working copy, and an embedded one
+  - copy_file: {from: fixtures/photo.png, to: work-photo.png}
+  - insert_picture: {path: work-photo.png, page: 0, x: 1in, y: 1in, width: 2in, link: true}
+  - insert_picture: {path: fixtures/stripes.jpg, page: 0, x: 4in, y: 1in, width: 2in}
+  - add_text_frame: {page: 0, rect: [1in, 4in, 5in, 1in]}
+    as: a
+  - insert_text: {target: $a, text: "Body text in Carlito"}
+  - add_text_frame: {page: 0, rect: [1in, 5in, 5in, 1in]}
+    as: b
+  - insert_text: {target: $b, text: "Headline in Liberation Serif"}
+  - format_chars: {target: $b, attrs: {font: "Liberation Serif", bold: true}}
+  - pack_and_go: {dir: packed, pdf: true}
+  - expect_files:
+      dir: packed
+      contains:
+        - "Spring News.newspub"
+        - "Spring News.pdf"
+        - "links/work-photo.png"
+        - "fonts/Carlito-Regular.ttf"
+        - "fonts/LiberationSerif-Bold.ttf"
+        - "pack-report.txt"
+      not_contains: ["fonts/LiberationSans-Regular.ttf", "links/stripes.jpg"]
+  # the packed copy finds its linked picture even after the original is gone
+  - delete_file: {path: work-photo.png}
+  - open: {path: "packed/Spring News.newspub"}
+  - expect: {query: {q: missing_links}, len: 0}
+  - expect_png: {page: 0, pixels: [{at: [130, 100], rgb: [240, 200, 40], tol: 30}]}
+  - expect_pdf: {file: "packed/Spring News.pdf", pages: 1, text_contains: ["Body text in Carlito"]}
+  - expect_error: {pack_and_go: {dir: "packed/Spring News.pdf"}}

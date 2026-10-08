@@ -189,6 +189,8 @@ impl Ctx<'_> {
                 o.push_str("</div>\n");
             }
             ObjectKind::Image(im) => self.image_html(o, ob, im, &label),
+            // Exported by the TEXTART task (TY-19).
+            ObjectKind::WordArt(_) => {}
             ObjectKind::Table(tb) => {
                 // Cell text is laid out relative to the table's top-left corner.
                 let st = object_style(ob);
@@ -489,6 +491,22 @@ fn shape_svg(o: &mut String, ob: &Object, sh: &Shape) {
                 let a = attrs.replacen(&format!("fill=\"{fill}\""), "fill=\"none\"", 1);
                 format!("<polyline points=\"{}\" {a}/>", pts(&v))
             }
+        }
+        ShapeKind::Bezier { nodes, closed } => {
+            let mut d = String::new();
+            for el in newpub_render::display::bezier_path(nodes, *closed, w, h) {
+                match el {
+                    newpub_render::PathEl::Move(x, y) => d.push_str(&format!("M{x:.2} {y:.2} ")),
+                    newpub_render::PathEl::Line(x, y) => d.push_str(&format!("L{x:.2} {y:.2} ")),
+                    newpub_render::PathEl::Cubic(a, b, c, e, x, y) => {
+                        d.push_str(&format!("C{a:.2} {b:.2} {c:.2} {e:.2} {x:.2} {y:.2} "))
+                    }
+                    newpub_render::PathEl::Close => d.push('Z'),
+                }
+            }
+            let a =
+                if *closed { attrs.clone() } else { attrs.replacen(&format!("fill=\"{fill}\""), "fill=\"none\"", 1) };
+            format!("<path d=\"{}\" {a}/>", d.trim_end())
         }
     };
     let alt = if ob.decorative { String::new() } else { ob.alt_text.clone().unwrap_or_default() };

@@ -1,0 +1,26 @@
+id: J-MM-005
+title: Mail merge from an Excel (.xlsx) workbook; choose the sheet
+covers: [MM-06]
+steps:
+  - new_document: {width: 6in, height: 4in}
+  - attach_data_source: {path: fixtures/members.xlsx}
+  - expect: {query: {q: data_source}, path: /fields, equals: ["first", "last", "street", "city", "photo", "amount"]}
+  - expect: {query: {q: data_source}, path: /records, equals: 4}
+  - add_text_frame: {page: 0, rect: [0.5in, 0.5in, 5in, 2in]}
+    as: f
+  - insert_merge_field: {target: $f, field: first}
+  - insert_text: {target: $f, text: " gave "}
+  - insert_merge_field: {target: $f, field: amount}
+  # whole numbers read from the workbook print without a decimal point
+  - set_merge_preview: {record: 0}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "Ada gave 25"}
+  - set_merge_preview: {record: 1}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "Grace gave "}
+  - set_merge_preview: {record: null}
+  - merge_to_pdf: {path: xlsx.pdf}
+  - expect_pdf: {file: xlsx.pdf, pages: 4, page_text: [{page: 3, contains: "Alan gave 40"}]}
+  # another sheet of the same workbook
+  - attach_data_source: {path: fixtures/members.xlsx, sheet: "Notes"}
+  - expect: {query: {q: data_source}, path: /fields, equals: ["ignored"]}
+  - expect: {query: {q: data_source}, path: /records, equals: 0}
+  - expect_error: {attach_data_source: {path: fixtures/members.xlsx, sheet: "Nope"}}

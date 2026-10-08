@@ -170,3 +170,90 @@ impl Document {
         Ok(d)
     }
 }
+
+impl Document {
+    /// Catalog merge (MM-05): the catalog page repeats as often as needed; on each copy the objects inside the
+    /// area's first cell are repeated across × down, one record per cell (empty cells stay empty). Other objects
+    /// on the catalog page appear on every copy and show the first record of that page; other pages appear
+    /// once and show the first record. The data source is detached.
+    pub fn merge_catalog(&self, recs: &[Record], pics: &HashMap<String, Id>) -> Result<Document, CoreError> {
+        let area = self
+            .merge
+            .as_ref()
+            .and_then(|m| m.catalog.clone())
+            .ok_or_else(|| CoreError::Invalid("no catalog area is set".into()))?;
+        if recs.is_empty() {
+            return Err(CoreError::Invalid("the recipient list is empty".into()));
+        }
+        let pi = self.page_index(area.page).ok_or_else(|| CoreError::Invalid("the catalog page was deleted".into()))?;
+        let per_page = (area.across.max(1) * area.down.max(1)) as usize;
+        let pages = recs.len().div_ceil(per_page);
+        let skip = self.merge.as_ref().is_some_and(|m| m.skip_blank_lines);
+        let eps = 0.01;
+        let r = area.rect;
+        let inside = |o: &crate::Object| {
+            o.rect.x >= r.x - eps
+                && o.rect.y >= r.y - eps
+                && o.rect.right() <= r.right() + eps
+                && o.rect.bottom() <= r.bottom() + eps
+        };
+        let mut d = self.clone();
+        let template: Vec<Id> =
+            d.pages[pi].objects.iter().copied().filter(|id| d.objects.get(id).is_some_and(&inside)).collect();
+        if template.is_empty() {
+            return Err(CoreError::Invalid("no objects lie inside the catalog area".into()));
+        }
+        d.pages[pi].objects.retain(|id| !template.contains(id));
+        // Copies of the catalog page (its other objects) after it.
+        let mut statics: Vec<Vec<Id>> = vec![d.pages[pi].objects.clone()];
+        for k in 1..pages {
+            let src = d.pages[pi].clone();
+            let id = d.alloc();
+            d.pages.insert(pi + k, crate::model::Page { id, objects: vec![], ..src.clone() });
+            let mut story_map = HashMap::new();
+            let mut tops = vec![];
+            for o in &src.objects {
+                tops.push(d.duplicate_object(*o, pi + k, &mut story_map)?);
+            }
+            statics.push(tops);
+        }
+        // One copy of the template per record.
+        let (dw, dh) = (r.w + area.gap.0, r.h + area.gap.0);
+        for (i, rec) in recs.iter().enumerate() {
+            let (k, cell) = (i / per_page, i % per_page);
+            let (col, row) = (cell % area.across.max(1) as usize, cell / area.across.max(1) as usize);
+            let mut story_map = HashMap::new();
+            let mut tops = vec![];
+            for t in &template {
+                let nid = d.duplicate_object(*t, pi + k, &mut story_map)?;
+                d.offset_tree(nid, col as f64 * dw, row as f64 * dh);
+                tops.push(nid);
+            }
+            let (mut st, mut im) = (BTreeSet::new(), vec![]);
+            d.reachable(&tops, &mut st, &mut im);
+            d.apply_record(&st, &im, rec, pics, skip);
+        }
+        for t in &template {
+            d.remove_object(*t)?;
+        }
+        // Page objects outside the area show the first record of their page; everything else the first record.
+        for (k, ids) in statics.iter().enumerate() {
+            let (mut st, mut im) = (BTreeSet::new(), vec![]);
+            d.reachable(ids, &mut st, &mut im);
+            d.apply_record(&st, &im, &recs[k * per_page], pics, skip);
+        }
+        let (mut st, mut im) = (BTreeSet::new(), vec![]);
+        let rest: Vec<Id> = d
+            .pages
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i < pi || *i >= pi + pages)
+            .flat_map(|(_, p)| p.objects.clone())
+            .chain(d.masters.iter().flat_map(|m| m.objects.clone()))
+            .collect();
+        d.reachable(&rest, &mut st, &mut im);
+        d.apply_record(&st, &im, &recs[0], pics, skip);
+        d.merge = None;
+        Ok(d)
+    }
+}

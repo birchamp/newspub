@@ -17,6 +17,7 @@ pub fn object_name(doc: &Document, o: &Object) -> String {
         }
         ObjectKind::Shape(s) => format!("Shape: {}", shape_name(&s.kind)),
         ObjectKind::Table(t) => format!("Table: {}\u{d7}{}", t.row_heights.len(), t.col_widths.len()),
+        ObjectKind::WordArt(w) => format!("WordArt: {}", w.text.chars().take(40).collect::<String>()),
         ObjectKind::Group { .. } => "Group".to_string(),
     }
 }

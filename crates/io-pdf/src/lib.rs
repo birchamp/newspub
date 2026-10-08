@@ -15,6 +15,7 @@ use std::collections::HashMap;
 
 pub mod impose;
 pub mod links;
+pub mod separations;
 pub mod standards;
 mod tagging;
 
@@ -46,6 +47,9 @@ pub enum Imposition {
         #[serde(default)]
         repeat: bool,
     },
+    /// The document's own sheet layout (`Document.sheet`, PG-11): every page repeated across one sheet,
+    /// items at `left + c × (page width + col_gap)`, `top + r × (page height + row_gap)`. Error without a sheet.
+    DocumentSheet,
 }
 
 /// Output standard (EX-03, AX-03), applied by `standards.rs`.
@@ -68,6 +72,8 @@ pub struct PdfOptions {
     pub pages: Option<Vec<usize>>,
     /// PDF/X-4 or PDF/UA-1 output.
     pub standard: Option<PdfStandard>,
+    /// Colour separations (PR-08): one page per ink plate (see `separations.rs`).
+    pub separations: bool,
 }
 
 /// Distance from the trim/bleed edge to where crop marks start, and their length.
@@ -432,7 +438,10 @@ pub fn export_pdf(
     }
     kd.set_metadata(meta);
 
-    let sheets = impose::plan(w, h, &indices, &opts.imposition)?;
+    if opts.separations {
+        return separations::export_separations(doc, layout, fonts, opts, &indices);
+    }
+    let sheets = impose::plan(w, h, &indices, &opts.imposition, doc.sheet.as_ref())?;
     for sheet in &sheets {
         let (sw, sh) = (sheet.width, sheet.height);
         let (mw, mh) = (sw + 2.0 * pad, sh + 2.0 * pad);

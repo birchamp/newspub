@@ -18,3 +18,4 @@ serde_json.workspace = true
 thiserror.workspace = true
 image.workspace = true
 zip.workspace = true
+calamine = "0.26"

@@ -49,6 +49,38 @@ pub(crate) fn parse_csv(text: &str) -> Vec<Vec<String>> {
     rows
 }
 
+/// Rows of a worksheet (default: the first) as text; whole numbers print without a decimal point.
+fn read_xlsx(bytes: &[u8], sheet: Option<&str>) -> Result<Vec<Vec<String>>, EngineError> {
+    use calamine::{Data, Reader};
+    let mut wb = calamine::open_workbook_auto_from_rs(std::io::Cursor::new(bytes.to_vec()))
+        .map_err(|e| EngineError::Other(format!("workbook: {e}")))?;
+    let names = wb.sheet_names().to_vec();
+    let name = match sheet {
+        Some(s) => names
+            .iter()
+            .find(|n| n.eq_ignore_ascii_case(s))
+            .cloned()
+            .ok_or_else(|| EngineError::Other(format!("the workbook has no sheet {s:?} (sheets: {names:?})")))?,
+        None => names.first().cloned().ok_or_else(|| EngineError::Other("the workbook has no sheets".into()))?,
+    };
+    let range = wb.worksheet_range(&name).map_err(|e| EngineError::Other(format!("sheet {name:?}: {e}")))?;
+    let cell = |c: &Data| match c {
+        Data::Empty => String::new(),
+        Data::String(s) => s.clone(),
+        Data::Int(i) => i.to_string(),
+        Data::Float(f) if f.fract() == 0.0 && f.abs() < 1e15 => format!("{}", *f as i64),
+        Data::Float(f) => f.to_string(),
+        Data::Bool(b) => b.to_string(),
+        Data::DateTime(d) => d.to_string(),
+        Data::DateTimeIso(s) | Data::DurationIso(s) => s.clone(),
+        Data::Error(e) => format!("{e}"),
+    };
+    let mut rows: Vec<Vec<String>> = range.rows().map(|r| r.iter().map(cell).collect()).collect();
+    rows.retain(|r| r.iter().any(|c| !c.trim().is_empty()));
+    // A sheet with only a header still has fields; an empty sheet has none.
+    Ok(rows)
+}
+
 impl Session {
     fn merge_data(&self) -> Result<&MergeData, EngineError> {
         self.doc.merge.as_ref().ok_or_else(|| EngineError::Other("no data source is attached".into()))
@@ -114,7 +146,8 @@ impl Session {
         let recs = self.merge_data()?.records();
         let mut d = self.doc.clone();
         let pics = self.merge_pictures(&mut d);
-        let mut out = d.merge_publication(&recs, &pics)?;
+        let catalog = d.merge.as_ref().is_some_and(|m| m.catalog.is_some());
+        let mut out = if catalog { d.merge_catalog(&recs, &pics)? } else { d.merge_publication(&recs, &pics)? };
         // Drop picture assets no record used.
         let used: BTreeSet<Id> = out
             .objects
@@ -137,10 +170,18 @@ impl Session {
     pub(crate) fn merge_action(&mut self, a: &SessionAction) -> Result<Outcome, EngineError> {
         use SessionAction::*;
         match a {
-            AttachDataSource { path } => {
+            AttachDataSource { path, sheet } => {
                 let p = self.resolve(path);
                 let bytes = std::fs::read(&p)?;
-                let mut rows = parse_csv(&String::from_utf8_lossy(&bytes)).into_iter();
+                let rows = if bytes.starts_with(b"PK\x03\x04") {
+                    read_xlsx(&bytes, sheet.as_deref())?
+                } else {
+                    if sheet.is_some() {
+                        return Err(EngineError::Other(format!("{path}: only workbooks have sheets")));
+                    }
+                    parse_csv(&String::from_utf8_lossy(&bytes))
+                };
+                let mut rows = rows.into_iter();
                 let fields: Vec<String> = rows
                     .next()
                     .ok_or_else(|| EngineError::Other(format!("{path}: the data source is empty")))?
@@ -155,6 +196,7 @@ impl Session {
                     filter: None,
                     sort: None,
                     skip_blank_lines: false,
+                    catalog: None,
                 });
                 self.merge_preview = None;
                 self.commit(d, None);
@@ -215,6 +257,15 @@ impl Session {
                 self.commit(d, None);
                 Ok(Outcome::default())
             }
+            SetCatalogArea { page, rect, across, down, gap } => {
+                let pid = self.doc.pages.get(*page).ok_or(CoreError::NoSuchPage(*page))?.id;
+                if *across == 0 || *down == 0 || rect.w <= 0.0 || rect.h <= 0.0 || gap.0 < 0.0 {
+                    return Err(CoreError::Invalid("the catalog area needs a size and at least one cell".into()).into());
+                }
+                let area = newpub_core::CatalogArea { page: pid, rect: *rect, across: *across, down: *down, gap: *gap };
+                self.edit_merge(|m| m.catalog = Some(area))
+            }
+            ClearCatalogArea {} => self.edit_merge(|m| m.catalog = None),
             _ => Err(EngineError::Other(format!("{a:?} is not a mail-merge action"))),
         }
     }
@@ -224,7 +275,10 @@ impl Session {
             Query::DataSource => Ok(match &self.doc.merge {
                 None => Value::Null,
                 Some(m) => json!({"fields": m.fields, "records": m.records().len(), "path": m.path,
-                                  "preview": self.merge_preview}),
+                                  "preview": self.merge_preview,
+                                  "catalog": m.catalog.as_ref().map(|c| json!({
+                                      "per_page": c.across * c.down, "across": c.across, "down": c.down})),
+                }),
             }),
             _ => Err(EngineError::Other(format!("query {q:?} is not a mail-merge query"))),
         }

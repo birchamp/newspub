@@ -78,8 +78,14 @@ fn n_up(
 }
 
 /// Lays out the selected pages (`indices`, document page indices) onto sheets.
-pub fn plan(w: f64, h: f64, indices: &[usize], imposition: &Imposition) -> Result<Vec<Sheet>, PdfError> {
-    let sheets = plan_sheets(w, h, indices, imposition)?;
+pub fn plan(
+    w: f64,
+    h: f64,
+    indices: &[usize],
+    imposition: &Imposition,
+    doc_sheet: Option<&newpub_core::SheetLayout>,
+) -> Result<Vec<Sheet>, PdfError> {
+    let sheets = plan_sheets(w, h, indices, imposition, doc_sheet)?;
     PAGE_SHEET.with(|m| {
         let mut m = m.borrow_mut();
         m.clear();
@@ -92,7 +98,13 @@ pub fn plan(w: f64, h: f64, indices: &[usize], imposition: &Imposition) -> Resul
     Ok(sheets)
 }
 
-fn plan_sheets(w: f64, h: f64, indices: &[usize], imposition: &Imposition) -> Result<Vec<Sheet>, PdfError> {
+fn plan_sheets(
+    w: f64,
+    h: f64,
+    indices: &[usize],
+    imposition: &Imposition,
+    _doc_sheet: Option<&newpub_core::SheetLayout>,
+) -> Result<Vec<Sheet>, PdfError> {
     Ok(match imposition {
         Imposition::None => indices
             .iter()
@@ -112,6 +124,10 @@ fn plan_sheets(w: f64, h: f64, indices: &[usize], imposition: &Imposition) -> Re
             .collect(),
         Imposition::NUp { sheet_width, sheet_height, gap, repeat } => {
             n_up((sheet_width.0, sheet_height.0), (w, h), gap.0, *repeat, indices)?
+        }
+        // PRODUCTS task (PG-11).
+        Imposition::DocumentSheet => {
+            return Err(PdfError::Unsupported("document sheet imposition is not implemented yet".into()));
         }
     })
 }

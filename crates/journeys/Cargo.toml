@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+zip.workspace = true
 newpub-core.workspace = true
 newpub-engine.workspace = true
 newpub-app.workspace = true

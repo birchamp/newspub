@@ -53,6 +53,7 @@ impl Document {
                 ObjectKind::Group { children } => stack.extend(children.iter().copied()),
                 ObjectKind::Table(t) => stories.extend(t.cells.iter().map(|c| c.story)),
                 ObjectKind::Shape(s) => stories.extend(s.story),
+                ObjectKind::WordArt(_) => {}
             }
             objects.push(o);
         }
@@ -209,6 +210,7 @@ impl Document {
                     }
                 }
                 ObjectKind::Shape(s) => s.story = remap(&map, s.story),
+                ObjectKind::WordArt(_) => {}
             }
             self.objects.insert(n.id, n);
         }

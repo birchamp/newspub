@@ -214,7 +214,7 @@ fn exclusions(doc: &Document, frame: &Object) -> Vec<Exclusion> {
     let mut out = vec![];
     for oid in &list[pos + 1..] {
         let Some(o) = doc.objects.get(oid) else { continue };
-        if o.wrap.mode == WrapMode::None {
+        if o.wrap.mode == WrapMode::None || o.hidden {
             continue;
         }
         let d = o.wrap.distance.0;
@@ -890,6 +890,7 @@ impl NoticeStyle {
             x_scale: 1.0,
             synthetic_bold: false,
             synthetic_italic: !face.italic,
+            effects: Default::default(),
             text: text.to_string(),
             glyphs,
         };
@@ -1057,6 +1058,7 @@ fn emit_line(
                     x_scale: st.x_scale,
                     synthetic_bold: st.synthetic_bold,
                     synthetic_italic: st.synthetic_italic,
+                    effects: st.effects.clone(),
                     text: String::new(),
                     glyphs: vec![],
                 },
@@ -1165,6 +1167,7 @@ fn emit_line(
                     x_scale: s.x_scale,
                     synthetic_bold: s.synthetic_bold,
                     synthetic_italic: s.synthetic_italic,
+                    effects: s.effects.clone(),
                     text: String::new(),
                     glyphs: vec![],
                 },
@@ -1232,6 +1235,7 @@ fn glyph_run(p: &Para, style: usize, text: String, glyphs: Vec<PGlyph>) -> Glyph
         x_scale: st.x_scale,
         synthetic_bold: st.synthetic_bold,
         synthetic_italic: st.synthetic_italic,
+        effects: st.effects.clone(),
         text,
         glyphs,
     }

@@ -78,6 +78,8 @@ pub struct GlyphRun {
     pub x_scale: f64,
     pub synthetic_bold: bool,
     pub synthetic_italic: bool,
+    /// Text effects (TY-18) drawn by the renderers.
+    pub effects: newpub_core::TextEffects,
     /// Source text of the run; glyph `text_range`s index into it.
     pub text: String,
     pub glyphs: Vec<PGlyph>,

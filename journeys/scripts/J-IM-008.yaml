@@ -1,0 +1,36 @@
+id: J-IM-008
+title: Insert GIF, BMP, TIFF and SVG pictures
+covers: [IM-09]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  # each raster fixture is 200×100 px: left half red, right half green
+  - insert_picture: {path: fixtures/halves.gif, page: 0, x: 1in, y: 1in, width: 2in}
+    as: g
+  - expect: {query: {q: object, id: $g}, path: /rect/h, approx: [72, 0.01]}
+  - insert_picture: {path: fixtures/halves.bmp, page: 0, x: 1in, y: 3in, width: 2in}
+  - insert_picture: {path: fixtures/halves.tif, page: 0, x: 1in, y: 5in, width: 2in}
+  # the SVG is 200×100 user units: a blue field with a yellow circle on the right
+  - insert_picture: {path: fixtures/badge.svg, page: 0, x: 4in, y: 1in, width: 2in}
+    as: s
+  - expect: {query: {q: object, id: $s}, path: /rect/h, approx: [72, 0.01]}
+  - expect_png:
+      page: 0
+      pixels:
+        - {at: [90, 108], rgb: [220, 40, 40], tol: 30}
+        - {at: [180, 108], rgb: [40, 160, 60], tol: 30}
+        - {at: [90, 252], rgb: [220, 40, 40], tol: 30}
+        - {at: [180, 252], rgb: [40, 160, 60], tol: 30}
+        - {at: [90, 396], rgb: [220, 40, 40], tol: 30}
+        - {at: [180, 396], rgb: [40, 160, 60], tol: 30}
+        - {at: [300, 80], rgb: [30, 90, 160], tol: 30}
+        - {at: [396, 108], rgb: [240, 200, 40], tol: 30}
+  - export_pdf: {path: formats.pdf}
+  # the three raster pictures are embedded as images; the SVG stays vector artwork
+  - expect_pdf:
+      file: formats.pdf
+      images: 3
+      ink:
+        - {page: 1, rect: [380, 95, 30, 25], min: 0.9}
+        - {page: 1, rect: [292, 75, 20, 10], min: 0.9}
+  - expect_roundtrip: {}
+  - expect_error: {insert_picture: {path: fixtures/short.txt, page: 0}}

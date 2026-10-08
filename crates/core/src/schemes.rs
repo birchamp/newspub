@@ -196,6 +196,17 @@ impl Document {
                         }
                     }
                 }
+                crate::ObjectKind::WordArt(w) => {
+                    fix(&mut w.fill);
+                    if let Some(st) = &mut w.outline {
+                        fix(&mut st.color);
+                    }
+                    if let Some(g) = &mut w.gradient {
+                        for stop in &mut g.stops {
+                            fix(&mut stop.color);
+                        }
+                    }
+                }
                 crate::ObjectKind::Group { .. } => {}
             }
         }

@@ -77,7 +77,7 @@ fn write_all(dir: &Path, blocks: &[Block]) -> Result<(), EngineError> {
 }
 
 impl Session {
-    fn library_path(&self) -> PathBuf {
+    pub(crate) fn library_path(&self) -> PathBuf {
         match &self.library_dir {
             Some(p) if p.is_absolute() => p.clone(),
             Some(p) => self.base_dir.join(p),

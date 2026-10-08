@@ -1,7 +1,7 @@
 //! Session-level actions and read-only queries.
 //! Interface rule (ARCHITECTURE.md §4): lead-owned; record changes in §11.
 
-use newpub_core::{Command, Id, Insets, Length, Rect};
+use newpub_core::{CharAttrs, Command, Id, Insets, Length, Rect};
 use newpub_io_pdf::PdfOptions;
 use serde::{Deserialize, Serialize};
 
@@ -223,6 +223,9 @@ pub enum SessionAction {
     /// Attach a CSV data source (first row = field names). Undoable.
     AttachDataSource {
         path: String,
+        /// Worksheet of an .xlsx workbook (default: the first sheet) (MM-06).
+        #[serde(default)]
+        sheet: Option<String>,
     },
     /// Show record `record` (index into the filtered, sorted list) in place of the fields; None shows field names.
     SetMergePreview {
@@ -273,6 +276,71 @@ pub enum SessionAction {
         x: Length,
         y: Length,
     },
+    // ---- lead: catalog merge (engine/src/merge.rs) ----
+    /// Catalog merge (MM-05): the first item's cell on `page`; objects lying inside it repeat `across` × `down`
+    /// per page with `gap` between cells, one record per cell. Undoable.
+    SetCatalogArea {
+        page: usize,
+        rect: Rect,
+        across: u32,
+        down: u32,
+        #[serde(default)]
+        gap: Length,
+    },
+    ClearCatalogArea {},
+    // ---- lead: business information sets (engine/src/bizinfo.rs) ----
+    /// Save the publication's business information set to the user library (by its name).
+    SaveBusinessInfoSet {},
+    /// Apply a saved set to the publication (undoable).
+    ApplyBusinessInfoSet {
+        name: String,
+    },
+    // ---- FINDFMT task (engine/src/findfmt.rs) ----
+    /// Replace all matches of text and/or formatting (FR-03). `find`/`replace` understand the codes ^p (paragraph),
+    /// ^l (line break U+2028), ^t (tab), ^s (non-breaking space), ^- (optional hyphen U+00AD), ^^ (caret).
+    /// `replace` None keeps the matched text; `replace_format` is overlaid on the matched (or replacement) text.
+    /// Nothing to find (no `find` and no `find_format`) → error. One undo step.
+    ReplaceAdvanced {
+        #[serde(default)]
+        find: Option<String>,
+        #[serde(default)]
+        find_format: Option<CharAttrs>,
+        #[serde(default)]
+        replace: Option<String>,
+        #[serde(default)]
+        replace_format: Option<CharAttrs>,
+        #[serde(default)]
+        match_case: bool,
+        #[serde(default)]
+        whole_word: bool,
+    },
+    // ---- PRODUCTS task (engine/src/products.rs) ----
+    /// New publication of a built-in type (PG-11): page size, margins and (for cards/labels) `Document.sheet`.
+    NewFromPublicationType {
+        id: String,
+    },
+    // ---- PACKGO task (engine/src/packgo.rs) ----
+    /// Pack and Go (PR-09): copy the publication, its linked pictures and the fonts it uses into `dir`.
+    PackAndGo {
+        dir: String,
+        #[serde(default = "yes")]
+        fonts: bool,
+        #[serde(default)]
+        pdf: bool,
+    },
+    // ---- EXPORT task (engine/src/exportx.rs) ----
+    /// Fixed-layout EPUB 3 (EX-06).
+    ExportEpub {
+        path: String,
+    },
+    /// XPS (EX-06).
+    ExportXps {
+        path: String,
+    },
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -344,6 +412,15 @@ impl SessionAction {
         "merge_to_publication",
         "save_building_block",
         "insert_building_block",
+        "set_catalog_area",
+        "clear_catalog_area",
+        "save_business_info_set",
+        "apply_business_info_set",
+        "replace_advanced",
+        "new_from_publication_type",
+        "pack_and_go",
+        "export_epub",
+        "export_xps",
     ];
 }
 
@@ -495,6 +572,34 @@ pub enum Query {
     BuildingBlocks,
     /// `{path, user_count}` of the user building-block library.
     BuildingBlockLibrary,
+    /// The publication's business information set, or null (BB-05).
+    BusinessInfo,
+    /// Names of the business information sets in the user library.
+    BusinessInfoSets,
+    /// Names of the WordArt style presets (TY-19).
+    WordArtStyles,
+    /// Points of a Bézier/path shape in page coordinates (SH-08): `[{x, y, ctrl_in, ctrl_out, smooth}]`.
+    PathNodes {
+        id: Id,
+    },
+    /// Matches of text and/or formatting (FR-03), same shape as Find: `[{story, start, end}]`.
+    FindAdvanced {
+        #[serde(default)]
+        text: Option<String>,
+        #[serde(default)]
+        format: Option<Box<CharAttrs>>,
+        #[serde(default)]
+        match_case: bool,
+        #[serde(default)]
+        whole_word: bool,
+    },
+    /// Built-in publication types (PG-11): `[{id, name, width, height, per_sheet, sheet}]` (sheet null for single items).
+    PublicationTypes,
+    PublicationType {
+        id: String,
+    },
+    /// Separation plate names (PR-08).
+    SeparationPlates,
     /// Baselines of a frame's lines in page coordinates.
     PageBaselines {
         frame: Id,

@@ -108,8 +108,9 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | IM-06 | P2 | Recolour, brightness, contrast, greyscale | J-IM-005 | [x] |
 | IM-07 | P2 | Picture borders, shapes (crop to shape), shadow, soft edges | J-IM-006 | [x] |
 | IM-08 | P2 | Linked (external) vs embedded pictures; relink | J-IM-007 | [x] |
-| IM-09 | P3 | SVG/EMF/WMF/TIFF/GIF/BMP import | J-IM-008 | [ ] |
+| IM-09 | P3 | SVG, TIFF, GIF and BMP import | J-IM-008 | [ ] |
 | IM-10 | P3 | Captions (caption gallery) grouped to picture | J-IM-009 | [ ] |
+| IM-11 | P3 | EMF/WMF (Windows metafile) import — research: no maintained Rust parser; needs a vector converter | — | [ ] |
 
 ## GD: Layout guides and snapping
 

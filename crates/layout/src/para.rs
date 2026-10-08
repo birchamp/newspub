@@ -23,6 +23,7 @@ pub struct RunStyle {
     pub strike: bool,
     pub synthetic_bold: bool,
     pub synthetic_italic: bool,
+    pub effects: newpub_core::TextEffects,
     /// Line metrics at this size, points (descent positive).
     pub ascent: f64,
     pub descent: f64,
@@ -55,6 +56,7 @@ impl RunStyle {
         RunStyle {
             synthetic_bold: rc.bold && !face.bold,
             synthetic_italic: rc.italic && !face.italic,
+            effects: rc.effects.clone(),
             face,
             size,
             color: rc.color.clone(),

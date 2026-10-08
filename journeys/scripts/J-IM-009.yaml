@@ -1,0 +1,34 @@
+id: J-IM-009
+title: Captions — add a caption below or above a picture, grouped with it
+covers: [IM-10]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - insert_picture: {path: fixtures/photo.png, page: 0, x: 1in, y: 1in, width: 3in}
+    as: p
+  - add_caption: {picture: $p, text: "Spring fair, 2026"}
+    as: [grp, cap]
+  - expect: {query: {q: object, id: $grp}, path: /kind/type, equals: "group"}
+  - expect: {query: {q: object, id: $grp}, path: /kind/children, equals: [$p, $cap]}
+  # below the picture (which ends at y = 72 + 162 = 234), the same width, with a small gap
+  - expect: {query: {q: object, id: $cap}, path: /rect/x, approx: [72, 0.01]}
+  - expect: {query: {q: object, id: $cap}, path: /rect/w, approx: [216, 0.01]}
+  - expect: {query: {q: object, id: $cap}, path: /rect/y, gte: 234}
+  - expect: {query: {q: object, id: $cap}, path: /rect/y, lte: 246}
+  - expect: {query: {q: frame_text, frame: $cap}, equals: "Spring fair, 2026"}
+  - expect: {query: {q: overflow, target: $cap}, equals: false}
+  # captions use the "Caption" paragraph style: 9 pt italic
+  - expect: {query: {q: char_attrs, target: $cap, at: 0}, path: /italic, equals: true}
+  - expect: {query: {q: char_attrs, target: $cap, at: 0}, path: /size, equals: 9}
+  # the caption moves with its picture
+  - move_objects: {ids: [$grp], dx: 1in, dy: 0}
+  - expect: {query: {q: object, id: $cap}, path: /rect/x, approx: [144, 0.01]}
+  # a caption above a second picture ends at or before the picture's top
+  - insert_picture: {path: fixtures/stripes.jpg, page: 0, x: 1in, y: 6in, width: 3in}
+    as: p2
+  - add_caption: {picture: $p2, text: "Above", position: above}
+    as: [g2, cap2]
+  - expect: {query: {q: object, id: $cap2}, path: /rect/y, lt: 432}
+  - expect_error: {add_caption: {picture: $cap}}
+  - export_pdf: {path: captions.pdf}
+  - expect_pdf: {file: captions.pdf, text_contains: ["Spring fair, 2026", "Above"]}
+  - expect_roundtrip: {}

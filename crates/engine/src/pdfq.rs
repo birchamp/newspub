@@ -80,6 +80,18 @@ impl Session {
                         }
                     }
                 }
+                ObjectKind::WordArt(w) => {
+                    if let Some(g) = &w.gradient {
+                        for st in &g.stops {
+                            note(&mut out, &st.color);
+                        }
+                    } else {
+                        note(&mut out, &w.fill);
+                    }
+                    if let Some(st) = &w.outline {
+                        note(&mut out, &st.color);
+                    }
+                }
                 ObjectKind::Group { .. } => {}
             }
         }

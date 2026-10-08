@@ -1,0 +1,42 @@
+id: J-SH-008
+title: Freeform and Bézier shapes — draw, move points, smooth or corner points, insert and delete points
+covers: [SH-08]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_freeform: {page: 0, points: [[1in, 1in], [3in, 1in], [3in, 3in], [1in, 3in]], closed: true, fill: "#2050a0"}
+    as: p
+  - expect: {query: {q: path_nodes, id: $p}, len: 4}
+  - expect: {query: {q: path_nodes, id: $p}, path: /1/x, approx: [216, 0.01]}
+  - expect: {query: {q: object, id: $p}, path: /rect, equals: {x: 72, y: 72, w: 144, h: 144}}
+  - expect_png: {page: 0, pixels: [{at: [144, 144], rgb: [32, 80, 160], tol: 20}]}
+  # moving a point reshapes the path and its bounding box
+  - move_path_node: {id: $p, index: 2, x: 4in, y: 4in}
+  - expect: {query: {q: path_nodes, id: $p}, path: /2/x, approx: [288, 0.01]}
+  - expect: {query: {q: object, id: $p}, path: /rect/w, approx: [216, 0.01]}
+  - expect_png: {page: 0, pixels: [{at: [200, 200], rgb: [32, 80, 160], tol: 20}, {at: [270, 120], rgb: [255, 255, 255], tol: 10}]}
+  # inserting a point on a straight segment keeps the shape: it lands at the segment's midpoint
+  - insert_path_node: {id: $p, after: 0}
+  - expect: {query: {q: path_nodes, id: $p}, len: 5}
+  - expect: {query: {q: path_nodes, id: $p}, path: /1/x, approx: [144, 0.01]}
+  - expect: {query: {q: path_nodes, id: $p}, path: /1/y, approx: [72, 0.01]}
+  - delete_path_node: {id: $p, index: 1}
+  - expect: {query: {q: path_nodes, id: $p}, len: 4}
+  # a smooth point gets symmetric handles; a corner point has none
+  - set_path_node_kind: {id: $p, index: 1, kind: smooth}
+  - expect: {query: {q: path_nodes, id: $p}, path: /1/smooth, equals: true}
+  - expect: {query: {q: path_nodes, id: $p}, path: /1/ctrl_in, not_equals: null}
+  - expect: {query: {q: path_nodes, id: $p}, path: /1/ctrl_out, not_equals: null}
+  - set_path_node_kind: {id: $p, index: 1, kind: corner}
+  - expect: {query: {q: path_nodes, id: $p}, path: /1/ctrl_in, is_null: true}
+  - undo: {}
+  - expect: {query: {q: path_nodes, id: $p}, path: /1/smooth, equals: true}
+  # a smooth open freeform passes through its points
+  - add_freeform: {page: 0, points: [[1in, 6in], [2in, 5in], [3in, 6in]], smooth: true, stroke: {color: "#d02020", width: 4}}
+    as: c
+  - expect: {query: {q: path_nodes, id: $c}, path: /1/smooth, equals: true}
+  - expect_png: {page: 0, pixels: [{at: [144, 361], rgb: [208, 32, 32], tol: 40}, {at: [144, 330], rgb: [255, 255, 255], tol: 10}]}
+  - delete_path_node: {id: $c, index: 0}
+  - expect_error: {delete_path_node: {id: $c, index: 0}}
+  - export_pdf: {path: freeform.pdf}
+  - expect_pdf: {file: freeform.pdf, ink: [{page: 1, rect: [150, 150, 40, 40], min: 0.95}]}
+  - expect_roundtrip: {}

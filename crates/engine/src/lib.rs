@@ -4,15 +4,21 @@
 
 pub mod action;
 mod autosave;
+mod bizinfo;
 mod blocks;
+mod exportx;
+mod findfmt;
 mod fixups;
 mod guides;
 mod html;
+mod imgformats;
 mod importer;
 mod layersq;
 mod merge;
+mod packgo;
 mod pdfq;
 mod pictures;
+mod products;
 mod pubimport;
 mod spell;
 mod templates;
@@ -52,17 +58,9 @@ pub enum EngineError {
 /// Reads a PNG or JPEG file into a new asset of `d`.
 pub(crate) fn load_picture(d: &mut Document, p: &Path) -> Result<Id, EngineError> {
     let bytes = std::fs::read(p)?;
-    let reader = image::ImageReader::new(std::io::Cursor::new(&bytes))
-        .with_guessed_format()
-        .map_err(|e| EngineError::Image(e.to_string()))?;
-    let mime = match reader.format() {
-        Some(image::ImageFormat::Png) => "image/png",
-        Some(image::ImageFormat::Jpeg) => "image/jpeg",
-        other => return Err(EngineError::Image(format!("unsupported picture format {other:?}"))),
-    };
-    let (pw, ph) = reader.into_dimensions().map_err(|e| EngineError::Image(e.to_string()))?;
+    let pic = imgformats::decode_picture(&bytes)?;
     let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-    Ok(d.add_asset(&name, mime, Arc::from(bytes), pw, ph))
+    Ok(d.add_asset(&name, pic.mime, Arc::from(pic.bytes), pic.px_w, pic.px_h))
 }
 
 /// Result of running an action.
@@ -359,6 +357,12 @@ impl Session {
             | MergeToPdf { .. }
             | MergeToPublication {} => self.merge_action(s),
             SaveBuildingBlock { .. } | InsertBuildingBlock { .. } => self.blocks_action(s),
+            SetCatalogArea { .. } | ClearCatalogArea {} => self.merge_action(s),
+            SaveBusinessInfoSet {} | ApplyBusinessInfoSet { .. } => self.bizinfo_action(s),
+            ReplaceAdvanced { .. } => self.findfmt_action(s),
+            NewFromPublicationType { .. } => self.products_action(s),
+            PackAndGo { .. } => self.packgo_action(s),
+            ExportEpub { .. } | ExportXps { .. } => self.exportx_action(s),
             ExportPng { path, page, dpi } => {
                 let png = self.page_png(*page, *dpi)?;
                 std::fs::write(self.resolve(path), png)?;
@@ -808,6 +812,12 @@ impl Session {
                 to(&fill.map(|c| self.doc.scheme_color(&c)))
             }
             BuildingBlocks | BuildingBlockLibrary => self.blocks_query(q)?,
+            BusinessInfo | BusinessInfoSets => self.bizinfo_query(q)?,
+            WordArtStyles => json!(newpub_core::wordart::styles().into_iter().map(|s| s.name).collect::<Vec<_>>()),
+            PathNodes { id } => to(&self.doc.path_nodes(*id)?),
+            FindAdvanced { .. } => self.findfmt_query(q)?,
+            PublicationTypes | PublicationType { .. } => self.products_query(q)?,
+            SeparationPlates => json!(newpub_io_pdf::separations::plates(&self.doc)),
             PageLabel { page } => {
                 if *page >= self.doc.pages.len() {
                     return Err(CoreError::NoSuchPage(*page).into());
@@ -978,13 +988,13 @@ impl Session {
                 let Some(o) = self.doc.objects.get(&id) else { continue };
                 let (mut missing, mut low, mut small, mut over) = (None, false, false, false);
                 match &o.kind {
-                    ObjectKind::Image(_) | ObjectKind::Shape(_) => {
+                    ObjectKind::Image(_) | ObjectKind::Shape(_) | ObjectKind::WordArt(_) => {
                         let has_alt = o.alt_text.as_deref().is_some_and(|t| !t.trim().is_empty());
                         if !o.decorative && !has_alt {
-                            let m = if matches!(o.kind, ObjectKind::Image(_)) {
-                                "Picture has no alt text"
-                            } else {
-                                "Shape has no alt text"
+                            let m = match o.kind {
+                                ObjectKind::Image(_) => "Picture has no alt text",
+                                ObjectKind::WordArt(_) => "WordArt has no alt text",
+                                _ => "Shape has no alt text",
                             };
                             missing = Some(m);
                         }

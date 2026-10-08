@@ -20,6 +20,8 @@ pub enum Field {
     SectionPageCount,
     /// Mail-merge field by column name.
     Merge(String),
+    /// Business information field by key (BB-05), e.g. `organization`, `phone`.
+    Business(String),
 }
 
 /// A section starts at a page and restarts page labels.

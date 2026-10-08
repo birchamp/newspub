@@ -62,6 +62,25 @@ pub enum Axis {
     Vertical,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CaptionPosition {
+    #[default]
+    Below,
+    Above,
+    /// Over the bottom of the picture.
+    Overlay,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NodeKind {
+    /// No handles: straight segments meet at an angle.
+    Corner,
+    /// Symmetric handles along the direction from the previous to the next point (a third of each distance).
+    Smooth,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ObjectPatch {
@@ -78,6 +97,8 @@ pub struct ObjectPatch {
     pub shadow: Option<Shadow>,
     /// Remove the shadow.
     pub no_shadow: bool,
+    pub hidden: Option<bool>,
+    pub overprint: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -166,6 +187,92 @@ pub enum Command {
         dx: Length,
         #[serde(default)]
         dy: Length,
+    },
+    // ---- TABLEPASTE task (core/src/tablepaste.rs) ----
+    /// Paste tab-separated text (rows by newline, cells by tab; CRLF and one trailing newline ignored) into a
+    /// table starting at (row, col), overwriting cells and adding rows/columns as needed (new columns copy the
+    /// last column's width and the table widens; new rows copy the last row's height). One undo step.
+    /// row/col beyond the current size → error.
+    PasteTableText {
+        table: Id,
+        row: usize,
+        col: usize,
+        text: String,
+    },
+    // ---- OBJECTS task (core/src/captions.rs) ----
+    /// Caption for a picture (IM-10): a text frame next to it, grouped with it. created = [group, caption frame].
+    AddCaption {
+        picture: Id,
+        #[serde(default)]
+        text: Option<String>,
+        #[serde(default)]
+        position: CaptionPosition,
+    },
+    // ---- TEXTART task (core/src/wordart.rs) ----
+    /// Add a WordArt object (TY-19). `style` names a preset from `wordart::styles()`.
+    AddWordArt {
+        #[serde(default)]
+        page: Option<usize>,
+        #[serde(default)]
+        master: Option<Id>,
+        rect: Rect,
+        text: String,
+        #[serde(default)]
+        style: Option<String>,
+    },
+    SetWordArt {
+        id: Id,
+        patch: crate::wordart::WordArtPatch,
+    },
+    // ---- FREEFORM task (core/src/freeform.rs) ----
+    /// Add a Bézier shape through page points (SH-08). `smooth` makes every point smooth (curve through them).
+    /// The object's rect is the bounding box of the points and handles.
+    AddFreeform {
+        #[serde(default)]
+        page: Option<usize>,
+        #[serde(default)]
+        master: Option<Id>,
+        points: Vec<[Length; 2]>,
+        #[serde(default)]
+        closed: bool,
+        #[serde(default)]
+        smooth: bool,
+        #[serde(default)]
+        fill: Option<Color>,
+        #[serde(default)]
+        stroke: Option<Stroke>,
+    },
+    /// Move point `index` to page position (x, y); its handles move with it.
+    MovePathNode {
+        id: Id,
+        index: usize,
+        x: Length,
+        y: Length,
+    },
+    /// Insert a point in the middle (t = 0.5) of the segment after point `after`, keeping the shape.
+    InsertPathNode {
+        id: Id,
+        after: usize,
+    },
+    /// Delete a point; a path keeps at least 2 points (3 when closed).
+    DeletePathNode {
+        id: Id,
+        index: usize,
+    },
+    SetPathNodeKind {
+        id: Id,
+        index: usize,
+        kind: NodeKind,
+    },
+    // ---- lead: business information (core/src/textops.rs) ----
+    SetBusinessInfo {
+        info: BusinessInfo,
+    },
+    InsertBusinessField {
+        target: Id,
+        #[serde(default)]
+        at: Option<usize>,
+        key: String,
     },
     /// Switch the publication's colour scheme (by built-in name); scheme colours follow.
     ApplyColorScheme {
@@ -716,6 +823,8 @@ impl Document {
             layer: None,
             parent: None,
             shadow: None,
+            hidden: false,
+            overprint: false,
         }
     }
 
@@ -811,7 +920,7 @@ impl Document {
 
     /// Removes an object and everything that depends on it (group children, its story when
     /// it was the story's only frame).
-    fn remove_object(&mut self, id: Id) -> Result<(), CoreError> {
+    pub(crate) fn remove_object(&mut self, id: Id) -> Result<(), CoreError> {
         let obj = self.objects.get(&id).cloned().ok_or(CoreError::NoSuchObject(id))?;
         if let Some(list) = self.z_list_mut(id) {
             list.retain(|x| *x != id);
@@ -851,7 +960,7 @@ impl Document {
 
     /// Deep-copies an object (and group children / text stories) onto a page.
     /// Moves an object and (for groups) its children, which are stored in page coordinates.
-    fn offset_tree(&mut self, id: Id, dx: f64, dy: f64) {
+    pub(crate) fn offset_tree(&mut self, id: Id, dx: f64, dy: f64) {
         let kids = match self.objects.get_mut(&id) {
             Some(o) => {
                 o.rect.x += dx;
@@ -1172,6 +1281,12 @@ impl Document {
                 }
                 if p.no_shadow {
                     o.shadow = None;
+                }
+                if let Some(v) = p.hidden {
+                    o.hidden = v;
+                }
+                if let Some(v) = p.overprint {
+                    o.overprint = v;
                 }
                 Ok(Applied::default())
             }
@@ -1672,6 +1787,15 @@ impl Document {
             | InsertSpecialChar { .. }
             | AddShapeText { .. } => crate::textops::apply(self, cmd),
             ApplyColorScheme { .. } | ApplyFontScheme { .. } => crate::schemes::apply(self, cmd),
+            PasteTableText { .. } => crate::tablepaste::apply(self, cmd),
+            AddCaption { .. } => crate::captions::apply(self, cmd),
+            AddWordArt { .. } | SetWordArt { .. } => crate::wordart::apply(self, cmd),
+            AddFreeform { .. }
+            | MovePathNode { .. }
+            | InsertPathNode { .. }
+            | DeletePathNode { .. }
+            | SetPathNodeKind { .. } => crate::freeform::apply(self, cmd),
+            SetBusinessInfo { .. } | InsertBusinessField { .. } => crate::textops::apply(self, cmd),
             AddLayer { name } => {
                 let id = self.alloc();
                 self.layers.push(Layer { id, name: name.clone(), visible: true, locked: false });

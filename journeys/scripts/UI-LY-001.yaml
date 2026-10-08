@@ -1,0 +1,33 @@
+id: UI-LY-001
+title: Selection pane — list the page's objects, select, rename, hide and show
+covers: [LY-04]
+ui: true
+steps:
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 1in], to: [4in, 2in]}
+  - type: {text: "Hello"}
+  - key: {key: "Escape"}
+  - click: {label: "Rectangle"}
+  - drag: {from: [1in, 3in], to: [3in, 4in]}
+  - expect: {query: {q: document}, path: /pages/0/objects/0, gt: 0, as: tb}
+  - click: {label: "Selection Pane"}
+  - expect_ui: {label: "Objects on this page"}
+  # objects are listed with default names (kind and position from the back)
+  - expect_ui: {label: "Text Box 1"}
+  - expect_ui: {label: "Rectangle 2"}
+  - click: {label: "Text Box 1"}
+  - expect: {query: {q: view}, path: /selection, equals: [$tb]}
+  # rename the selected object
+  - click: {label: "Rename"}
+  - fill: {label: "Object name", text: "Masthead"}
+  - key: {key: "Enter"}
+  - expect: {query: {q: object, id: $tb}, path: /name, equals: "Masthead"}
+  - expect_ui: {label: "Masthead"}
+  # hide and show
+  - click: {label: "Hide Masthead"}
+  - expect: {query: {q: object, id: $tb}, path: /hidden, equals: true}
+  - expect_png: {page: 0, ink: [{rect: [72, 72, 216, 72], max: 0.001}]}
+  - click: {label: "Show Masthead"}
+  - expect: {query: {q: object, id: $tb}, path: /hidden, equals: false}
+  - click: {label: "Selection Pane"}
+  - expect_ui: {label: "Objects on this page", exists: false}

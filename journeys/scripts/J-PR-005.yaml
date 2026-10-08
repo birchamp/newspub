@@ -1,0 +1,40 @@
+id: J-PR-005
+title: Colour separations — one plate per ink, knockouts, overprint
+covers: [PR-08]
+steps:
+  - new_document: {width: 4in, height: 4in, margins: {top: 0, right: 0, bottom: 0, left: 0}}
+  # full-page cyan, a magenta square on top, and a small spot-colour square in the corner
+  - add_shape: {page: 0, rect: [0, 0, 4in, 4in], kind: rect, fill: "cmyk(100,0,0,0)"}
+  - add_shape: {page: 0, rect: [1in, 1in, 2in, 2in], kind: rect, fill: "cmyk(0,100,0,0)"}
+    as: mag
+  - add_shape: {page: 0, rect: [0.25in, 0.25in, 0.5in, 0.5in], kind: rect, fill: {space: spot, name: "Brand Red", c: 0, m: 0.9, y: 0.8, k: 0}}
+  - expect: {query: {q: separation_plates}, equals: ["Cyan", "Magenta", "Yellow", "Black", "Brand Red"]}
+  - export_pdf: {path: seps.pdf, options: {separations: true}}
+  # one PDF page per plate; each plate shows its ink as black
+  - expect_pdf:
+      file: seps.pdf
+      pages: 5
+      page_text: [{page: 1, contains: "Cyan"}, {page: 5, contains: "Brand Red"}]
+      ink:
+        # cyan plate: cyan everywhere except where the magenta square and the spot square knock it out
+        - {page: 1, rect: [20, 150, 40, 40], min: 0.9}
+        - {page: 1, rect: [100, 100, 80, 80], max: 0.05}
+        - {page: 1, rect: [24, 24, 24, 24], max: 0.05}
+        # magenta plate: only the magenta square (the spot colour has its own plate)
+        - {page: 2, rect: [100, 100, 80, 80], min: 0.9}
+        - {page: 2, rect: [20, 150, 40, 40], max: 0.05}
+        - {page: 2, rect: [24, 24, 24, 24], max: 0.05}
+        # yellow and black plates are empty
+        - {page: 3, rect: [10, 60, 268, 218], max: 0.01}
+        - {page: 4, rect: [10, 60, 268, 218], max: 0.01}
+        # spot plate
+        - {page: 5, rect: [24, 24, 24, 24], min: 0.9}
+        - {page: 5, rect: [100, 100, 80, 80], max: 0.05}
+  # overprinting the magenta square stops it knocking out the cyan beneath
+  - set_object: {id: $mag, patch: {overprint: true}}
+  - export_pdf: {path: overprint.pdf, options: {separations: true}}
+  - expect_pdf: {file: overprint.pdf, ink: [{page: 1, rect: [100, 100, 80, 80], min: 0.9}, {page: 2, rect: [100, 100, 80, 80], min: 0.9}]}
+  # composite (normal) export still produces the normal page
+  - export_pdf: {path: composite.pdf}
+  - expect_pdf: {file: composite.pdf, pages: 1}
+  - expect_roundtrip: {}

@@ -1,0 +1,33 @@
+id: J-BB-005
+title: Business information sets — fields filled in across the publication; switch sets
+covers: [BB-05]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 5in, 1in]}
+    as: f
+  - insert_business_field: {target: $f, key: organization}
+  - insert_text: {target: $f, text: " — "}
+  - insert_business_field: {target: $f, key: phone}
+  # with no business information the fields show their names
+  - expect: {query: {q: frame_text, frame: $f}, equals: "«organization» — «phone»"}
+  - set_business_info: {info: {name: "Parish office", fields: {organization: "St Mary's", phone: "555 0100"}}}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "St Mary's — 555 0100"}
+  - expect: {query: {q: business_info}, path: /name, equals: "Parish office"}
+  # sets are saved to the user's library and can be applied to any publication
+  - save_business_info_set: {}
+  - expect: {query: {q: business_info_sets}, contains: "Parish office"}
+  # a set without a phone number leaves that field blank
+  - set_business_info: {info: {name: "Choir", fields: {organization: "Choir of St Mary's"}}}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "Choir of St Mary's — "}
+  - apply_business_info_set: {name: "Parish office"}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "St Mary's — 555 0100"}
+  - undo: {}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "Choir of St Mary's — "}
+  - export_pdf: {path: info.pdf}
+  - expect_pdf: {file: info.pdf, text_contains: ["Choir of St Mary's"]}
+  - expect_roundtrip: {}
+  - expect_error: {apply_business_info_set: {name: "No such set"}}
+  # a new publication can use the saved set
+  - new_document: {width: 8.5in, height: 11in}
+  - apply_business_info_set: {name: "Parish office"}
+  - expect: {query: {q: business_info}, path: /fields/phone, equals: "555 0100"}

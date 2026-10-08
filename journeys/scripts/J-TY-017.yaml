@@ -1,0 +1,35 @@
+id: J-TY-017
+title: Text effects — shadow, outline, glow, reflection, emboss
+covers: [TY-18]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 6in, 2in]}
+    as: f
+  - insert_text: {target: $f, text: "HIE"}
+  - format_chars: {target: $f, attrs: {font: "Liberation Sans", bold: true, size: 72}}
+  # E's frame-local position and baseline; page = frame + 72
+  - expect: {query: {q: char_box, target: $f, at: 2}, path: /x, gt: 0, as: ex}
+  - expect: {query: {q: char_box, target: $f, at: 2}, path: /baseline, gt: 0, as: b}
+  # under E's bottom bar (2–5 pt below the baseline) is blank without effects
+  - expect_png: {page: 0, dpi: 144, ink: [{rect: ["$ex+80", "$b+74", 30, 3], max: 0.02}]}
+  # shadow 6 pt down and right, black
+  - format_chars: {target: $f, attrs: {effects: {shadow: {dx: 6, dy: 6, blur: 0, color: "#000000"}}}}
+  - expect_png: {page: 0, dpi: 144, ink: [{rect: ["$ex+80", "$b+74", 30, 3], min: 0.5}]}
+  - export_pdf: {path: shadow.pdf}
+  - expect_pdf: {file: shadow.pdf, text_contains: ["HIE"], ink: [{page: 1, rect: ["$ex+80", "$b+74", 30, 3], min: 0.5}]}
+  # outline: a 3 pt red stroke spreads 1.5 pt outside each glyph
+  - format_chars: {target: $f, attrs: {effects: {outline: {width: 3, color: "#ff0000"}}}}
+  - expect_png: {page: 0, dpi: 288, ink: [{rect: ["$ex+80", "$b+74", 30, 3], max: 0.02}, {rect: ["$ex+80", "$b+72.3", 30, 0.8], min: 0.5}]}
+  # glow: an 8 pt yellow halo around the glyphs
+  - format_chars: {target: $f, attrs: {effects: {glow: {radius: 8, color: "#ffd000"}}}}
+  - expect_png: {page: 0, dpi: 144, ink: [{rect: ["$ex+80", "$b+74", 30, 3], min: 0.3}]}
+  # reflection: a faded mirror image below the baseline
+  - format_chars: {target: $f, attrs: {effects: {reflection: 0.5}}}
+  - expect_png: {page: 0, dpi: 144, ink: [{rect: ["$ex+80", "$b+74", 30, 3], min: 0.2}]}
+  # emboss: a 1 pt dark edge below and right, a light edge above and left
+  - format_chars: {target: $f, attrs: {effects: {emboss: true}}}
+  - expect_png: {page: 0, dpi: 288, ink: [{rect: ["$ex+80", "$b+72.3", 30, 0.6], min: 0.3}, {rect: ["$ex+80", "$b+74", 30, 3], max: 0.02}]}
+  # an empty effects value removes them
+  - format_chars: {target: $f, attrs: {effects: {}}}
+  - expect_png: {page: 0, dpi: 144, ink: [{rect: ["$ex+80", "$b+74", 30, 3], max: 0.02}]}
+  - expect_roundtrip: {}

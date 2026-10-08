@@ -1,0 +1,38 @@
+id: J-TB-005
+title: Paste tab-separated data into a table; the table grows to fit
+covers: [TB-05]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_table: {page: 0, rect: [1in, 1in, 4in, 1in], rows: 2, cols: 2}
+    as: t
+  # a 3-column, 3-row block pasted at (0, 0) grows the 2×2 table to 3×3
+  - paste_table_text: {table: $t, row: 0, col: 0, text: "Item\tPrice\tStock\nTeapot\t12.50\t4\nMug\t6.00\t10"}
+  - expect: {query: {q: table, id: $t}, path: /rows, equals: 3}
+  - expect: {query: {q: table, id: $t}, path: /cols, equals: 3}
+  # the new column takes the width of the last column; the table widens
+  - expect: {query: {q: table, id: $t}, path: /col_widths, equals: [144, 144, 144]}
+  - expect: {query: {q: object, id: $t}, path: /rect/w, equals: 432}
+  - expect: {query: {q: table_cell, table: $t, row: 0, col: 1}, path: /story, gt: 0, as: c01}
+  - expect: {query: {q: table_cell, table: $t, row: 1, col: 2}, path: /story, gt: 0, as: c12}
+  - expect: {query: {q: table_cell, table: $t, row: 2, col: 0}, path: /story, gt: 0, as: c20}
+  - expect: {query: {q: story_text, target: $c01}, equals: "Price"}
+  - expect: {query: {q: story_text, target: $c12}, equals: "4"}
+  - expect: {query: {q: story_text, target: $c20}, equals: "Mug"}
+  # pasting at an offset overwrites cells and adds only the rows it needs
+  - paste_table_text: {table: $t, row: 2, col: 1, text: "7.00\n8.00"}
+  - expect: {query: {q: table, id: $t}, path: /rows, equals: 4}
+  - expect: {query: {q: table, id: $t}, path: /cols, equals: 3}
+  - expect: {query: {q: table_cell, table: $t, row: 3, col: 1}, path: /story, gt: 0, as: c31}
+  - expect: {query: {q: story_text, target: $c31}, equals: "8.00"}
+  - expect: {query: {q: story_text, target: $c20}, equals: "Mug"}
+  # Windows line endings and the trailing newline that spreadsheets add are ignored
+  - paste_table_text: {table: $t, row: 0, col: 0, text: "A\tB\r\n"}
+  - expect: {query: {q: table, id: $t}, path: /rows, equals: 4}
+  - expect: {query: {q: story_text, target: $c01}, equals: "B"}
+  # one paste is one undo step
+  - undo: {}
+  - expect: {query: {q: story_text, target: $c01}, equals: "Price"}
+  - expect_error: {paste_table_text: {table: $t, row: 9, col: 0, text: "x"}}
+  - export_pdf: {path: pasted.pdf}
+  - expect_pdf: {file: pasted.pdf, text_contains: ["Teapot", "12.50", "8.00"]}
+  - expect_roundtrip: {}

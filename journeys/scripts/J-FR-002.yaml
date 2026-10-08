@@ -1,0 +1,37 @@
+id: J-FR-002
+title: Find and replace formatting and special characters
+covers: [FR-03]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 5in, 2in]}
+    as: f
+  - insert_text: {target: $f, text: "Tea\tCoffee\nCakes and biscuits\nTea again"}
+  - format_chars: {target: $f, start: 11, end: 16, attrs: {bold: true}}
+  # formatting alone
+  - expect: {query: {q: find_advanced, format: {bold: true}}, len: 1}
+  - expect: {query: {q: find_advanced, format: {bold: true}}, path: /0/start, equals: 11}
+  - expect: {query: {q: find_advanced, format: {bold: true}}, path: /0/end, equals: 16}
+  # special characters: ^t tab, ^p paragraph mark, ^l line break, ^^ a caret
+  - expect: {query: {q: find_advanced, text: "^t"}, len: 1}
+  - expect: {query: {q: find_advanced, text: "^t"}, path: /0/start, equals: 3}
+  - expect: {query: {q: find_advanced, text: "^p"}, len: 2}
+  - expect: {query: {q: find_advanced, text: "s^pTea"}, len: 1}
+  # text and formatting together
+  - expect: {query: {q: find_advanced, text: "tea", format: {bold: true}}, len: 0}
+  - expect: {query: {q: find_advanced, text: "cakes", format: {bold: true}}, len: 1}
+  # replace paragraph marks with line breaks: one paragraph remains
+  - replace_advanced: {find: "^p", replace: "^l"}
+  - expect: {query: {q: story_text, target: $f}, equals: "Tea\tCoffee Cakes and biscuits Tea again"}
+  - undo: {}
+  - expect: {query: {q: story_text, target: $f}, equals: "Tea\tCoffee\nCakes and biscuits\nTea again"}
+  # replace formatting only: bold becomes italic, the text is unchanged
+  - replace_advanced: {find_format: {bold: true}, replace_format: {bold: false, italic: true}}
+  - expect: {query: {q: char_attrs, target: $f, at: 12}, path: /italic, equals: true}
+  - expect: {query: {q: char_attrs, target: $f, at: 12}, path: /bold, equals: false}
+  - expect: {query: {q: story_text, target: $f}, equals: "Tea\tCoffee\nCakes and biscuits\nTea again"}
+  # replace text and apply formatting to the replacement
+  - replace_advanced: {find: "Tea", replace: "Juice", replace_format: {color: "#c00000"}, match_case: true}
+  - expect: {query: {q: story_text, target: $f}, equals: "Juice\tCoffee\nCakes and biscuits\nJuice again"}
+  - expect: {query: {q: char_attrs, target: $f, at: 1}, path: /color/r, equals: 192}
+  - expect: {query: {q: char_attrs, target: $f, at: 7}, path: /color/r, equals: 0}
+  - expect_error: {replace_advanced: {replace: "x"}}

@@ -79,6 +79,61 @@ pub struct CharAttrs {
     /// This char is a field (it must be `field::FIELD_CHAR`); see core::field.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub field: Option<crate::field::Field>,
+    /// Text effects (TY-18). `Some(empty)` removes inherited effects.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effects: Option<TextEffects>,
+}
+
+/// Text effects drawn with the glyphs (TY-18). Lengths in points.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct TextEffects {
+    /// Copy of the glyphs drawn behind them, offset by (dx, dy), optionally blurred.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shadow: Option<TextShadow>,
+    /// Stroke around each glyph outline (centred on the outline).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outline: Option<TextOutline>,
+    /// Soft halo around the glyphs: opacity 0.8 at the outline falling to 0 at `radius`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub glow: Option<TextGlow>,
+    /// Mirror image below the baseline (gap at most 1 pt) whose opacity starts at this value (0–1)
+    /// and fades to 0 over the glyph height.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reflection: Option<f64>,
+    /// Raised look: a 1 pt dark copy offset down-right and a light copy offset up-left behind the glyphs.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub emboss: bool,
+    /// Sunken look: the emboss copies swapped (light down-right, dark up-left).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub engrave: bool,
+}
+
+impl TextEffects {
+    pub fn is_empty(&self) -> bool {
+        *self == TextEffects::default()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TextShadow {
+    pub dx: f64,
+    pub dy: f64,
+    #[serde(default)]
+    pub blur: f64,
+    pub color: Color,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TextOutline {
+    pub width: f64,
+    pub color: Color,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TextGlow {
+    pub radius: f64,
+    pub color: Color,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -93,7 +148,7 @@ impl CharAttrs {
     /// Fields set in `other` replace fields in `self`.
     pub fn overlay(&mut self, other: &CharAttrs) {
         overlay!(self, other; style, font, size, bold, italic, underline, strike, color, tracking,
-            scale, kerning, ligatures, dlig, features, baseline, caps, lang, link, field);
+            scale, kerning, ligatures, dlig, features, baseline, caps, lang, link, field, effects);
     }
     pub fn is_empty(&self) -> bool {
         *self == CharAttrs::default()
@@ -274,6 +329,7 @@ pub struct ResolvedChar {
     pub baseline: Baseline,
     pub caps: Caps,
     pub lang: String,
+    pub effects: TextEffects,
 }
 
 impl ResolvedChar {
@@ -295,6 +351,7 @@ impl ResolvedChar {
             baseline: a.baseline.unwrap_or(Baseline::Normal),
             caps: a.caps.unwrap_or(Caps::Normal),
             lang: a.lang.clone().unwrap_or_else(|| "en-US".into()),
+            effects: a.effects.clone().unwrap_or_default(),
         }
     }
 }

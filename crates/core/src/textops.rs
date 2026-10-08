@@ -22,6 +22,19 @@ pub(crate) fn apply(doc: &mut Document, cmd: &Command) -> Result<Applied, CoreEr
         InsertMergeField { target, at, field } => {
             apply(doc, &InsertField { target: *target, at: *at, field: Field::Merge(field.clone()) })
         }
+        SetBusinessInfo { info } => {
+            if info.name.trim().is_empty() {
+                return Err(CoreError::Invalid("a business information set needs a name".into()));
+            }
+            doc.business_info = Some(info.clone());
+            Ok(Applied::default())
+        }
+        InsertBusinessField { target, at, key } => {
+            if key.trim().is_empty() {
+                return Err(CoreError::Invalid("business field needs a key".into()));
+            }
+            apply(doc, &InsertField { target: *target, at: *at, field: Field::Business(key.trim().to_string()) })
+        }
         SetPictureField { id, field } => {
             match &mut doc.object_mut(*id)?.kind {
                 ObjectKind::Image(im) => im.merge_field = field.clone(),
@@ -122,6 +135,11 @@ impl Document {
                 (next - first).to_string()
             }
             Field::Merge(name) => format!("\u{AB}{name}\u{BB}"),
+            // No set: the field's name; a set without this key: blank.
+            Field::Business(key) => match &self.business_info {
+                None => format!("\u{AB}{key}\u{BB}"),
+                Some(info) => info.fields.get(key).cloned().unwrap_or_default(),
+            },
         }
     }
 

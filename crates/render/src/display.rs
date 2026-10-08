@@ -325,7 +325,35 @@ pub fn shape_path(kind: &ShapeKind, w: f64, h: f64) -> Vec<PathEl> {
             let pts: Vec<(f64, f64)> = points.iter().map(|p| (p[0] * w, p[1] * h)).collect();
             poly(&pts, *closed)
         }
+        ShapeKind::Bezier { nodes, closed } => bezier_path(nodes, *closed, w, h),
     }
+}
+
+/// Cubic Bézier outline through `nodes` (rect-relative). A segment's control points are the start node's
+/// `ctrl_out` and the end node's `ctrl_in`, each defaulting to its own point (straight when both absent).
+pub fn bezier_path(nodes: &[BezierNode], closed: bool, w: f64, h: f64) -> Vec<PathEl> {
+    let p = |q: [f64; 2]| (q[0] * w, q[1] * h);
+    let Some(first) = nodes.first() else { return vec![] };
+    let (x0, y0) = p(first.at);
+    let mut out = vec![PathEl::Move(x0, y0)];
+    let n = nodes.len();
+    let segs = if closed { n } else { n.saturating_sub(1) };
+    for i in 0..segs {
+        let (a, b) = (&nodes[i], &nodes[(i + 1) % n]);
+        if a.ctrl_out.is_none() && b.ctrl_in.is_none() {
+            let (x, y) = p(b.at);
+            out.push(PathEl::Line(x, y));
+        } else {
+            let (c1x, c1y) = p(a.ctrl_out.unwrap_or(a.at));
+            let (c2x, c2y) = p(b.ctrl_in.unwrap_or(b.at));
+            let (x, y) = p(b.at);
+            out.push(PathEl::Cubic(c1x, c1y, c2x, c2y, x, y));
+        }
+    }
+    if closed {
+        out.push(PathEl::Close);
+    }
+    out
 }
 
 pub fn dash_pattern(d: Dash, width: f64) -> Vec<f64> {
@@ -536,6 +564,9 @@ fn push_placeholder(items: &mut Vec<Item>, w: f64, h: f64, t: Affine) {
 }
 
 fn visible(doc: &Document, o: &Object) -> bool {
+    if o.hidden {
+        return false;
+    }
     match o.layer {
         Some(l) => doc.layers.iter().find(|x| x.id == l).map(|x| x.visible).unwrap_or(true),
         None => true,
@@ -809,6 +840,8 @@ fn push_object_inner(
                 }
             }
         }
+        // Drawn by the TEXTART task (TY-19).
+        ObjectKind::WordArt(_) => {}
         ObjectKind::Group { children } => {
             // Children are stored in page coordinates; the group's own transform is not applied.
             for c in children {

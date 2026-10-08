@@ -1,0 +1,33 @@
+id: J-EX-006
+title: Export EPUB (fixed layout) and XPS
+covers: [EX-06]
+steps:
+  - new_document: {width: 8.5in, height: 11in, pages: 2}
+  - set_meta: {title: "Spring News", lang: "en-US"}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 6in, 1in]}
+    as: a
+  - insert_text: {target: $a, text: "Spring newsletter"}
+  - insert_picture: {path: fixtures/photo.png, page: 0, x: 1in, y: 3in, width: 3in}
+  - add_text_frame: {page: 1, rect: [1in, 1in, 6in, 1in]}
+    as: b
+  - insert_text: {target: $b, text: "Page two"}
+  - export_epub: {path: news.epub}
+  - expect_zip:
+      file: news.epub
+      first: mimetype
+      entries: ["META-INF/container.xml", "OEBPS/content.opf", "OEBPS/nav.xhtml", "OEBPS/page-1.xhtml", "OEBPS/page-2.xhtml"]
+      text:
+        - {entry: mimetype, equals: "application/epub+zip"}
+        - {entry: "OEBPS/content.opf", contains: "pre-paginated"}
+        - {entry: "OEBPS/content.opf", contains: "Spring News"}
+        - {entry: "OEBPS/content.opf", contains: "en-US"}
+        - {entry: "OEBPS/page-1.xhtml", contains: "Spring newsletter"}
+        - {entry: "OEBPS/page-2.xhtml", contains: "Page two"}
+  - export_xps: {path: news.xps}
+  - expect_zip:
+      file: news.xps
+      entries: ["[Content_Types].xml", "_rels/.rels", "FixedDocumentSequence.fdseq", "Documents/1/FixedDocument.fdoc", "Documents/1/Pages/1.fpage", "Documents/1/Pages/2.fpage"]
+      text:
+        - {entry: "Documents/1/Pages/1.fpage", contains: "UnicodeString=\"Spring newsletter\""}
+        - {entry: "Documents/1/Pages/1.fpage", contains: "Width=\"816\""}
+        - {entry: "Documents/1/Pages/2.fpage", contains: "UnicodeString=\"Page two\""}

@@ -261,6 +261,8 @@ fn convert<R: Read + Seek>(z: &mut ZipArchive<R>, root: &Value) -> Result<Docume
                     layer: None,
                     parent: None,
                     shadow: None,
+                    hidden: false,
+                    overprint: false,
                 },
             );
             if let Some(p) = doc.pages.get_mut(pi) {

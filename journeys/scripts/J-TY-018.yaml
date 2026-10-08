@@ -1,0 +1,29 @@
+id: J-TY-018
+title: WordArt-style text objects — styles, fill, outline, warps
+covers: [TY-19]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - expect: {query: {q: word_art_styles}, len: {gte: 6}}
+  - add_word_art: {page: 0, rect: [1in, 1in, 6in, 1.5in], text: "SALE"}
+    as: w
+  - expect: {query: {q: object, id: $w}, path: /kind/type, equals: "word_art"}
+  - expect: {query: {q: object, id: $w}, path: /kind/text, equals: "SALE"}
+  # the text is stretched to fill its box
+  - expect_png: {page: 0, ink: [{rect: [72, 72, 432, 108], min: 0.25}, {rect: [72, 190, 432, 40], max: 0.001}]}
+  # fill colour
+  - set_word_art: {id: $w, patch: {fill: "#c00000"}}
+  - expect: {query: {q: object, id: $w}, path: /kind/fill/r, equals: 192}
+  # arch up: the middle of the text rises to the top of the box, the ends drop to the bottom
+  - set_word_art: {id: $w, patch: {warp: arch_up}}
+  - expect_png: {page: 0, ink: [{rect: [72, 72, 60, 20], max: 0.05}, {rect: [252, 72, 72, 20], min: 0.1}]}
+  # arch down: the reverse
+  - set_word_art: {id: $w, patch: {warp: arch_down}}
+  - expect_png: {page: 0, ink: [{rect: [72, 160, 60, 20], max: 0.05}, {rect: [252, 160, 72, 20], min: 0.1}]}
+  # a style preset sets fill, outline and warp together
+  - add_word_art: {page: 0, rect: [1in, 4in, 6in, 1.5in], text: "Fun day", style: "Bold outline"}
+    as: w2
+  - expect: {query: {q: object, id: $w2}, path: /kind/outline, not_equals: null}
+  - export_pdf: {path: wordart.pdf}
+  - expect_pdf: {file: wordart.pdf, ink: [{page: 1, rect: [252, 160, 72, 20], min: 0.1}, {page: 1, rect: [72, 288, 432, 108], min: 0.1}]}
+  - expect_error: {add_word_art: {page: 0, rect: [1in, 1in, 1in, 1in], text: "x", style: "No such style"}}
+  - expect_roundtrip: {}

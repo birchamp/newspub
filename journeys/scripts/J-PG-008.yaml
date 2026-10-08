@@ -1,0 +1,39 @@
+id: J-PG-008
+title: Publication types — business cards and labels several to a sheet; envelopes
+covers: [PG-11]
+steps:
+  - expect: {query: {q: publication_types}, len: {gte: 4}}
+  - expect: {query: {q: publication_type, id: business-card}, path: /per_sheet, equals: 10}
+  - new_from_publication_type: {id: business-card}
+  # a 3.5 × 2 in card, laid out 2 across and 5 down on a Letter sheet
+  - expect: {query: {q: document}, path: /setup/width, equals: 252}
+  - expect: {query: {q: document}, path: /setup/height, equals: 144}
+  - expect: {query: {q: document}, path: /sheet/columns, equals: 2}
+  - expect: {query: {q: document}, path: /sheet/rows, equals: 5}
+  - expect: {query: {q: document}, path: /sheet/width, equals: 612}
+  - add_text_frame: {page: 0, rect: [0.25in, 0.25in, 3in, 0.5in]}
+    as: f
+  - insert_text: {target: $f, text: "Jane Smith"}
+  # exported on its own the card is one card-sized page
+  - export_pdf: {path: card.pdf}
+  - expect_pdf: {file: card.pdf, pages: 1, page_size: [252, 144]}
+  # printed on the sheet: ten copies on one Letter page; the sheet is 0.75 in from the left, 0.5 in from the top
+  - export_pdf: {path: sheet.pdf, options: {imposition: document_sheet}}
+  - expect_pdf:
+      file: sheet.pdf
+      pages: 1
+      page_size: [612, 792]
+      page_text: [{page: 1, contains: "Jane Smith"}]
+      ink:
+        # the name on the first card (top left) and on the tenth (bottom right)
+        - {page: 1, rect: [72, 54, 60, 14], min: 0.03}
+        - {page: 1, rect: [324, 630, 60, 14], min: 0.03}
+        # the gutter area between the card's text and the next card stays clear
+        - {page: 1, rect: [250, 54, 20, 14], max: 0.001}
+  # an envelope is a single page with no sheet
+  - new_from_publication_type: {id: envelope-10}
+  - expect: {query: {q: document}, path: /setup/width, equals: 684}
+  - expect: {query: {q: document}, path: /setup/height, equals: 297}
+  - expect: {query: {q: document}, path: /sheet, is_null: true}
+  - expect_error: {new_from_publication_type: {id: no-such-type}}
+  - expect_roundtrip: {}

@@ -7,4 +7,5 @@ license.workspace = true
 [dependencies]
 newpub-core.workspace = true
 newpub-layout.workspace = true
+newpub-render.workspace = true
 thiserror.workspace = true

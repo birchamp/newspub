@@ -1,0 +1,40 @@
+id: J-MM-004
+title: Catalog merge — a repeating area shows several records per page
+covers: [MM-05]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - attach_data_source: {path: fixtures/products.csv}
+  - add_text_frame: {page: 0, rect: [0.5in, 0.5in, 3.5in, 1.5in]}
+    as: t
+  - insert_merge_field: {target: $t, field: name}
+  - insert_text: {target: $t, text: " — "}
+  - insert_merge_field: {target: $t, field: price}
+  - insert_text: {target: $t, text: "\n"}
+  - insert_merge_field: {target: $t, field: blurb}
+  # a page heading outside the repeating area appears once per page
+  - add_text_frame: {page: 0, rect: [0.5in, 9.5in, 7in, 0.5in]}
+    as: h
+  - insert_text: {target: $h, text: "Pottery price list"}
+  # the repeating area: one item is 3.75 × 2 in, 2 across and 2 down with 0.25 in gaps
+  - set_catalog_area: {page: 0, rect: [0.5in, 0.5in, 3.75in, 2in], across: 2, down: 2, gap: 0.25in}
+  - expect: {query: {q: data_source}, path: /catalog/per_page, equals: 4}
+  # 5 records, 4 per page: 2 pages
+  - merge_to_pdf: {path: catalog.pdf}
+  - expect_pdf:
+      file: catalog.pdf
+      pages: 2
+      page_text:
+        - {page: 1, contains: "Teapot — 12.50"}
+        - {page: 1, contains: "Bowl — 9.25"}
+        - {page: 1, contains: "Pottery price list"}
+        - {page: 2, contains: "Plate — 7.75"}
+        - {page: 2, contains: "Pottery price list"}
+      ink:
+        # the second item (Mug) sits in the second column: x = 0.5 + 3.75 + 0.25 = 4.5 in
+        - {page: 1, rect: [330, 45, 60, 14], min: 0.03}
+        # the second page has one item; its second-column cell is empty
+        - {page: 2, rect: [324, 36, 270, 144], max: 0.001}
+  - merge_to_publication: {}
+  - expect: {query: {q: page_count}, equals: 2}
+  - expect: {query: {q: object_count, page: 0}, equals: 5}
+  - expect: {query: {q: object_count, page: 1}, equals: 2}
