@@ -7,7 +7,8 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 - An item is checked (`[x]`) only when every journey listed for it passes in CI on macOS, Windows, and Linux.
   The first items were checked from CI run 37839317947 (commit addfc94), whose job logs show 93/97 journeys passing on all three OSes;
   the failing set (J-AX-003, J-BB-003, J-BB-004, UI-SH-007) is the same on every OS. The remaining P0–P2 items were checked
-  from CI run 37842573100 (commit bb529dc): 100/100 journeys pass on macOS, Windows, and Linux.
+  from CI run 37842573100 (commit bb529dc): 100/100 journeys pass on macOS, Windows, and Linux. The P3 items were
+  checked from CI run 37854377656 (commit 6c64ad8): 116/116 journeys pass on all three OSes.
 - Journeys are written by the lead **before** an item is dispatched. The implementing agent never edits them.
 - Priorities: **P0** means newpub is unusable without it. **P1** means everyday work needs it.
   **P2** covers professional and occasional workflows. **P3** is rare, legacy, or research.
@@ -31,7 +32,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | PG-08 | P1 | Page background colour / fill | J-PG-006 | [x] |
 | PG-09 | P2 | Sections with restart numbering and number format (1, i, I, a, A) | J-PG-005 | [x] |
 | PG-10 | P2 | Change page size of an existing publication (objects stay put, reported off-page) | J-PG-007 | [x] |
-| PG-11 | P3 | Publication types (envelopes, labels, business cards: multiple pages per sheet) | J-PG-008 | [ ] |
+| PG-11 | P3 | Publication types (envelopes, labels, business cards: multiple pages per sheet) | J-PG-008 | [x] |
 
 ## TF: Text frames, linked text, and overflow
 
@@ -70,8 +71,8 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | TY-15 | P2 | Keep with next, keep lines together, widow/orphan control | J-TY-014 | [x] |
 | TY-16 | P2 | Special characters: non-breaking space, em/en dash, optional hyphen, line break | J-TY-015 | [x] |
 | TY-17 | P2 | Right-to-left and complex-script shaping (Arabic, Hebrew, Devanagari) | J-TY-016 | [x] |
-| TY-18 | P3 | Text effects (shadow, outline, glow, reflection, emboss on text) | J-TY-017 | [ ] |
-| TY-19 | P3 | WordArt-style text objects | J-TY-018 | [ ] |
+| TY-18 | P3 | Text effects (shadow, outline, glow, reflection, emboss on text) | J-TY-017 | [x] |
+| TY-19 | P3 | WordArt-style text objects | J-TY-018 | [x] |
 
 ## SH: Shapes and lines
 
@@ -84,7 +85,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | SH-05 | P2 | AutoShapes library (rounded rectangle, star, arrow, callout, polygon, triangle) | J-SH-005 | [x] |
 | SH-06 | P2 | Text inside shapes | J-SH-006 | [x] |
 | SH-07 | P2 | Gradient, pattern, and transparency fills; shape shadow | J-SH-007 | [x] |
-| SH-08 | P3 | Freeform / Bézier drawing and point editing | J-SH-008 | [ ] |
+| SH-08 | P3 | Freeform / Bézier drawing and point editing | J-SH-008 | [x] |
 
 ## TB: Tables
 
@@ -94,7 +95,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | TB-02 | P1 | Insert/delete rows and columns; resize rows/columns | J-TB-002 | [x] |
 | TB-03 | P1 | Cell borders, fill; merge and split cells | J-TB-003 | [x] |
 | TB-04 | P2 | Table formats (preset styles), header row | J-TB-004 | [x] |
-| TB-05 | P3 | Paste tabular data (TSV) into a table | J-TB-005 | [ ] |
+| TB-05 | P3 | Paste tabular data (TSV) into a table | J-TB-005 | [x] |
 
 ## IM: Images
 
@@ -108,9 +109,9 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | IM-06 | P2 | Recolour, brightness, contrast, greyscale | J-IM-005 | [x] |
 | IM-07 | P2 | Picture borders, shapes (crop to shape), shadow, soft edges | J-IM-006 | [x] |
 | IM-08 | P2 | Linked (external) vs embedded pictures; relink | J-IM-007 | [x] |
-| IM-09 | P3 | SVG, TIFF, GIF and BMP import | J-IM-008 | [ ] |
-| IM-10 | P3 | Captions (caption gallery) grouped to picture | J-IM-009 | [ ] |
-| IM-11 | P3 | EMF/WMF (Windows metafile) import as vector pictures (common drawing records) | J-IM-010 | [ ] |
+| IM-09 | P3 | SVG, TIFF, GIF and BMP import | J-IM-008 | [x] |
+| IM-10 | P3 | Captions (caption gallery) grouped to picture | J-IM-009 | [x] |
+| IM-11 | P3 | EMF/WMF (Windows metafile) import as vector pictures (common drawing records) | J-IM-010 | [x] |
 
 ## GD: Layout guides and snapping
 
@@ -129,7 +130,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | LY-01 | P0 | Z-order: bring to front/forward, send to back/backward | J-LY-001 | [x] |
 | LY-02 | P2 | Layers: create, rename, reorder, hide, lock; move object to layer | J-LY-002 | [x] |
 | LY-03 | P2 | Lock object position | J-LY-003 | [x] |
-| LY-04 | P3 | Selection pane (list, rename, hide objects) | UI-LY-001 | [ ] |
+| LY-04 | P3 | Selection pane (list, rename, hide objects) | UI-LY-001 | [x] |
 
 ## BB: Building blocks and templates
 
@@ -139,7 +140,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | BB-02 | P1 | Built-in starter templates (original designs: newsletter, flyer, bulletin, booklet) | J-BB-002 | [x] |
 | BB-03 | P2 | Building blocks: save selection, insert block; built-in originals (headings, sidebars, pull quotes) | J-BB-003 | [x] |
 | BB-04 | P2 | Colour schemes and font schemes applied publication-wide | J-BB-004 | [x] |
-| BB-05 | P3 | Business information sets (fields auto-filled into publication) | J-BB-005 | [ ] |
+| BB-05 | P3 | Business information sets (fields auto-filled into publication) | J-BB-005 | [x] |
 
 ## MM: Mail merge and catalog merge
 
@@ -149,8 +150,8 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | MM-02 | P2 | Merge to new publication / to PDF (one copy per record) | J-MM-001 | [x] |
 | MM-03 | P2 | Filter/sort recipient list; skip blank fields | J-MM-002 | [x] |
 | MM-04 | P2 | Picture fields in merge | J-MM-003 | [x] |
-| MM-05 | P3 | Catalog merge (repeating area, multiple records per page) | J-MM-004 | [ ] |
-| MM-06 | P3 | Excel (.xlsx) data source | J-MM-005 | [ ] |
+| MM-05 | P3 | Catalog merge (repeating area, multiple records per page) | J-MM-004 | [x] |
+| MM-06 | P3 | Excel (.xlsx) data source | J-MM-005 | [x] |
 
 ## PR: Print production
 
@@ -163,8 +164,8 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | PR-05 | P2 | CMYK colours in the document model and DeviceCMYK output | J-PR-004 | [x] |
 | PR-06 | P2 | Spot colours (Separation colourspace) | J-PR-004 | [x] |
 | PR-07 | P2 | Print to system printer (OS print dialog) | UI-PR-001 | [x] |
-| PR-08 | P3 | Colour separations and overprint control | J-PR-005 | [ ] |
-| PR-09 | P3 | Pack and Go (collect fonts/images into a folder) | J-PR-006 | [ ] |
+| PR-08 | P3 | Colour separations and overprint control | J-PR-005 | [x] |
+| PR-09 | P3 | Pack and Go (collect fonts/images into a folder) | J-PR-006 | [x] |
 
 ## EX: Export
 
@@ -175,7 +176,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | EX-03 | P2 | Export PDF/X-4 (OutputIntent, boxes, no transparency issues). Risk: krilla 0.8 has no PDF/X validator, so this needs our own post-processing | J-EX-003 | [x] |
 | EX-04 | P2 | Export HTML (one page per page, positioned) | J-EX-004 | [x] |
 | EX-05 | P2 | PDF hyperlinks and bookmarks | J-EX-005 | [x] |
-| EX-06 | P3 | Export to XPS / EPUB | J-EX-006 | [ ] |
+| EX-06 | P3 | Export to XPS / EPUB | J-EX-006 | [x] |
 
 ## FI: Native file format
 
@@ -226,7 +227,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 |----|---|---------|----------|------|
 | FR-01 | P1 | Find across all stories; match case, whole word | J-FR-001 | [x] |
 | FR-02 | P1 | Replace / replace all (one undo step) | J-FR-001 | [x] |
-| FR-03 | P3 | Find/replace formatting and special characters | J-FR-002 | [ ] |
+| FR-03 | P3 | Find/replace formatting and special characters | J-FR-002 | [x] |
 
 ## UI: Application shell (real-UI journeys)
 

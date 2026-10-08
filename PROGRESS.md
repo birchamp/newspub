@@ -144,3 +144,9 @@ The dashboard parses this file:
   - The XPS output has not been opened in a real XPS viewer, only checked as well-formed XML.
   - SEPARATIONS ignores overprint on group children.
 - Local result: 116/116 journeys pass, and clippy and fmt are clean.
+
+### 2026-10-08 23:55 — All parity items green on all three OSes
+- CI run 37854377656 at commit 6c64ad8: clippy, build and 116/116 journeys pass on Linux, macOS and Windows.
+- Checked off 16 P3 items: TB-05, FR-03, IM-09, IM-10, IM-11, LY-04, PG-11, TY-18, TY-19, SH-08, BB-05, MM-05, MM-06, PR-08, PR-09, EX-06.
+- PARITY now stands at 129/129.
+- REPORT.md is rewritten with the gaps, risks and next steps that remain.
