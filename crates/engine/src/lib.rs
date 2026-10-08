@@ -271,7 +271,12 @@ impl Session {
                 std::fs::write(self.resolve(path), bytes)?;
                 Ok(Outcome::default())
             }
-            ExportImage { .. } | ReplaceAll { .. } => Err(EngineError::Other(format!("{s:?} is not implemented yet"))),
+            ExportImage { path, page, dpi, format, quality } => {
+                let bytes = self.page_image(*page, *dpi, *format, *quality)?;
+                std::fs::write(self.resolve(path), bytes)?;
+                Ok(Outcome::default())
+            }
+            ReplaceAll { .. } => Err(EngineError::Other(format!("{s:?} is not implemented yet"))),
             ExportPng { path, page, dpi } => {
                 let png = self.page_png(*page, *dpi)?;
                 std::fs::write(self.resolve(path), png)?;
@@ -299,6 +304,39 @@ impl Session {
     pub fn page_png(&mut self, page: usize, dpi: f64) -> Result<Vec<u8>, EngineError> {
         let pm = self.render_page(page, dpi)?;
         pm.encode_png().map_err(|e| EngineError::Image(e.to_string()))
+    }
+
+    /// Encodes a page as PNG or JPEG at `dpi`. The rendered pixmap has an opaque white background,
+    /// so dropping alpha after demultiplying yields the flattened RGB image for JPEG.
+    pub fn page_image(
+        &mut self,
+        page: usize,
+        dpi: f64,
+        format: action::ImageFormat,
+        quality: u8,
+    ) -> Result<Vec<u8>, EngineError> {
+        let pm = self.render_page(page, dpi)?;
+        match format {
+            action::ImageFormat::Png => pm.encode_png().map_err(|e| EngineError::Image(e.to_string())),
+            action::ImageFormat::Jpeg => {
+                let mut rgb = Vec::with_capacity(pm.pixels().len() * 3);
+                for px in pm.pixels() {
+                    let c = px.demultiply();
+                    rgb.extend_from_slice(&[c.red(), c.green(), c.blue()]);
+                }
+                let mut out = Vec::new();
+                let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality.clamp(1, 100));
+                image::ImageEncoder::write_image(
+                    encoder,
+                    &rgb,
+                    pm.width(),
+                    pm.height(),
+                    image::ExtendedColorType::Rgb8,
+                )
+                .map_err(|e| EngineError::Image(e.to_string()))?;
+                Ok(out)
+            }
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
