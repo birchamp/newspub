@@ -227,7 +227,7 @@ pub fn convert(bytes: &[u8]) -> Result<String, MetafileError> {
             49 | 93 | 94 | 99 | 122 => {
                 objs.insert(r.u32(p).unwrap_or(0), Obj::Other);
             }
-            42 | 43 | 44 => {
+            42..=44 => {
                 let (l, t, rr, b) = rect(p);
                 let (x0, y0) = dc.map(l, t);
                 let (x1, y1) = dc.map(rr, b);

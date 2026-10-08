@@ -198,10 +198,8 @@ pub fn poly_d(pts: &[(f64, f64)], close: bool) -> String {
 pub fn bezier_d(pts: &[(f64, f64)], continue_from: bool) -> String {
     let mut d = String::new();
     let mut it = pts.iter();
-    if !continue_from {
-        if let Some((x, y)) = it.next() {
-            let _ = write!(d, "M{x:.3} {y:.3} ");
-        }
+    if !continue_from && let Some((x, y)) = it.next() {
+        let _ = write!(d, "M{x:.3} {y:.3} ");
     }
     let rest: Vec<_> = it.collect();
     for c in rest.chunks(3) {
