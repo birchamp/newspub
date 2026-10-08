@@ -103,7 +103,7 @@ fn plan_sheets(
     h: f64,
     indices: &[usize],
     imposition: &Imposition,
-    _doc_sheet: Option<&newpub_core::SheetLayout>,
+    doc_sheet: Option<&newpub_core::SheetLayout>,
 ) -> Result<Vec<Sheet>, PdfError> {
     Ok(match imposition {
         Imposition::None => indices
@@ -125,9 +125,39 @@ fn plan_sheets(
         Imposition::NUp { sheet_width, sheet_height, gap, repeat } => {
             n_up((sheet_width.0, sheet_height.0), (w, h), gap.0, *repeat, indices)?
         }
-        // PRODUCTS task (PG-11).
         Imposition::DocumentSheet => {
-            return Err(PdfError::Unsupported("document sheet imposition is not implemented yet".into()));
+            let layout = doc_sheet
+                .ok_or_else(|| PdfError::Unsupported("this publication has no sheet layout to print on".into()))?;
+            let (sw, sh) = (layout.width.0, layout.height.0);
+            if !(w > 0.0 && h > 0.0 && sw > 0.0 && sh > 0.0) || layout.columns == 0 || layout.rows == 0 {
+                return Err(PdfError::Unsupported("invalid sheet layout or page size".into()));
+            }
+            let (cols, rows) = (layout.columns, layout.rows);
+            let slots: Vec<(f64, f64)> = (0..rows)
+                .flat_map(|r| (0..cols).map(move |c| (c, r)))
+                .map(|(c, r)| {
+                    (
+                        layout.left.0 + c as f64 * (w + layout.col_gap.0),
+                        layout.top.0 + r as f64 * (h + layout.row_gap.0),
+                    )
+                })
+                .collect();
+            // The cell is the page's own size: a page that does not fit its cell on the sheet is an error.
+            let right = layout.left.0 + cols as f64 * w + (cols - 1) as f64 * layout.col_gap.0;
+            let bottom = layout.top.0 + rows as f64 * h + (rows - 1) as f64 * layout.row_gap.0;
+            if right > sw + 1e-6 || bottom > sh + 1e-6 {
+                return Err(PdfError::Unsupported(format!(
+                    "a {w:.1} x {h:.1} pt page is larger than a cell of the {sw:.1} x {sh:.1} pt sheet"
+                )));
+            }
+            indices
+                .iter()
+                .map(|i| Sheet {
+                    width: sw,
+                    height: sh,
+                    slots: slots.iter().map(|&(x, y)| Slot { page: Some(*i), x, y }).collect(),
+                })
+                .collect()
         }
     })
 }
