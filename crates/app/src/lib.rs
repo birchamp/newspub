@@ -1,12 +1,14 @@
 //! newpub-app: the egui desktop application. A thin view over [`Session`]: every gesture
 //! becomes an [`Action`], every displayed fact comes from the session.
 
+mod a11y;
 mod dup;
 mod picker;
 mod print;
 mod recent;
+mod view;
 
-use egui::{Color32, Pos2, Rect as ERect, Sense, Stroke, TextureHandle, Vec2};
+use egui::{Color32, Pos2, Rect as ERect, Stroke, TextureHandle, Vec2};
 use newpub_engine::core::{
     self as core, Align, CharAttrs, Command, Id, Length, ObjectKind, ObjectPatch, ParaAttrs, Rect, ShapeKind,
     TextFramePatch, ZOp,
@@ -91,6 +93,8 @@ pub struct NewpubApp {
     pub print_spool: Option<std::path::PathBuf>,
     print_jobs: usize,
     last_print_job: Option<serde_json::Value>,
+    /// Scroll, spread, units and keyboard-editing state (see view.rs).
+    view: view::ViewState,
 }
 
 /// Text buffers of the object and format panels.
@@ -135,6 +139,7 @@ impl NewpubApp {
             print_spool: None,
             print_jobs: 0,
             last_print_job: None,
+            view: view::ViewState::default(),
         }
     }
 
@@ -209,12 +214,12 @@ impl NewpubApp {
         };
         self.zoom = next;
         self.fitted = false;
+        self.reset_scroll();
     }
 
     /// Zooms so the whole page fits the canvas.
     pub fn fit_page(&mut self) {
-        let doc = self.session.doc();
-        let (w, h) = (doc.setup.width.0 as f32, doc.setup.height.0 as f32);
+        let (w, h) = self.content_pts();
         let avail = if self.canvas_size.x > 80.0 && self.canvas_size.y > 80.0 {
             self.canvas_size - Vec2::splat(40.0)
         } else {
@@ -224,6 +229,7 @@ impl NewpubApp {
             self.zoom = (avail.x / w).min(avail.y / h).clamp(0.1, 8.0);
         }
         self.fitted = true;
+        self.reset_scroll();
     }
 
     /// Runs an action and reports errors in the status bar.
@@ -244,7 +250,7 @@ impl NewpubApp {
     /// View state for UI journeys (`{q: view}`): zoom, whether the view is fitted, whether the zoom
     /// is one of the preset stops, selection, current page, tool.
     pub fn view_state(&self) -> serde_json::Value {
-        serde_json::json!({
+        let mut v = serde_json::json!({
             "zoom": self.zoom,
             "fit": self.fitted,
             "zoom_stop": ZOOM_STOPS.iter().any(|z| (z - self.zoom).abs() < 1e-4),
@@ -253,7 +259,9 @@ impl NewpubApp {
             "tool": format!("{:?}", self.tool),
             "print_jobs": self.print_jobs,
             "last_print_job": self.last_print_job,
-        })
+        });
+        self.view_extra(&mut v);
+        v
     }
 
     /// Screen position of a document point on the current page (used by UI journeys).
@@ -280,6 +288,7 @@ impl NewpubApp {
         if std::mem::take(&mut self.startup_picker) {
             self.open_picker();
         }
+        self.sync_units();
         self.shortcuts(&ctx);
         egui::Panel::top("ribbon").show(ui, |ui| self.ribbon(ui));
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
@@ -295,7 +304,7 @@ impl NewpubApp {
 
     fn shortcuts(&mut self, ctx: &egui::Context) {
         use egui::Key;
-        let typing_in_widget = ctx.egui_wants_keyboard_input();
+        let typing_in_widget = ctx.egui_wants_keyboard_input() && !self.canvas_focused(ctx);
         let events = ctx.input(|i| i.events.clone());
         let dialog_open = self.dialog != Dialog::None;
         for e in &events {
@@ -337,7 +346,7 @@ impl NewpubApp {
                 Key::ArrowRight => self.nudge(step, 0.0),
                 Key::ArrowUp => self.nudge(0.0, -step),
                 Key::ArrowDown => self.nudge(0.0, step),
-                Key::Escape => self.selection.clear(),
+                Key::Escape => self.escape(),
                 Key::Tab => self.cycle_frame(!m.shift),
                 Key::Delete => {
                     let ids = std::mem::take(&mut self.selection);
@@ -474,13 +483,12 @@ impl NewpubApp {
             }
             ui.separator();
             if ui.button("Zoom In").clicked() {
-                self.zoom = (self.zoom * 1.25).min(8.0);
-                self.fitted = false;
+                self.zoom_step(1);
             }
             if ui.button("Zoom Out").clicked() {
-                self.zoom = (self.zoom / 1.25).max(0.1);
-                self.fitted = false;
+                self.zoom_step(-1);
             }
+            self.view_controls(ui);
         });
     }
 
@@ -679,37 +687,7 @@ impl NewpubApp {
     }
 
     fn canvas(&mut self, ui: &mut egui::Ui) {
-        let (w, h) = (self.session.doc().setup.width.0 as f32, self.session.doc().setup.height.0 as f32);
-        let ppp = ui.ctx().pixels_per_point();
-        let tex = self.page_texture(ui.ctx(), ppp);
-        self.canvas_size = ui.available_size();
-        egui::ScrollArea::both().auto_shrink([false, false]).show(ui, |ui| {
-            let size = Vec2::new(w * self.zoom + 40.0, h * self.zoom + 40.0);
-            let (resp, painter) = ui.allocate_painter(size, Sense::click_and_drag());
-            let resp = resp.on_hover_text("Page canvas");
-            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Page canvas"));
-            self.page_origin = resp.rect.min + Vec2::splat(20.0);
-            let page_rect = ERect::from_min_size(self.page_origin, Vec2::new(w * self.zoom, h * self.zoom));
-            painter.rect_filled(page_rect.translate(Vec2::splat(3.0)), 0.0, Color32::from_black_alpha(60));
-            if let Some(t) = &tex {
-                painter.image(t.id(), page_rect, ERect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
-            } else {
-                painter.rect_filled(page_rect, 0.0, Color32::WHITE);
-            }
-            self.draw_guides(&painter);
-            self.draw_selection(&painter);
-            self.handle_canvas_input(&resp);
-            if let (Some(a), Some(b)) = (self.drag_start, self.drag_now)
-                && self.tool != Tool::Select
-            {
-                painter.rect_stroke(
-                    ERect::from_two_pos(a, b),
-                    0.0,
-                    Stroke::new(1.0, Color32::from_rgb(40, 120, 220)),
-                    egui::StrokeKind::Middle,
-                );
-            }
-        });
+        self.canvas_view(ui);
     }
 
     fn draw_guides(&self, painter: &egui::Painter) {

@@ -93,3 +93,12 @@ The dashboard parses this file:
   - Since fixed by the lead and awaiting CI: BB-04, AX-03.
   - In Batch 3: BB-03, UI-08, PR-07, GD-04, UI-06, AX-04.
   - P3 items without implementations: 15.
+
+### 2026-10-08 22:30 — Batch 3 merged (3 tasks, 6 items)
+- All three tasks were approved by Sonnet review on the first attempt:
+  - BLOCKS (BB-03): a JSON user library with an assets folder, and 7 original built-in blocks;
+  - PICKPRINT (UI-08, PR-07): the startup and New template picker, replacing the old New dialog; a print dialog with printer, copies and page range; OS hand-off through `lp` or PowerShell, or a spool folder in journeys;
+  - VIEWAX (GD-04, UI-06, AX-04): rulers, a units menu, actual size and fit, wheel scrolling, two-page spread, a keyboard-focusable canvas with Enter to insert a frame, and screen-reader names for objects.
+- Merge conflict in app/lib.rs (fields, `view_state`, and `ui()` hooks from both UI tasks) resolved by the lead. VIEWAX made `view_state` report the TextBox tool as "Text" to fit the original journey wording; the merge keeps the uniform debug name "TextBox", which matches the corrected UI-AX-001.
+- Local: 100/100 journeys pass, clippy and fmt clean. All P0–P2 items are implemented; check-off waits for CI on all three OSes.
+- Untested: the real OS print hand-off (CI has no printer).

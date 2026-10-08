@@ -1,5 +1,5 @@
 {
- "updated": "2026-10-08T21:00:00Z",
+ "updated": "2026-10-08T22:30:00Z",
  "tasks": [
   {
    "item": "LY-03",
@@ -139,11 +139,11 @@
   },
   {
    "item": "GD-04",
-   "agent": "GUIDES",
+   "agent": "VIEWAX",
    "tier": "sonnet",
-   "state": "open",
-   "batch": "B2",
-   "note": "needs journey/UI work (Batch 3)"
+   "state": "merged",
+   "batch": "B3",
+   "note": "approved first attempt"
   },
   {
    "item": "GD-05",
@@ -448,6 +448,62 @@
    "state": "merged",
    "batch": "B2",
    "note": ""
+  },
+  {
+   "item": "BB-03",
+   "agent": "BLOCKS",
+   "tier": "sonnet",
+   "state": "merged",
+   "batch": "B3",
+   "note": "approved first attempt"
+  },
+  {
+   "item": "UI-08",
+   "agent": "PICKPRINT",
+   "tier": "sonnet",
+   "state": "merged",
+   "batch": "B3",
+   "note": "approved first attempt"
+  },
+  {
+   "item": "PR-07",
+   "agent": "PICKPRINT",
+   "tier": "sonnet",
+   "state": "merged",
+   "batch": "B3",
+   "note": "approved first attempt"
+  },
+  {
+   "item": "UI-06",
+   "agent": "VIEWAX",
+   "tier": "sonnet",
+   "state": "merged",
+   "batch": "B3",
+   "note": "approved first attempt"
+  },
+  {
+   "item": "AX-04",
+   "agent": "VIEWAX",
+   "tier": "sonnet",
+   "state": "merged",
+   "batch": "B3",
+   "note": "approved first attempt"
+  },
+  {
+   "item": "BB-04",
+   "agent": "lead",
+   "tier": "lead",
+   "state": "merged",
+   "batch": "B3",
+   "note": "done by lead"
+  },
+  {
+   "item": "AX-03",
+   "agent": "lead",
+   "tier": "lead",
+   "state": "merged",
+   "batch": "B3",
+   "note": "done by lead"
   }
  ]
 }
