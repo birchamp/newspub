@@ -510,6 +510,57 @@ impl Document {
         Ok(s..e)
     }
 
+    /// Current rects of the given objects. Errors if none are given, an id is unknown, or one is locked.
+    fn unlocked_rects(&self, ids: &[Id]) -> Result<Vec<(Id, Rect)>, CoreError> {
+        if ids.is_empty() {
+            return Err(CoreError::Invalid("no objects given".into()));
+        }
+        ids.iter()
+            .map(|id| {
+                let o = self.object(*id)?;
+                if o.locked {
+                    return Err(CoreError::Locked(*id));
+                }
+                Ok((*id, o.rect))
+            })
+            .collect()
+    }
+
+    /// The box that alignment is measured against: the selection's union, or the page or its margins.
+    fn align_reference(&self, items: &[(Id, Rect)], relative: &AlignTo) -> Rect {
+        let (page_w, page_h) = (self.setup.width.0, self.setup.height.0);
+        match relative {
+            AlignTo::Selection => {
+                let x0 = items.iter().map(|(_, r)| r.x).fold(f64::INFINITY, f64::min);
+                let y0 = items.iter().map(|(_, r)| r.y).fold(f64::INFINITY, f64::min);
+                let x1 = items.iter().map(|(_, r)| r.right()).fold(f64::NEG_INFINITY, f64::max);
+                let y1 = items.iter().map(|(_, r)| r.bottom()).fold(f64::NEG_INFINITY, f64::max);
+                Rect::new(x0, y0, x1 - x0, y1 - y0)
+            }
+            AlignTo::Page => Rect::new(0.0, 0.0, page_w, page_h),
+            AlignTo::Margins => {
+                let page = items.first().and_then(|(id, _)| self.page_of(*id)).unwrap_or(0);
+                let (top, bottom, left, right) = self.page_margins(page);
+                Rect::new(left, top, page_w - left - right, page_h - top - bottom)
+            }
+        }
+    }
+
+    /// Moves an object and, when it is a group, its children, by the same offset.
+    fn shift_object(&mut self, id: Id, dx: f64, dy: f64) -> Result<(), CoreError> {
+        let o = self.object_mut(id)?;
+        o.rect.x += dx;
+        o.rect.y += dy;
+        if let ObjectKind::Group { children } = o.kind.clone() {
+            for c in children {
+                let co = self.object_mut(c)?;
+                co.rect.x += dx;
+                co.rect.y += dy;
+            }
+        }
+        Ok(())
+    }
+
     /// Removes an object and everything that depends on it (group children, its story when
     /// it was the story's only frame).
     fn remove_object(&mut self, id: Id) -> Result<(), CoreError> {
@@ -937,9 +988,53 @@ impl Document {
                 }
                 Ok(Applied::default())
             }
-            AlignObjects { .. } | DistributeObjects { .. } | ReplaceText { .. } => {
-                Err(CoreError::Unsupported(format!("{cmd:?} is not implemented yet")))
+            AlignObjects { ids, edge, relative } => {
+                let items = self.unlocked_rects(ids)?;
+                let reference = self.align_reference(&items, relative);
+                for (id, r) in items {
+                    let (dx, dy) = match edge {
+                        AlignEdge::Left => (reference.x - r.x, 0.0),
+                        AlignEdge::Center => (reference.x + (reference.w - r.w) / 2.0 - r.x, 0.0),
+                        AlignEdge::Right => (reference.right() - r.w - r.x, 0.0),
+                        AlignEdge::Top => (0.0, reference.y - r.y),
+                        AlignEdge::Middle => (0.0, reference.y + (reference.h - r.h) / 2.0 - r.y),
+                        AlignEdge::Bottom => (0.0, reference.bottom() - r.h - r.y),
+                    };
+                    self.shift_object(id, dx, dy)?;
+                }
+                Ok(Applied::default())
             }
+            DistributeObjects { ids, axis } => {
+                if ids.len() < 3 {
+                    return Err(CoreError::Invalid("distribute needs at least three objects".into()));
+                }
+                // (start, size) of a rect along the distribution axis.
+                let along = |r: &Rect| match axis {
+                    Axis::Horizontal => (r.x, r.w),
+                    Axis::Vertical => (r.y, r.h),
+                };
+                let mut items = self.unlocked_rects(ids)?;
+                items.sort_by(|a, b| along(&a.1).0.total_cmp(&along(&b.1).0));
+                let n = items.len();
+                let (first_start, _) = along(&items[0].1);
+                let (last_start, last_size) = along(&items[n - 1].1);
+                let total: f64 = items.iter().map(|(_, r)| along(r).1).sum();
+                let gap = (last_start + last_size - first_start - total) / (n - 1) as f64;
+                let mut cursor = first_start;
+                for (i, (id, r)) in items.into_iter().enumerate() {
+                    // The first and last objects stay where they are; the middle ones follow the gaps.
+                    let (start, size) = along(&r);
+                    let target = if i == 0 || i == n - 1 { start } else { cursor };
+                    let delta = target - start;
+                    match axis {
+                        Axis::Horizontal => self.shift_object(id, delta, 0.0)?,
+                        Axis::Vertical => self.shift_object(id, 0.0, delta)?,
+                    }
+                    cursor = target + size + gap;
+                }
+                Ok(Applied::default())
+            }
+            ReplaceText { .. } => Err(CoreError::Unsupported(format!("{cmd:?} is not implemented yet"))),
             Group { ids } => {
                 if ids.len() < 2 {
                     return Err(CoreError::Invalid("group needs at least two objects".into()));
