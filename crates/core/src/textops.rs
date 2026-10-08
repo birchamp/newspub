@@ -78,10 +78,11 @@ impl Document {
     fn section_for(&self, i: usize) -> (usize, u32, NumberFormat) {
         let mut best: Option<(usize, u32, NumberFormat)> = None;
         for s in &self.sections {
-            if let Some(pi) = self.page_index(s.page) {
-                if pi <= i && best.map(|b| pi >= b.0).unwrap_or(true) {
-                    best = Some((pi, s.start_at, s.format));
-                }
+            if let Some(pi) = self.page_index(s.page)
+                && pi <= i
+                && best.map(|b| pi >= b.0).unwrap_or(true)
+            {
+                best = Some((pi, s.start_at, s.format));
             }
         }
         best.unwrap_or((0, 1, NumberFormat::Decimal))
