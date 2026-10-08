@@ -7,14 +7,19 @@ use newpub_core::{
     Color, Dash, Document, Fit, Id, ImageFrame, ImageMask, Object, ObjectKind, Shape, ShapeKind, Stroke,
 };
 use newpub_layout::{DecorationKind, DocLayout, FontStore, FrameLayout};
-use std::collections::BTreeMap;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::path::Path;
+
+pub mod epub;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
+    #[error("zip: {0}")]
+    Zip(#[from] zip::result::ZipError),
 }
 
 /// Points to CSS pixels.
@@ -82,6 +87,20 @@ fn asset_names(doc: &Document) -> BTreeMap<Id, String> {
     out
 }
 
+/// The bytes of an asset (embedded, or read from its link).
+pub fn asset_bytes(a: &newpub_core::Asset) -> Vec<u8> {
+    if a.bytes.is_empty() {
+        a.link.as_ref().and_then(|l| std::fs::read(l).ok()).unwrap_or_default()
+    } else {
+        a.bytes.to_vec()
+    }
+}
+
+/// CSS family name of a face, stripped of characters that would break a quoted string.
+pub(crate) fn css_family(family: &str) -> String {
+    family.replace(['\'', '"', '\\', '<', '>', '&'], "")
+}
+
 /// Exports `doc` as a set of HTML pages plus an `assets/` folder into `dir` (created if needed).
 pub fn export(doc: &Document, layout: &DocLayout, fonts: &FontStore, dir: &Path) -> Result<(), Error> {
     std::fs::create_dir_all(dir)?;
@@ -91,16 +110,11 @@ pub fn export(doc: &Document, layout: &DocLayout, fonts: &FontStore, dir: &Path)
         std::fs::create_dir_all(&adir)?;
         for (id, name) in &names {
             let a = &doc.assets[id];
-            let bytes: Vec<u8> = if a.bytes.is_empty() {
-                a.link.as_ref().and_then(|l| std::fs::read(l).ok()).unwrap_or_default()
-            } else {
-                a.bytes.to_vec()
-            };
-            std::fs::write(adir.join(name), bytes)?;
+            std::fs::write(adir.join(name), asset_bytes(a))?;
         }
     }
     let n = doc.pages.len();
-    let ctx = Ctx { doc, layout, fonts, names: &names };
+    let ctx = Ctx::new(doc, layout, fonts, &names, "assets/");
     for i in 0..n {
         std::fs::write(dir.join(page_file(i)), ctx.page_html(i, n))?;
     }
@@ -112,13 +126,26 @@ struct Ctx<'a> {
     layout: &'a DocLayout,
     fonts: &'a FontStore,
     names: &'a BTreeMap<Id, String>,
+    /// Prefix of image URLs (`assets/` for HTML, `images/` for EPUB).
+    img_prefix: &'a str,
+    /// Faces used by the text written so far (indices into the font store).
+    used_faces: RefCell<BTreeSet<u32>>,
 }
 
-impl Ctx<'_> {
-    fn page_html(&self, i: usize, n: usize) -> String {
+impl<'a> Ctx<'a> {
+    pub(crate) fn new(
+        doc: &'a Document,
+        layout: &'a DocLayout,
+        fonts: &'a FontStore,
+        names: &'a BTreeMap<Id, String>,
+        img_prefix: &'a str,
+    ) -> Ctx<'a> {
+        Ctx { doc, layout, fonts, names, img_prefix, used_faces: RefCell::new(BTreeSet::new()) }
+    }
+
+    /// The positioned page box (`<div class="page">...</div>`) for page `i`.
+    pub(crate) fn page_div(&self, i: usize) -> String {
         let doc = self.doc;
-        let title = if doc.meta.title.trim().is_empty() { format!("Page {}", i + 1) } else { doc.meta.title.clone() };
-        let lang = if doc.meta.lang.trim().is_empty() { "en" } else { doc.meta.lang.trim() };
         let (w, h) = (doc.setup.width.0, doc.setup.height.0);
         let page = &doc.pages[i];
         let master = doc.master_for_page(i);
@@ -128,6 +155,26 @@ impl Ctx<'_> {
             .or_else(|| master.and_then(|m| m.background.clone()))
             .map(|c| css_color(&c))
             .unwrap_or_else(|| "#fff".to_string());
+        let mut o = String::new();
+        let _ = writeln!(o, "<div class=\"page\" style=\"width:{}px;height:{}px;background:{}\">", px(w), px(h), bg);
+        if let Some(m) = master {
+            for id in &m.objects {
+                self.object_html(&mut o, *id, 0);
+            }
+        }
+        for id in doc.draw_order(i) {
+            self.object_html(&mut o, id, 0);
+        }
+        o.push_str("</div>\n");
+        o
+    }
+}
+
+impl Ctx<'_> {
+    fn page_html(&self, i: usize, n: usize) -> String {
+        let doc = self.doc;
+        let title = if doc.meta.title.trim().is_empty() { format!("Page {}", i + 1) } else { doc.meta.title.clone() };
+        let lang = if doc.meta.lang.trim().is_empty() { "en" } else { doc.meta.lang.trim() };
         let mut o = String::new();
         let _ = write!(
             o,
@@ -148,16 +195,7 @@ impl Ctx<'_> {
              .obj img{display:block}\n</style>\n</head>\n<body>\n",
         );
         nav(&mut o, i, n);
-        let _ = writeln!(o, "<div class=\"page\" style=\"width:{}px;height:{}px;background:{}\">", px(w), px(h), bg);
-        if let Some(m) = master {
-            for id in &m.objects {
-                self.object_html(&mut o, *id, 0);
-            }
-        }
-        for id in doc.draw_order(i) {
-            self.object_html(&mut o, id, 0);
-        }
-        o.push_str("</div>\n");
+        o.push_str(&self.page_div(i));
         nav(&mut o, i, n);
         o.push_str("</body>\n</html>\n");
         o
@@ -262,9 +300,10 @@ impl Ctx<'_> {
                     continue;
                 }
                 let face = self.fonts.face(run.face);
+                self.used_faces.borrow_mut().insert(run.face.0);
                 let mut st = format!(
                     "font-family:'{}',sans-serif;font-size:{}px;color:{}",
-                    face.family.replace(['\'', '"', '\\', '<', '>', '&'], ""),
+                    css_family(&face.family),
                     px(run.size),
                     css_color(&run.color)
                 );
@@ -324,8 +363,9 @@ impl Ctx<'_> {
         };
         let _ = writeln!(
             o,
-            "<div class=\"obj pic\"{label} style=\"{st}\"><img src=\"assets/{}\" alt=\"{}\" style=\"position:absolute;\
-             width:{:.3}%;height:{:.3}%;left:{:.3}%;top:{:.3}%;object-fit:{fit}\"></div>",
+            "<div class=\"obj pic\"{label} style=\"{st}\"><img src=\"{}{}\" alt=\"{}\" style=\"position:absolute;\
+             width:{:.3}%;height:{:.3}%;left:{:.3}%;top:{:.3}%;object-fit:{fit}\"/></div>",
+            self.img_prefix,
             escape(name),
             escape(&alt),
             100.0 / kept_w,

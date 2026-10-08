@@ -2418,6 +2418,7 @@ dependencies = [
  "newpub-io-native",
  "newpub-io-pdf",
  "newpub-io-pub",
+ "newpub-io-xps",
  "newpub-layout",
  "newpub-render",
  "newpub-spell",
@@ -2437,6 +2438,7 @@ dependencies = [
  "newpub-layout",
  "newpub-render",
  "thiserror 2.0.21",
+ "zip 8.6.0",
 ]
 
 [[package]]
@@ -2480,6 +2482,18 @@ dependencies = [
  "newpub-core",
  "serde",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "newpub-io-xps"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "newpub-core",
+ "newpub-layout",
+ "newpub-render",
+ "thiserror 2.0.21",
+ "zip 8.6.0",
 ]
 
 [[package]]
