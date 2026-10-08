@@ -3,6 +3,7 @@
 
 mod a11y;
 mod dup;
+mod freeform;
 mod pane;
 mod picker;
 mod print;
@@ -32,15 +33,17 @@ pub enum Tool {
     Rectangle,
     Ellipse,
     Line,
+    Freeform,
 }
 
 impl Tool {
-    pub const ALL: [(Tool, &'static str); 5] = [
+    pub const ALL: [(Tool, &'static str); 6] = [
         (Tool::Select, "Select"),
         (Tool::TextBox, "Text Box"),
         (Tool::Rectangle, "Rectangle"),
         (Tool::Ellipse, "Ellipse"),
         (Tool::Line, "Line"),
+        (Tool::Freeform, "Freeform"),
     ];
 }
 
@@ -98,6 +101,8 @@ pub struct NewpubApp {
     view: view::ViewState,
     /// Selection pane (see pane.rs).
     pane: pane::PaneState,
+    /// Freeform tool and point editing (see freeform.rs).
+    freeform: freeform::FreeformState,
 }
 
 /// Text buffers of the object and format panels.
@@ -144,6 +149,7 @@ impl NewpubApp {
             last_print_job: None,
             view: view::ViewState::default(),
             pane: pane::PaneState::default(),
+            freeform: freeform::FreeformState::default(),
         }
     }
 
@@ -265,6 +271,7 @@ impl NewpubApp {
             "last_print_job": self.last_print_job,
         });
         self.view_extra(&mut v);
+        self.freeform_view(&mut v);
         v
     }
 
@@ -351,7 +358,9 @@ impl NewpubApp {
                 Key::ArrowRight => self.nudge(step, 0.0),
                 Key::ArrowUp => self.nudge(0.0, -step),
                 Key::ArrowDown => self.nudge(0.0, step),
+                Key::Escape if self.freeform_escape() => {}
                 Key::Escape => self.escape(),
+                Key::Enter => self.freeform_enter(),
                 Key::Tab => self.cycle_frame(!m.shift),
                 Key::Delete => {
                     let ids = std::mem::take(&mut self.selection);
@@ -468,6 +477,7 @@ impl NewpubApp {
                     self.tool = tool;
                 }
             }
+            self.freeform_controls(ui);
             if ui.selectable_label(self.pane.open, "Selection Pane").clicked() {
                 self.pane.open = !self.pane.open;
             }
@@ -695,7 +705,9 @@ impl NewpubApp {
     }
 
     fn canvas(&mut self, ui: &mut egui::Ui) {
+        let full = ui.available_rect_before_wrap();
         self.canvas_view(ui);
+        self.freeform_overlay(ui, ERect::from_min_max(full.max - self.canvas_size, full.max));
     }
 
     fn draw_guides(&self, painter: &egui::Painter) {
@@ -806,6 +818,10 @@ impl NewpubApp {
     }
 
     fn handle_canvas_input(&mut self, resp: &egui::Response) {
+        if self.tool == Tool::Freeform {
+            self.freeform_input(resp);
+            return;
+        }
         if resp.drag_started() {
             // egui reports a drag once the pointer has moved; the gesture began at the press origin.
             self.drag_start = resp.ctx.input(|i| i.pointer.press_origin()).or(resp.interact_pointer_pos());
@@ -876,7 +892,7 @@ impl NewpubApp {
         let rect = Rect::new(x0.min(x1), y0.min(y1), (x1 - x0).abs().max(1.0), (y1 - y0).abs().max(1.0));
         let page = Some(self.page);
         let out = match self.tool {
-            Tool::Select => None,
+            Tool::Select | Tool::Freeform => None,
             Tool::TextBox => self.act(Command::AddTextFrame { page, master: None, rect, columns: None, gutter: None }),
             Tool::Rectangle | Tool::Ellipse => {
                 let kind = if self.tool == Tool::Rectangle { ShapeKind::Rect } else { ShapeKind::Ellipse };
