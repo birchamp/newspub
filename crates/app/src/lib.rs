@@ -2,11 +2,13 @@
 //! becomes an [`Action`], every displayed fact comes from the session.
 
 mod dup;
+mod picker;
+mod print;
 mod recent;
 
 use egui::{Color32, Pos2, Rect as ERect, Sense, Stroke, TextureHandle, Vec2};
 use newpub_engine::core::{
-    self as core, Align, CharAttrs, Command, Id, Insets, Length, ObjectKind, ObjectPatch, ParaAttrs, Rect, ShapeKind,
+    self as core, Align, CharAttrs, Command, Id, Length, ObjectKind, ObjectPatch, ParaAttrs, Rect, ShapeKind,
     TextFramePatch, ZOp,
 };
 use newpub_engine::{Action, PdfOptions, Session, SessionAction};
@@ -43,7 +45,8 @@ impl Tool {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Dialog {
     None,
-    NewPublication { preset: usize, width: String, height: String },
+    Picker(picker::PickerState),
+    Print(print::PrintState),
     ExportPdf { path: String, crop_marks: bool, booklet: bool },
     Save { path: String },
     Open { path: String },
@@ -86,6 +89,8 @@ pub struct NewpubApp {
     /// When set, print jobs are written here as `job-<n>.pdf` instead of going to the OS print
     /// system (PR-07; journeys use it, since CI has no printer).
     pub print_spool: Option<std::path::PathBuf>,
+    print_jobs: usize,
+    last_print_job: Option<serde_json::Value>,
 }
 
 /// Text buffers of the object and format panels.
@@ -128,6 +133,8 @@ impl NewpubApp {
             recent: recent::Recent::default(),
             startup_picker: false,
             print_spool: None,
+            print_jobs: 0,
+            last_print_job: None,
         }
     }
 
@@ -244,6 +251,8 @@ impl NewpubApp {
             "selection": self.selection,
             "page": self.page,
             "tool": format!("{:?}", self.tool),
+            "print_jobs": self.print_jobs,
+            "last_print_job": self.last_print_job,
         })
     }
 
@@ -268,6 +277,9 @@ impl NewpubApp {
     /// Draws the whole UI into the root `ui`. Called by eframe and by the UI-journey harness.
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
+        if std::mem::take(&mut self.startup_picker) {
+            self.open_picker();
+        }
         self.shortcuts(&ctx);
         egui::Panel::top("ribbon").show(ui, |ui| self.ribbon(ui));
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
@@ -275,6 +287,10 @@ impl NewpubApp {
         egui::Panel::right("format").resizable(false).default_size(190.0).show(ui, |ui| self.format_panel(ui));
         egui::CentralPanel::default().show(ui, |ui| self.canvas(ui));
         self.dialogs(&ctx);
+    }
+
+    fn open_picker(&mut self) {
+        self.dialog = Dialog::Picker(picker::PickerState::new(self));
     }
 
     fn shortcuts(&mut self, ctx: &egui::Context) {
@@ -296,6 +312,7 @@ impl NewpubApp {
                     Key::Y | Key::Z => {
                         self.act(SessionAction::Redo);
                     }
+                    Key::P => self.dialog = Dialog::Print(print::PrintState::new()),
                     Key::E => {
                         self.dialog =
                             Dialog::ExportPdf { path: "publication.pdf".into(), crop_marks: false, booklet: false }
@@ -404,7 +421,7 @@ impl NewpubApp {
     fn ribbon(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
             if ui.button("New").clicked() {
-                self.dialog = Dialog::NewPublication { preset: 0, width: "8.5in".into(), height: "11in".into() };
+                self.open_picker();
             }
             if ui.button("Open").clicked() {
                 self.dialog = Dialog::Open { path: String::new() };
@@ -420,6 +437,9 @@ impl NewpubApp {
             }
             if ui.button("Export PDF").clicked() {
                 self.dialog = Dialog::ExportPdf { path: "publication.pdf".into(), crop_marks: false, booklet: false };
+            }
+            if ui.button("Print").clicked() {
+                self.dialog = Dialog::Print(print::PrintState::new());
             }
             ui.separator();
             if ui.add_enabled(self.session.can_undo(), egui::Button::new("Undo")).clicked() {
@@ -924,48 +944,8 @@ impl NewpubApp {
         let mut close = false;
         match &mut dialog {
             Dialog::None => {}
-            Dialog::NewPublication { preset, width, height } => {
-                egui::Window::new("New Publication").collapsible(false).show(ctx, |ui| {
-                    ui.horizontal(|ui| {
-                        for (i, (name, w, h)) in PRESETS.iter().enumerate() {
-                            if ui.selectable_label(*preset == i, *name).clicked() {
-                                *preset = i;
-                                if !w.is_empty() {
-                                    *width = w.to_string();
-                                    *height = h.to_string();
-                                }
-                            }
-                        }
-                    });
-                    labeled_field(ui, "Page width", width);
-                    labeled_field(ui, "Page height", height);
-                    ui.horizontal(|ui| {
-                        if ui.button("Create").clicked() {
-                            match (parse_len(width), parse_len(height)) {
-                                (Some(w), Some(h)) => {
-                                    let a = SessionAction::NewDocument {
-                                        width: w,
-                                        height: h,
-                                        margins: Some(Insets::uniform(36.0)),
-                                        facing: false,
-                                        pages: 1,
-                                        bleed: None,
-                                    };
-                                    if self.act(a).is_some() {
-                                        self.page = 0;
-                                        self.selection.clear();
-                                        close = true;
-                                    }
-                                }
-                                _ => self.status = "Enter a page size such as 8.5in or 210mm".into(),
-                            }
-                        }
-                        if ui.button("Cancel").clicked() {
-                            close = true;
-                        }
-                    });
-                });
-            }
+            Dialog::Picker(st) => close = picker::show(self, ctx, st),
+            Dialog::Print(st) => close = print::show(self, ctx, st),
             Dialog::ExportPdf { path, crop_marks, booklet } => {
                 egui::Window::new("Export PDF").collapsible(false).show(ctx, |ui| {
                     labeled_field(ui, "PDF file", path);
