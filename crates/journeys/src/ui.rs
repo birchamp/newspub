@@ -114,6 +114,15 @@ fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Resul
             }
         }
         "run" => settle(h),
+        "expect" if args.get("query").and_then(|q| q.get("q")).and_then(|q| q.as_str()) == Some("view") => {
+            // App view state is answered by the app, not the engine.
+            let spec = args.as_object().ok_or_else(|| anyhow!("expect needs a map"))?;
+            let mut actual = h.state().view_state();
+            if let Some(p) = spec.get("path").and_then(|p| p.as_str()) {
+                actual = runner::pointer(&actual, p)?.clone();
+            }
+            runner::check_matchers(&actual, spec)?;
+        }
         "expect" | "let" | "dump" | "expect_pdf" | "expect_png" | "expect_image" | "expect_html"
         | "expect_roundtrip" => {
             let s: &mut Session = &mut h.state_mut().session;

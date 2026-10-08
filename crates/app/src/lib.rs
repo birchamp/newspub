@@ -57,6 +57,8 @@ pub struct NewpubApp {
     drag_now: Option<Pos2>,
     /// Selected object being moved: total offset in document points.
     moving: Option<Vec2>,
+    /// The zoom was set by "fit" and has not been changed since.
+    pub fitted: bool,
 }
 
 fn parse_len(s: &str) -> Option<Length> {
@@ -78,6 +80,7 @@ impl NewpubApp {
             drag_start: None,
             drag_now: None,
             moving: None,
+            fitted: false,
         }
     }
 
@@ -94,6 +97,20 @@ impl NewpubApp {
                 None
             }
         }
+    }
+
+    /// View state for UI journeys (`{q: view}`): zoom, whether the view is fitted, whether the zoom
+    /// is one of the preset stops, selection, current page, tool.
+    pub fn view_state(&self) -> serde_json::Value {
+        const STOPS: [f32; 8] = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0];
+        serde_json::json!({
+            "zoom": self.zoom,
+            "fit": self.fitted,
+            "zoom_stop": STOPS.iter().any(|z| (z - self.zoom).abs() < 1e-4),
+            "selection": self.selection,
+            "page": self.page,
+            "tool": format!("{:?}", self.tool),
+        })
     }
 
     /// Screen position of a document point on the current page (used by UI journeys).
