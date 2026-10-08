@@ -10,4 +10,5 @@ serde.workspace = true
 newpub-core.workspace = true
 newpub-layout.workspace = true
 krilla.workspace = true
+lopdf.workspace = true
 thiserror.workspace = true
