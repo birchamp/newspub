@@ -122,6 +122,21 @@ pub fn check(ctx: &mut Ctx, spec: &Value) -> Result<()> {
             }
         }
     }
+    // actual_text_contains: strings that must appear (in logical order) in /ActualText marked content, which viewers
+    // use for copy and paste (e.g. right-to-left runs drawn in visual order).
+    let want_actual = strs(spec.get("actual_text_contains"));
+    if !want_actual.is_empty() {
+        let mut actual = vec![];
+        for pid in pages.values() {
+            actual.extend(actual_texts(&pdf, *pid));
+        }
+        let joined = actual.join(" ");
+        for w in want_actual {
+            if !joined.contains(&w) {
+                bail!("no /ActualText contains {w:?}; ActualText spans: {actual:?}");
+            }
+        }
+    }
     if let Some(Value::Array(list)) = spec.get("page_text") {
         for pt in list {
             let n = pt.get("page").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
@@ -504,6 +519,38 @@ fn bookmarks(pdf: &Pdf) -> Vec<String> {
         }
     }
     walk(pdf, outlines.get(b"First").ok(), &mut out, 0);
+    out
+}
+
+/// /ActualText values of the marked-content sequences on a page (inline property lists or /Properties resources).
+fn actual_texts(pdf: &Pdf, page: lopdf::ObjectId) -> Vec<String> {
+    let mut out = vec![];
+    let Ok(content) = pdf.get_and_decode_page_content(page) else { return out };
+    let props = pdf
+        .get_dictionary(page)
+        .ok()
+        .and_then(|d| d.get(b"Resources").ok())
+        .map(|r| resolve(pdf, r))
+        .and_then(|r| r.as_dict().ok())
+        .and_then(|r| r.get(b"Properties").ok())
+        .map(|p| resolve(pdf, p))
+        .and_then(|p| p.as_dict().ok());
+    for op in &content.operations {
+        if op.operator != "BDC" {
+            continue;
+        }
+        let Some(arg) = op.operands.get(1) else { continue };
+        let dict = match arg {
+            Object::Dictionary(d) => Some(d),
+            Object::Name(n) => {
+                props.and_then(|p| p.get(n).ok()).map(|o| resolve(pdf, o)).and_then(|o| o.as_dict().ok())
+            }
+            _ => None,
+        };
+        if let Some(Object::String(b, _)) = dict.and_then(|d| d.get(b"ActualText").ok()) {
+            out.push(decode_pdf_string(b));
+        }
+    }
     out
 }
 

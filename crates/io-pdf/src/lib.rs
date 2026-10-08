@@ -265,6 +265,12 @@ impl Ctx<'_> {
                 (Item::Tag(TagMark::Begin { owner, path }), Some(t)) => t.begin(s, *owner, path),
                 (Item::Tag(TagMark::End), Some(t)) => t.end(s),
                 (Item::Tag(_), None) => {}
+                // Right-to-left glyphs are drawn in visual order; their marked content carries the logical text.
+                (Item::Glyphs { run, .. }, Some(t)) if t.is_open() && is_rtl(run) => {
+                    t.actual_text(s, &logical_text(run));
+                    self.draw_item(s, item);
+                    t.resume(s);
+                }
                 (_, Some(t)) if !t.is_open() => {
                     tagging::Tagger::start_artifact(s);
                     self.draw_item(s, item);
@@ -425,6 +431,20 @@ impl Ctx<'_> {
     }
 }
 
+/// Glyphs placed in decreasing source order (a right-to-left run after visual reordering).
+fn is_rtl(run: &newpub_layout::GlyphRun) -> bool {
+    run.glyphs.windows(2).any(|w| w[1].char_index < w[0].char_index)
+}
+
+/// The run's text in logical (source) order, one copy per cluster.
+fn logical_text(run: &newpub_layout::GlyphRun) -> String {
+    let mut clusters: Vec<(usize, std::ops::Range<usize>)> =
+        run.glyphs.iter().filter(|g| !g.text_range.is_empty()).map(|g| (g.char_index, g.text_range.clone())).collect();
+    clusters.sort_by_key(|c| c.0);
+    clusters.dedup_by(|a, b| a.1 == b.1);
+    clusters.iter().filter_map(|(_, r)| run.text.get(r.clone())).collect()
+}
+
 fn crop_marks(s: &mut krilla::surface::Surface, x: f64, y: f64, w: f64, h: f64, off: f64) {
     let mut pb = PathBuilder::new();
     let (x1, y1) = (x + w, y + h);
@@ -482,7 +502,9 @@ pub fn export_pdf(
     } else {
         KDoc::new()
     };
-    let mut tagger: Option<tagging::Tagger> = ua.then(Default::default);
+    // Every export is a tagged PDF (structure for assistive technology, logical text for right-to-left runs);
+    // PDF/UA additionally runs krilla's UA-1 validator.
+    let mut tagger: Option<tagging::Tagger> = Some(tagging::Tagger::default());
     let mut ctx = Ctx { doc, fonts, kfonts: HashMap::new(), images: HashMap::new(), svgs: HashMap::new() };
     let mut meta = krilla::metadata::Metadata::new().creator("newpub".to_string());
     if !doc.meta.title.is_empty() {
@@ -535,13 +557,9 @@ pub fn export_pdf(
             }
         }
         if opts.crop_marks {
-            if ua {
-                tagging::Tagger::start_artifact(&mut s);
-            }
+            tagging::Tagger::start_artifact(&mut s);
             crop_marks(&mut s, pad, pad, sw, sh, bleed + MARK_GAP);
-            if ua {
-                s.end_tagged();
-            }
+            s.end_tagged();
         }
         s.finish();
         for slot in &sheet.slots {
@@ -556,6 +574,7 @@ pub fn export_pdf(
     }
     links::outline(&mut kd, doc, &sheets);
     if let Some(t) = &tagger
+        && ua
         && doc.bookmarks.is_empty()
     {
         links::heading_outline(&mut kd, &t.headings, doc.pages.len());

@@ -171,7 +171,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 
 | ID | P | Feature | Journeys | Done |
 |----|---|---------|----------|------|
-| EX-01 | P0 | Export PDF: vector text with embedded subset fonts, images, shapes | J-EX-001 | [x] |
+| EX-01 | P0 | Export PDF: vector text with embedded subset fonts, images, shapes | J-EX-001, J-EX-007 | [x] |
 | EX-02 | P1 | Export page as PNG/JPEG at chosen DPI | J-EX-002 | [x] |
 | EX-03 | P2 | Export PDF/X-4 (OutputIntent, boxes, no transparency issues). Risk: krilla 0.8 has no PDF/X validator, so this needs our own post-processing | J-EX-003 | [x] |
 | EX-04 | P2 | Export HTML (one page per page, positioned) | J-EX-004 | [x] |
@@ -218,7 +218,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 |----|---|---------|----------|------|
 | AX-01 | P1 | Alt text on all non-text objects; mark decorative | J-AX-001 | [x] |
 | AX-02 | P1 | Accessibility checker (missing alt text, low contrast, reading order, tiny text) | J-AX-002 | [x] |
-| AX-03 | P2 | Tagged PDF (PDF/UA) with reading order and alt text | J-AX-003 | [x] |
+| AX-03 | P2 | Tagged PDF (PDF/UA) with reading order and alt text | J-AX-003, J-EX-007 | [x] |
 | AX-04 | P2 | App UI fully operable by keyboard and screen reader (AccessKit tree) | UI-AX-001 | [x] |
 
 ## FR: Find and replace

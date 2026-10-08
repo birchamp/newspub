@@ -19,5 +19,6 @@ steps:
   - expect: {query: {q: char_box, target: $f, at: 6}, path: /x, gt: 0, as: x6}
   - expect: {query: {q: char_box, target: $f, at: 5}, path: /x, lt: $x6}
   - export_pdf: {path: rtl.pdf}
-  # Known gap (PROGRESS.md): the PDF text layer keeps visual order for RTL; logical order needs /ActualText.
-  - expect_pdf: {file: rtl.pdf, text_contains: ["ABC", "\u05E9", "\u05DD"]}
+  # right-to-left runs are drawn in visual order but carry their logical text as /ActualText, so copy and paste
+  # gives the words in reading order
+  - expect_pdf: {file: rtl.pdf, text_contains: ["ABC", "\u05E9", "\u05DD"], actual_text_contains: ["שלום", "עולם"]}

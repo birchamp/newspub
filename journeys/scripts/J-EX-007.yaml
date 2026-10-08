@@ -1,0 +1,27 @@
+id: J-EX-007
+title: Every exported PDF is tagged — structure, alt text, artifacts, language
+covers: [EX-01, AX-03]
+steps:
+  - new_document: {width: 8.5in, height: 11in, pages: 2}
+  - set_meta: {title: "Parish news", lang: "en-GB"}
+  - define_para_style: {name: "Heading 1", chars: {size: 22, bold: true}}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 6in, 1in]}
+    as: h
+  - insert_text: {target: $h, text: "Harvest supper"}
+  - apply_para_style: {target: $h, style: "Heading 1"}
+  - add_text_frame: {page: 0, rect: [1in, 2.5in, 6in, 2in]}
+    as: b
+  - insert_text: {target: $b, text: "Join us in the hall on Saturday."}
+  - insert_picture: {path: fixtures/photo.png, page: 1, x: 1in, y: 1in, width: 3in}
+    as: p
+  - set_object: {id: $p, patch: {alt_text: "Tables set for supper"}}
+  # an ordinary export (no PDF/UA option) is still a tagged PDF
+  - export_pdf: {path: plain.pdf}
+  - expect_pdf:
+      file: plain.pdf
+      pages: 2
+      text_contains: ["Harvest supper", "Join us in the hall"]
+      tagged: {structure: ["H1", "P", "Figure"], figure_alt: ["Tables set for supper"], lang: "en-GB", title: "Parish news"}
+  # booklet imposition keeps the tags
+  - export_pdf: {path: booklet.pdf, options: {imposition: booklet}}
+  - expect_pdf: {file: booklet.pdf, tagged: {structure: ["H1", "P", "Figure"]}}

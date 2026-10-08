@@ -31,6 +31,8 @@ pub(crate) struct Tagger {
     page_objects: HashSet<Id>,
     /// Inside a marked-content sequence opened by `begin`.
     open: bool,
+    /// Structure element receiving the open sequence.
+    leaf: Option<usize>,
     /// Headings in document order: (level, text, page index).
     pub(crate) headings: Vec<(u16, String, usize)>,
 }
@@ -77,12 +79,30 @@ impl Tagger {
         let id = s.start_tagged(tag);
         self.nodes[leaf].children.push(Child::Leaf(id));
         self.open = true;
+        self.leaf = Some(leaf);
+    }
+
+    /// Switches the open sequence to a span whose /ActualText is `text` (same structure element).
+    pub(crate) fn actual_text(&mut self, s: &mut Surface, text: &str) {
+        let Some(leaf) = self.leaf.filter(|_| self.open) else { return };
+        s.end_tagged();
+        let id = s.start_tagged(ContentTag::Span(SpanTag::empty().with_actual_text(Some(text))));
+        self.nodes[leaf].children.push(Child::Leaf(id));
+    }
+
+    /// Continues the structure element with a plain span after `actual_text`.
+    pub(crate) fn resume(&mut self, s: &mut Surface) {
+        let Some(leaf) = self.leaf.filter(|_| self.open) else { return };
+        s.end_tagged();
+        let id = s.start_tagged(ContentTag::Span(SpanTag::empty()));
+        self.nodes[leaf].children.push(Child::Leaf(id));
     }
 
     pub(crate) fn end(&mut self, s: &mut Surface) {
         if self.open {
             s.end_tagged();
             self.open = false;
+            self.leaf = None;
         }
     }
 
