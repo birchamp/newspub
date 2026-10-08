@@ -26,3 +26,15 @@ The dashboard parses this file:
 ### 2026-10-08 18:20 — Predecessor surveyed; decisions adopted (lead)
 - An Explore agent surveyed the NewsPub TypeScript app (model, UX, shortcuts, snapping, templates, pretext layout). Results and adopt/not-adopt decisions are in ARCHITECTURE.md §12.
 - New parity items: FI-05 (open predecessor `.newspub` files), UI-07 (carried-over shortcuts), UI-08 (template picker at startup). Native files use the `.newspub` extension.
+
+### 2026-10-08 18:40 — Batch 1 merged (8 tasks, 14 items)
+- Merged: LY-03 lock enforcement (Haiku), PG-05 page-margin/spread queries (Haiku), FI-02 fonts/assets queries (Haiku), EX-02 PNG/JPEG export (Haiku), SH-04 align/distribute (Haiku), SH-03 arrowheads, caps, joins (Haiku), FR-01/02 find, replace, replace all (Sonnet), AX-01/02 + IM-05 accessibility checker (Sonnet), TY-06/07/10 tab leaders, lists, drop caps in the layout engine (Sonnet).
+- Every task passed Sonnet review on its first attempt; no escalations.
+- Merge conflicts in engine/lib.rs and core/command.rs (several agents split the same placeholder match arms) were resolved by the lead. All 44 Batch 1-era journeys pass locally; 45/97 overall, and the other 52 belong to items not yet dispatched.
+- Process issues found:
+  - Workflow worktrees start at the repo's initial commit, so agents had to find the base commit themselves (EX-02 stacked on PG-05).
+  - Placeholder "not implemented" arms shared by several tasks cause predictable merge conflicts.
+- Fix for Batch 2 specs:
+  - Name the exact base commit in each spec.
+  - Give every task its own placeholder arm.
+- Items are checked off in PARITY.md only once CI is green on all three OSes for this merge.

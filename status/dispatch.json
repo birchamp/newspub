@@ -1,11 +1,11 @@
 {
-  "updated": "2026-10-08T17:55:00Z",
+  "updated": "2026-10-08T18:40:00Z",
   "tasks": [
     {
       "item": "LY-03",
       "agent": "haiku:LY-03",
       "tier": "haiku",
-      "state": "in_progress",
+      "state": "merged",
       "batch": "B1",
       "note": ""
     },
@@ -13,7 +13,7 @@
       "item": "PG-05",
       "agent": "haiku:PG-05",
       "tier": "haiku",
-      "state": "in_progress",
+      "state": "merged",
       "batch": "B1",
       "note": ""
     },
@@ -21,7 +21,7 @@
       "item": "FI-02",
       "agent": "haiku:FI-02",
       "tier": "haiku",
-      "state": "in_progress",
+      "state": "merged",
       "batch": "B1",
       "note": ""
     },
@@ -29,7 +29,7 @@
       "item": "EX-02",
       "agent": "haiku:EX-02",
       "tier": "haiku",
-      "state": "in_progress",
+      "state": "merged",
       "batch": "B1",
       "note": ""
     },
@@ -37,7 +37,7 @@
       "item": "SH-04",
       "agent": "haiku:SH-04",
       "tier": "haiku",
-      "state": "in_progress",
+      "state": "merged",
       "batch": "B1",
       "note": ""
     },
@@ -45,7 +45,7 @@
       "item": "SH-03",
       "agent": "haiku:SH-03",
       "tier": "haiku",
-      "state": "in_progress",
+      "state": "merged",
       "batch": "B1",
       "note": ""
     },
@@ -53,7 +53,7 @@
       "item": "FR-01",
       "agent": "sonnet:FR",
       "tier": "sonnet",
-      "state": "in_progress",
+      "state": "merged",
       "batch": "B1",
       "note": ""
     },
@@ -61,7 +61,7 @@
       "item": "FR-02",
       "agent": "sonnet:FR",
       "tier": "sonnet",
-      "state": "in_progress",
+      "state": "merged",
       "batch": "B1",
       "note": ""
     },
@@ -69,7 +69,7 @@
       "item": "AX-01",
       "agent": "sonnet:AX",
       "tier": "sonnet",
-      "state": "in_progress",
+      "state": "merged",
       "batch": "B1",
       "note": ""
     },
@@ -77,7 +77,7 @@
       "item": "AX-02",
       "agent": "sonnet:AX",
       "tier": "sonnet",
-      "state": "in_progress",
+      "state": "merged",
       "batch": "B1",
       "note": ""
     },
@@ -85,7 +85,7 @@
       "item": "IM-05",
       "agent": "sonnet:AX",
       "tier": "sonnet",
-      "state": "in_progress",
+      "state": "merged",
       "batch": "B1",
       "note": ""
     },
@@ -93,7 +93,7 @@
       "item": "TY-06",
       "agent": "sonnet:TEXT",
       "tier": "sonnet",
-      "state": "in_progress",
+      "state": "merged",
       "batch": "B1",
       "note": ""
     },
@@ -101,7 +101,7 @@
       "item": "TY-07",
       "agent": "sonnet:TEXT",
       "tier": "sonnet",
-      "state": "in_progress",
+      "state": "merged",
       "batch": "B1",
       "note": ""
     },
@@ -109,7 +109,7 @@
       "item": "TY-10",
       "agent": "sonnet:TEXT",
       "tier": "sonnet",
-      "state": "in_progress",
+      "state": "merged",
       "batch": "B1",
       "note": ""
     }
