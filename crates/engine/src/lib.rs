@@ -6,6 +6,7 @@ pub mod action;
 mod autosave;
 mod guides;
 mod html;
+mod importer;
 mod layersq;
 mod pdfq;
 mod pictures;
@@ -259,20 +260,14 @@ impl Session {
             InsertPicture { path, page, x, y, width, height, into, link } => {
                 self.insert_picture(path, *page, *x, *y, *width, *height, *into, *link)
             }
-            ImportText { target, path, at } => {
-                let p = self.resolve(path);
-                let bytes = std::fs::read(&p)?;
-                let text = String::from_utf8_lossy(&bytes).replace("\r\n", "\n");
-                let text = text.strip_suffix('\n').unwrap_or(&text).to_string();
-                self.apply_cmd(&Command::InsertText { target: *target, at: *at, text, attrs: None })?;
-                Ok(Outcome::default())
-            }
+            ImportText { target, path, at } => self.import_text(*target, path, *at),
             Autoflow { frame } => self.autoflow(*frame),
             Save { path } => {
                 let p = self.resolve(path);
                 newpub_io_native::save(&self.doc, &p)?;
                 self.path = Some(p);
                 self.dirty = false;
+                self.autosave_clear();
                 Ok(Outcome::default())
             }
             Open { path } => {
