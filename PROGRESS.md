@@ -108,3 +108,18 @@ The dashboard parses this file:
 - Checked off: BB-03, BB-04, AX-03, UI-08, PR-07, GD-04, UI-06, AX-04. PARITY now stands at 113/128; P0–P2 at 110/110.
 - B-001 closed: the dashboard is the claude.ai page, with GitHub Pages as a CI mirror.
 - Final report: REPORT.md (parity by area, known gaps, top risks, P3 recommendations).
+
+### 2026-10-08 22:40 — P3 work started (user: "go ahead with the P3 items")
+- Journeys were written first for all 15 P3 items: J-TB-005, J-FR-002, J-IM-008, J-IM-009, UI-LY-001, J-PG-008, J-TY-017, J-TY-018, J-SH-008, J-BB-005, J-MM-004, J-MM-005, J-PR-005, J-PR-006 and J-EX-006.
+- New fixtures, all generated and original: halves.gif/.bmp/.tif, badge.svg, members.xlsx, products.csv.
+- Runner checks added: `expect_files` and `expect_zip`.
+- PARITY: IM-09 is narrowed to SVG, TIFF, GIF and BMP. EMF/WMF becomes a new IM-11 (P3, research: there is no maintained Rust parser; it needs a vector converter). Doing so keeps IM-09 from looking done while EMF/WMF is still missing.
+- Interfaces, all lead decisions recorded in ARCHITECTURE §11:
+  - text effects through `ResolvedChar` and `GlyphRun`;
+  - `Object.hidden` and `Object.overprint`;
+  - `ObjectKind::WordArt` and `ShapeKind::Bezier`, with the Bézier geometry rendered by the lead;
+  - document sheet layout, business information, catalog areas;
+  - `Imposition::DocumentSheet` and `PdfOptions.separations`;
+  - engine actions and queries, and the picture-decoding hook.
+- Done by the lead (journeys pass locally): MM-05 catalog merge, MM-06 Excel data source (calamine, MIT), BB-05 business information sets.
+- Batch 4 dispatched on base f5fa56d (103/115 passing): TABLEPASTE (Haiku), FINDFMT, IMAGES, OBJECTS, PRODUCTS, TEXTART, FREEFORM, SEPARATIONS (Sonnet), PACKGO (Haiku), EXPORT (Sonnet).

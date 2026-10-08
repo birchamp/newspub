@@ -1,5 +1,5 @@
 {
- "updated": "2026-10-08T22:30:00Z",
+ "updated": "2026-10-08T22:40:00Z",
  "tasks": [
   {
    "item": "LY-03",
@@ -504,6 +504,134 @@
    "state": "merged",
    "batch": "B3",
    "note": "done by lead"
+  },
+  {
+   "item": "TB-05",
+   "agent": "TABLEPASTE",
+   "tier": "haiku",
+   "state": "in_progress",
+   "batch": "B4",
+   "note": ""
+  },
+  {
+   "item": "FR-03",
+   "agent": "FINDFMT",
+   "tier": "sonnet",
+   "state": "in_progress",
+   "batch": "B4",
+   "note": ""
+  },
+  {
+   "item": "IM-09",
+   "agent": "IMAGES",
+   "tier": "sonnet",
+   "state": "in_progress",
+   "batch": "B4",
+   "note": ""
+  },
+  {
+   "item": "IM-10",
+   "agent": "OBJECTS",
+   "tier": "sonnet",
+   "state": "in_progress",
+   "batch": "B4",
+   "note": ""
+  },
+  {
+   "item": "LY-04",
+   "agent": "OBJECTS",
+   "tier": "sonnet",
+   "state": "in_progress",
+   "batch": "B4",
+   "note": ""
+  },
+  {
+   "item": "PG-11",
+   "agent": "PRODUCTS",
+   "tier": "sonnet",
+   "state": "in_progress",
+   "batch": "B4",
+   "note": ""
+  },
+  {
+   "item": "TY-18",
+   "agent": "TEXTART",
+   "tier": "sonnet",
+   "state": "in_progress",
+   "batch": "B4",
+   "note": ""
+  },
+  {
+   "item": "TY-19",
+   "agent": "TEXTART",
+   "tier": "sonnet",
+   "state": "in_progress",
+   "batch": "B4",
+   "note": ""
+  },
+  {
+   "item": "SH-08",
+   "agent": "FREEFORM",
+   "tier": "sonnet",
+   "state": "in_progress",
+   "batch": "B4",
+   "note": ""
+  },
+  {
+   "item": "PR-08",
+   "agent": "SEPARATIONS",
+   "tier": "sonnet",
+   "state": "in_progress",
+   "batch": "B4",
+   "note": ""
+  },
+  {
+   "item": "PR-09",
+   "agent": "PACKGO",
+   "tier": "haiku",
+   "state": "in_progress",
+   "batch": "B4",
+   "note": ""
+  },
+  {
+   "item": "EX-06",
+   "agent": "EXPORT",
+   "tier": "sonnet",
+   "state": "in_progress",
+   "batch": "B4",
+   "note": ""
+  },
+  {
+   "item": "MM-05",
+   "agent": "lead",
+   "tier": "lead",
+   "state": "merged",
+   "batch": "B4",
+   "note": "done by lead"
+  },
+  {
+   "item": "MM-06",
+   "agent": "lead",
+   "tier": "lead",
+   "state": "merged",
+   "batch": "B4",
+   "note": "done by lead"
+  },
+  {
+   "item": "BB-05",
+   "agent": "lead",
+   "tier": "lead",
+   "state": "merged",
+   "batch": "B4",
+   "note": "done by lead"
+  },
+  {
+   "item": "IM-11",
+   "agent": "",
+   "tier": "",
+   "state": "blocked",
+   "batch": "",
+   "note": "EMF/WMF: research, no maintained Rust parser"
   }
  ]
 }
