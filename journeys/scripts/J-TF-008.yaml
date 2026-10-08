@@ -26,5 +26,6 @@ steps:
   - move_page: {from: 2, to: 1}
   - expect: {query: {q: frame_text, frame: $f1}, ends_with: "(Continued on page 2)"}
   # no notice when the story fits in the first frame
-  - delete_text: {target: $f1, start: 30, end: 900}
+  - let: {n: {q: story_length, target: $f1}}
+  - delete_text: {target: $f1, start: 30, end: $n}
   - expect: {query: {q: frame_text, frame: $f1}, not_contains: "Continued"}

@@ -417,6 +417,18 @@ pub fn layout_story(
         sl.overflow_at = (!story.is_empty()).then_some(0);
         return (sl, outs);
     }
+    // Continued notices: reserve one notice line at the bottom ("on") or top ("from") of frames that ask for it.
+    let mut frames = frames;
+    let n_frames = frames.len();
+    let notice = NoticeStyle::new(doc, fonts, story);
+    for (i, f) in frames.iter_mut().enumerate() {
+        if f.tf.continued_on && i + 1 < n_frames {
+            f.bottom -= notice.height;
+        }
+        if f.tf.continued_from && i > 0 {
+            f.top += notice.height;
+        }
+    }
     let top = frames[0].top;
     let mut flow = Flow { frames, fi: 0, ci: 0, y: top, col_empty: true };
     let ranges = story.para_ranges();
@@ -624,7 +636,137 @@ pub fn layout_story(
             }
         }
     }
+    add_continued_notices(doc, fonts, &notice, &flow.frames, &mut outs, sl.overflow_at.is_some());
     (sl, outs)
+}
+
+/// Style of "(Continued on page N)" notices: the story's font, italic, 9 pt.
+struct NoticeStyle {
+    face: crate::FaceId,
+    size: f64,
+    height: f64,
+    ascent: f64,
+    color: newpub_core::Color,
+}
+
+impl NoticeStyle {
+    fn new(doc: &Document, fonts: &FontStore, story: &Story) -> NoticeStyle {
+        let rc = doc.resolve_char(&story.paras[0], &story.span_attrs_at(0));
+        let face = fonts.resolve(&rc.font, false, true);
+        let f = fonts.face(face);
+        let size = 9.0;
+        NoticeStyle { face, size, height: f.line_height() * size, ascent: f.ascender * size, color: rc.color }
+    }
+
+    fn run(&self, fonts: &FontStore, text: &str, x: f64, baseline: f64, char_index: usize) -> (GlyphRun, f64) {
+        let face = fonts.face(self.face);
+        let opts = crate::shape::ShapeOpts { kerning: true, ligatures: true, dlig: false, small_caps: false, extra: &[], rtl: false };
+        let shaped = crate::shape::shape(&face, text, &opts);
+        let mut pen = x;
+        let mut glyphs = vec![];
+        for (i, g) in shaped.iter().enumerate() {
+            let end = shaped.get(i + 1).map(|n| n.cluster).unwrap_or(text.len()).max(g.cluster);
+            glyphs.push(PGlyph {
+                id: g.glyph,
+                x: pen + g.dx * self.size,
+                y: baseline - g.dy * self.size,
+                advance: g.advance * self.size,
+                text_range: g.cluster..end,
+                char_index,
+                generated: true,
+            });
+            pen += g.advance * self.size;
+        }
+        let run = GlyphRun {
+            face: self.face,
+            size: self.size,
+            color: self.color.clone(),
+            x_scale: 1.0,
+            synthetic_bold: false,
+            synthetic_italic: !face.italic,
+            text: text.to_string(),
+            glyphs,
+        };
+        (run, pen - x)
+    }
+}
+
+/// Adds "(Continued on page N)" at the bottom and "(Continued from page N)" at the top of frames that request them,
+/// when the story really continues to (or comes from) another frame on a different page.
+fn add_continued_notices(
+    doc: &Document,
+    fonts: &FontStore,
+    notice: &NoticeStyle,
+    frames: &[FrameGeom],
+    outs: &mut [FrameLayout],
+    _overflows: bool,
+) {
+    let has_text: Vec<bool> = outs.iter().map(|o| o.lines.iter().any(|l| !l.char_range.is_empty())).collect();
+    let page_of = |i: usize| doc.page_of(frames[i].id);
+    for i in 0..frames.len() {
+        if !has_text[i] {
+            continue;
+        }
+        let f = &frames[i];
+        let (x0, x1) = (f.cols.first().map(|c| c.0).unwrap_or(0.0), f.cols.last().map(|c| c.1).unwrap_or(0.0));
+        if f.tf.continued_on {
+            if let Some(j) = (i + 1..frames.len()).find(|&j| has_text[j]) {
+                if let Some(pj) = page_of(j).filter(|pj| Some(*pj) != page_of(i)) {
+                    let text = format!("(Continued on page {})", doc.page_label(pj));
+                    let baseline = f.bottom + notice.ascent;
+                    let at = outs[i].char_range.end;
+                    let (run, w) = notice.run(fonts, &text, 0.0, baseline, at);
+                    let x = (x1 - w).max(x0);
+                    let run = shift_run(run, x);
+                    outs[i].lines.push(Line {
+                        column: f.cols.len().saturating_sub(1),
+                        x,
+                        width: x1 - x0,
+                        top: f.bottom,
+                        height: notice.height,
+                        baseline,
+                        char_range: at..at,
+                        para: usize::MAX,
+                        runs: vec![run],
+                        hyphenated: false,
+                    });
+                }
+            }
+        }
+        if f.tf.continued_from {
+            if let Some(k) = (0..i).rev().find(|&k| has_text[k]) {
+                if let Some(pk) = page_of(k).filter(|pk| Some(*pk) != page_of(i)) {
+                    let text = format!("(Continued from page {})", doc.page_label(pk));
+                    let top = f.top - notice.height;
+                    let baseline = top + notice.ascent;
+                    let at = outs[i].char_range.start;
+                    let (run, _) = notice.run(fonts, &text, x0, baseline, at);
+                    outs[i].lines.insert(
+                        0,
+                        Line {
+                            column: 0,
+                            x: x0,
+                            width: x1 - x0,
+                            top,
+                            height: notice.height,
+                            baseline,
+                            char_range: at..at,
+                            para: usize::MAX,
+                            runs: vec![run],
+                            hyphenated: false,
+                        },
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn shift_run(mut run: GlyphRun, dx: f64) -> GlyphRun {
+    for g in &mut run.glyphs {
+        g.x += dx;
+    }
+    run
 }
 
 #[allow(clippy::too_many_arguments)]
