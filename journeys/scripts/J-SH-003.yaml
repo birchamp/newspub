@@ -1,0 +1,27 @@
+id: J-SH-003
+title: Dash styles, arrowheads, line caps and joins
+covers: [SH-03]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_shape: {page: 0, rect: [1in, 1in, 5in, 0in], kind: line, stroke: {color: "#000000", width: 4, dash: dash}}
+    as: d
+  # dashes: 4×width on, 3×width off → gaps on the line
+  - expect_png: {page: 0, dpi: 72, pixels: [{at: [80, 72], rgb: [0, 0, 0], tol: 60}, {at: [94, 72], rgb: [255, 255, 255], tol: 60}]}
+  # arrowheads (medium): length and width are 3 × the line width; the tip is at the line's end point
+  - add_shape: {page: 0, rect: [1in, 3in, 4in, 0in], kind: line, stroke: {color: "#000000", width: 4}}
+    as: a
+  - set_shape: {id: $a, patch: {arrow_end: triangle, arrow_start: none}}
+  - expect: {query: {q: object, id: $a}, path: /kind/arrow_end, equals: triangle}
+  # the arrowhead is wider than the line near its end, and absent at the start
+  - expect_png: {page: 0, dpi: 144, ink: [{rect: [349, 212, 2, 2], min: 0.5}, {rect: [74, 212, 4, 2], max: 0.05}, {rect: [362, 210, 6, 12], max: 0.05}]}
+  - set_shape: {id: $a, patch: {arrow_start: oval}}
+  - expect_png: {page: 0, dpi: 144, ink: [{rect: [72, 212, 4, 2], min: 0.5}]}
+  # round caps extend past the line ends by half the width; butt caps do not
+  - add_shape: {page: 0, rect: [2in, 5in, 2in, 0in], kind: line, stroke: {color: "#000000", width: 12, cap: butt}}
+    as: c
+  - expect_png: {page: 0, dpi: 72, pixels: [{at: [140, 360], rgb: [255, 255, 255], tol: 40}]}
+  - set_shape: {id: $c, patch: {stroke: {color: "#000000", width: 12, cap: round}}}
+  - expect_png: {page: 0, dpi: 72, pixels: [{at: [140, 360], rgb: [0, 0, 0], tol: 60}]}
+  - export_pdf: {path: lines.pdf}
+  - expect_pdf: {file: lines.pdf, ink: [{page: 1, rect: [137, 357, 4, 6], min: 0.3}, {page: 1, rect: [349, 212, 2, 2], min: 0.5}]}
+  - expect_roundtrip: {}

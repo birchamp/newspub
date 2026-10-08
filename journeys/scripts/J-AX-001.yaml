@@ -1,0 +1,15 @@
+id: J-AX-001
+title: Alt text on pictures and shapes; mark decorative
+covers: [AX-01, IM-05]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - insert_picture: {path: fixtures/photo.png, page: 0}
+    as: p
+  - add_shape: {page: 0, rect: [1in, 6in, 2in, 1in], kind: rect, fill: "#cccccc"}
+    as: r
+  - set_object: {id: $p, patch: {alt_text: "Children carrying bread to the harvest supper"}}
+  - set_object: {id: $r, patch: {decorative: true}}
+  - expect: {query: {q: object, id: $p}, path: /alt_text, equals: "Children carrying bread to the harvest supper"}
+  - expect: {query: {q: object, id: $r}, path: /decorative, equals: true}
+  - expect: {query: {q: accessibility_check}, len: 0}
+  - expect_roundtrip: {}

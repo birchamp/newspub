@@ -31,6 +31,37 @@ pub enum ZOp {
     Backward,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AlignEdge {
+    Left,
+    Center,
+    Right,
+    Top,
+    Middle,
+    Bottom,
+}
+
+/// What `align_objects` aligns against.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AlignTo {
+    /// The bounding box of the given objects.
+    #[default]
+    Selection,
+    /// The page edges.
+    Page,
+    /// The page margin guides.
+    Margins,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Axis {
+    Horizontal,
+    Vertical,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ObjectPatch {
@@ -220,6 +251,18 @@ pub enum Command {
         id: Id,
         patch: ImagePatch,
     },
+    /// Align objects' edges or centres. Locked objects are an error.
+    AlignObjects {
+        ids: Vec<Id>,
+        edge: AlignEdge,
+        #[serde(default)]
+        relative: AlignTo,
+    },
+    /// Space objects evenly between the outermost two (≥ 3 objects), equal gaps along `axis`.
+    DistributeObjects {
+        ids: Vec<Id>,
+        axis: Axis,
+    },
     Group {
         ids: Vec<Id>,
     },
@@ -241,6 +284,13 @@ pub enum Command {
         target: Id,
         start: usize,
         end: usize,
+    },
+    /// Replace chars `start..end` with `text`; the new text takes the formatting of the first replaced char.
+    ReplaceText {
+        target: Id,
+        start: usize,
+        end: usize,
+        text: String,
     },
     FormatChars {
         target: Id,
@@ -886,6 +936,9 @@ impl Document {
                     im.stroke = Some(v);
                 }
                 Ok(Applied::default())
+            }
+            AlignObjects { .. } | DistributeObjects { .. } | ReplaceText { .. } => {
+                Err(CoreError::Unsupported(format!("{cmd:?} is not implemented yet")))
             }
             Group { ids } => {
                 if ids.len() < 2 {

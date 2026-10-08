@@ -1,0 +1,33 @@
+id: J-SH-002
+title: Move, resize, rotate, and flip objects
+covers: [SH-02]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_shape: {page: 0, rect: [1in, 1in, 2in, 1in], kind: rect, fill: "#ff0000"}
+    as: r
+  - move_objects: {ids: [$r], dx: 1in, dy: 2in}
+  - expect: {query: {q: object, id: $r}, path: /rect, equals: {x: 144, y: 216, w: 144, h: 72}}
+  - expect_png: {page: 0, pixels: [{at: [216, 252], rgb: [255, 0, 0]}, {at: [100, 100], rgb: [255, 255, 255]}]}
+  - set_object: {id: $r, patch: {rect: [2in, 3in, 1in, 3in]}}
+  - expect_png: {page: 0, pixels: [{at: [180, 400], rgb: [255, 0, 0]}, {at: [250, 230], rgb: [255, 255, 255]}]}
+  # rotate 90° about the centre (180, 324): the 1×3in bar becomes 3×1in
+  - set_object: {id: $r, patch: {rotation: 90}}
+  - expect: {query: {q: object, id: $r}, path: /rotation, equals: 90}
+  - expect_png: {page: 0, pixels: [{at: [260, 324], rgb: [255, 0, 0]}, {at: [180, 230], rgb: [255, 255, 255]}]}
+  - set_object: {id: $r, patch: {rotation: -45}}
+  - expect: {query: {q: object, id: $r}, path: /rotation, equals: 315}
+  # flipping a right triangle moves its right angle to the other side
+  - add_shape: {page: 0, rect: [5in, 1in, 2in, 2in], kind: {path: {points: [[0, 0], [0, 1], [1, 1]], closed: true}}, fill: "#0000ff"}
+    as: t
+  - expect_png: {page: 0, pixels: [{at: [370, 130], rgb: [0, 0, 255]}, {at: [490, 130], rgb: [255, 255, 255]}]}
+  - set_object: {id: $t, patch: {flip_h: true}}
+  - expect_png: {page: 0, pixels: [{at: [370, 130], rgb: [255, 255, 255]}, {at: [490, 130], rgb: [0, 0, 255]}]}
+  # rotated text frame keeps its text, and the PDF still contains it
+  - add_text_frame: {page: 0, rect: [1in, 8in, 3in, 1in]}
+    as: f
+  - insert_text: {target: $f, text: "Rotated notice"}
+  - set_object: {id: $f, patch: {rotation: 30}}
+  - export_pdf: {path: rotated.pdf}
+  - expect_pdf: {file: rotated.pdf, text_contains: ["Rotated notice"]}
+  - set_object: {id: $r, patch: {locked: true}}
+  - expect_error: {move_objects: {ids: [$r], dx: 10, dy: 0}}

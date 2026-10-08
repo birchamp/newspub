@@ -1,0 +1,24 @@
+id: J-TY-009
+title: Drop caps spanning several lines
+covers: [TY-10]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 4in, 4in]}
+    as: f
+  - set_text_frame: {id: $f, patch: {insets: {top: 0, bottom: 0, left: 0, right: 0}}}
+  - insert_text: {target: $f, text: "@repeat:8:Once upon a time in the river town the harvest came early. "}
+  - expect: {query: {q: char_box, target: $f, at: 1}, path: /x, lt: 10, as: plain_x}
+  - format_paras: {target: $f, attrs: {drop_cap: {lines: 3}}}
+  - expect: {query: {q: para_attrs, target: $f, at: 0}, path: /drop_cap/lines, equals: 3}
+  # the dropped "O" is large, sits at the left edge, and its baseline is the third line's baseline
+  - expect: {query: {q: char_box, target: $f, at: 0}, path: /x, approx: [0, 0.5]}
+  - expect: {query: {q: char_box, target: $f, at: 0}, path: /width, gt: 30}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /2/baseline, gt: 0, as: third_baseline}
+  - expect: {query: {q: char_box, target: $f, at: 0}, path: /baseline, approx: [$third_baseline, 0.5]}
+  # the first three lines are indented past the drop cap; the fourth is not
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/x, gt: 30}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /2/x, gt: 30}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /3/x, approx: [0, 0.01]}
+  - export_pdf: {path: dropcap.pdf}
+  - expect_pdf: {file: dropcap.pdf, text_contains: ["Once upon a time"]}
+  - expect_png: {page: 0, ink: [{rect: [72, 72, 30, 34], min: 0.15}]}

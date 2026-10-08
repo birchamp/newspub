@@ -269,6 +269,7 @@ pub fn run_step(s: &mut Session, ctx: &mut Ctx, step: &Value) -> Result<()> {
         }
         "expect_pdf" => crate::pdfcheck::check(ctx, &args)?,
         "expect_png" => crate::pngcheck::check(s, ctx, &args)?,
+        "expect_image" => crate::pngcheck::check_file(ctx, &args)?,
         "expect_roundtrip" => roundtrip(s, ctx)?,
         "snapshot" => {
             let page = args.get("page").and_then(|p| p.as_u64()).unwrap_or(0) as usize;

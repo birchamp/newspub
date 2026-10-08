@@ -122,6 +122,39 @@ pub enum SessionAction {
         #[serde(default = "dpi")]
         dpi: f64,
     },
+    /// Export one page as an image file (PNG or JPEG) at `dpi`, white background, trim size.
+    ExportImage {
+        path: String,
+        page: usize,
+        #[serde(default = "dpi")]
+        dpi: f64,
+        #[serde(default)]
+        format: ImageFormat,
+        /// JPEG quality 1–100.
+        #[serde(default = "quality")]
+        quality: u8,
+    },
+    /// Replace every match in every story; one undo step. Outcome is empty; query `find` to verify.
+    ReplaceAll {
+        find: String,
+        replace: String,
+        #[serde(default)]
+        match_case: bool,
+        #[serde(default)]
+        whole_word: bool,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ImageFormat {
+    #[default]
+    Png,
+    Jpeg,
+}
+
+fn quality() -> u8 {
+    90
 }
 
 fn one() -> usize {
@@ -146,6 +179,8 @@ impl SessionAction {
         "open",
         "export_pdf",
         "export_png",
+        "export_image",
+        "replace_all",
     ];
 }
 
@@ -229,6 +264,41 @@ pub enum Query {
     Masters,
     /// `{undo, redo}` depths.
     History,
+    /// Position of the glyph showing char `at`: `{frame, page, x, baseline, width, line}` in frame-local
+    /// points (x = pen position), or null if the char is not displayed (overflow, or a hidden char).
+    CharBox {
+        target: Id,
+        at: usize,
+    },
+    /// Underline/strike decorations in a frame: `[{kind, x0, x1, y, thickness}]` frame-local.
+    Decorations {
+        frame: Id,
+    },
+    /// Margins of a page after facing-page mirroring: `{top, bottom, left, right}` in points.
+    PageMargins {
+        page: usize,
+    },
+    /// Page indices grouped as displayed: with facing pages `[[0], [1, 2], [3, 4], …]`, otherwise one per page.
+    Spreads,
+    /// Sorted, de-duplicated font family names used by any text (resolved through styles).
+    FontsUsed,
+    /// Font families used by text that are not available in the font store (sorted).
+    MissingFonts,
+    /// Assets: `[{id, name, mime, px_w, px_h, link}]` in id order.
+    Assets,
+    /// Find text in all stories: `[{story, start, end}]` ordered by story id then position.
+    Find {
+        text: String,
+        #[serde(default)]
+        match_case: bool,
+        #[serde(default)]
+        whole_word: bool,
+    },
+    /// Accessibility checker: `[{rule, object, page, message}]`. Rules: `missing_alt_text`
+    /// (picture or shape without alt text that is not decorative), `low_contrast` (text colour vs
+    /// page background contrast ratio < 4.5), `small_text` (text under 8pt), `overflow` (story with
+    /// hidden overflow text).
+    AccessibilityCheck,
     /// Bounding box of all glyphs in a frame, page coordinates: `{x, y, w, h}` or null.
     TextBounds {
         frame: Id,

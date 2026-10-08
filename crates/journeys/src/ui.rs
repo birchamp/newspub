@@ -114,7 +114,7 @@ fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Resul
             }
         }
         "run" => settle(h),
-        "expect" | "let" | "dump" | "expect_pdf" | "expect_png" | "expect_roundtrip" => {
+        "expect" | "let" | "dump" | "expect_pdf" | "expect_png" | "expect_image" | "expect_roundtrip" => {
             let s: &mut Session = &mut h.state_mut().session;
             runner::run_step(s, ctx, step)?;
         }

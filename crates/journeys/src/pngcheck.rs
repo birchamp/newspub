@@ -101,3 +101,59 @@ pub fn check(s: &mut Session, ctx: &mut Ctx, spec: &Value) -> Result<()> {
     }
     Ok(())
 }
+
+/// `expect_image`: an exported image file — `{file, format: png|jpeg, width, height, pixels: [{at: [px, py], rgb, tol}]}`.
+/// Pixel coordinates here are image pixels.
+pub fn check_file(ctx: &mut Ctx, spec: &Value) -> Result<()> {
+    let file = spec.get("file").and_then(|f| f.as_str()).ok_or_else(|| anyhow!("expect_image needs file"))?;
+    let path = ctx.out.join(file);
+    let bytes = std::fs::read(&path).map_err(|e| anyhow!("reading {}: {e}", path.display()))?;
+    let fmt = image::guess_format(&bytes).map_err(|e| anyhow!("{file}: not an image: {e}"))?;
+    if let Some(want) = spec.get("format").and_then(|f| f.as_str()) {
+        let got = match fmt {
+            image::ImageFormat::Png => "png",
+            image::ImageFormat::Jpeg => "jpeg",
+            _ => "other",
+        };
+        if got != want {
+            bail!("{file} is {got}, expected {want}");
+        }
+    }
+    let img = image::load_from_memory(&bytes).map_err(|e| anyhow!("{file}: {e}"))?.to_rgba8();
+    for (k, v) in [("width", img.width()), ("height", img.height())] {
+        if let Some(want) = spec.get(k).and_then(|x| x.as_u64()) {
+            if want != v as u64 {
+                bail!("{file} {k} is {v}, expected {want}");
+            }
+        }
+    }
+    if let Some(Value::Array(list)) = spec.get("pixels") {
+        for probe in list {
+            let at: Vec<u32> = probe
+                .get("at")
+                .and_then(|r| r.as_array())
+                .map(|a| a.iter().filter_map(|x| x.as_f64().map(|v| v as u32)).collect())
+                .unwrap_or_default();
+            let want: Vec<i32> = probe
+                .get("rgb")
+                .and_then(|r| r.as_array())
+                .map(|a| a.iter().filter_map(|x| x.as_i64().map(|v| v as i32)).collect())
+                .unwrap_or_default();
+            if at.len() != 2 || want.len() != 3 {
+                bail!("pixel probe needs at: [x, y] and rgb: [r, g, b]");
+            }
+            if at[0] >= img.width() || at[1] >= img.height() {
+                bail!("pixel probe {at:?} outside the image");
+            }
+            let tol = probe.get("tol").and_then(|v| v.as_i64()).unwrap_or(40) as i32;
+            let p = img.get_pixel(at[0], at[1]).0;
+            let got = [p[0] as i32, p[1] as i32, p[2] as i32];
+            if got.iter().zip(&want).any(|(a, b)| (a - b).abs() > tol) {
+                bail!("{file} pixel {at:?} is rgb{got:?}, expected rgb{want:?} ±{tol}");
+            }
+        }
+    }
+    let r = ctx.rel(&path);
+    ctx.artifacts.push(r);
+    Ok(())
+}

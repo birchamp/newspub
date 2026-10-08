@@ -1,0 +1,18 @@
+id: J-TY-005
+title: Indents — left, right, first-line, hanging
+covers: [TY-05]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 4in, 6in]}
+    as: f
+  - insert_text: {target: $f, text: "@repeat:6:Indented paragraph text wraps here. "}
+  - format_paras: {target: $f, attrs: {indent_left: 36, indent_right: 18, indent_first: 18}}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/x, approx: [59.76, 0.01]}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /1/x, approx: [41.76, 0.01]}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /1/width, approx: [222.48, 0.01]}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /1/ink_right, lte: 264.25}
+  # hanging indent: first line starts left of the rest
+  - format_paras: {target: $f, attrs: {indent_left: 36, indent_first: -36, indent_right: 0}}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/x, approx: [5.76, 0.01]}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /1/x, approx: [41.76, 0.01]}
+  - expect: {query: {q: para_attrs, target: $f, at: 0}, path: /indent_first, equals: -36}

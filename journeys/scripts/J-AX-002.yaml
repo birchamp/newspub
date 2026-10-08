@@ -1,0 +1,22 @@
+id: J-AX-002
+title: Accessibility checker — missing alt text, low contrast, tiny text, hidden overflow
+covers: [AX-02]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - insert_picture: {path: fixtures/photo.png, page: 0}
+    as: p
+  - expect: {query: {q: accessibility_check}, len: 1}
+  - expect: {query: {q: accessibility_check}, path: /0, equals: {rule: missing_alt_text, object: $p, page: 0, message: "Picture has no alt text"}}
+  - set_object: {id: $p, patch: {alt_text: "A blue picture"}}
+  - expect: {query: {q: accessibility_check}, len: 0}
+  - add_text_frame: {page: 0, rect: [1in, 6in, 4in, 0.4in]}
+    as: f
+  - insert_text: {target: $f, text: "Pale grey words"}
+  - format_chars: {target: $f, attrs: {color: "#dddddd"}}
+  - expect: {query: {q: accessibility_check}, path: /0/rule, equals: low_contrast}
+  - format_chars: {target: $f, attrs: {color: "#000000", size: 6}}
+  - expect: {query: {q: accessibility_check}, path: /0/rule, equals: small_text}
+  - format_chars: {target: $f, attrs: {size: 11}}
+  - insert_text: {target: $f, text: "@repeat:20: more words that cannot fit"}
+  - expect: {query: {q: accessibility_check}, path: /0/rule, equals: overflow}
+  - expect: {query: {q: accessibility_check}, path: /0/object, equals: $f}

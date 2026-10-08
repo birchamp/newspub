@@ -1,0 +1,11 @@
+id: J-PG-006
+title: Page background colour (page and master)
+covers: [PG-08]
+steps:
+  - new_document: {width: 8.5in, height: 11in, pages: 3}
+  - set_page_background: {page: 1, color: "#ffeecc"}
+  - expect_png: {page: 1, pixels: [{at: [300, 400], rgb: [255, 238, 204]}]}
+  - expect_png: {page: 0, pixels: [{at: [300, 400], rgb: [255, 255, 255]}]}
+  - export_pdf: {path: bg.pdf}
+  - expect_pdf: {file: bg.pdf, ink: [{page: 1, rect: [0, 0, 612, 792], max: 0.0}]}
+  - expect_roundtrip: {}

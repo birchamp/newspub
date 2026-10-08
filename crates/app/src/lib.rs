@@ -527,8 +527,13 @@ impl NewpubApp {
             Tool::TextBox => self.act(Command::AddTextFrame { page, master: None, rect, columns: None, gutter: None }),
             Tool::Rectangle | Tool::Ellipse => {
                 let kind = if self.tool == Tool::Rectangle { ShapeKind::Rect } else { ShapeKind::Ellipse };
-                let stroke =
-                    Some(core::Stroke { color: core::Color::BLACK, width: Length(1.0), dash: core::Dash::Solid });
+                let stroke = Some(core::Stroke {
+                    color: core::Color::BLACK,
+                    width: Length(1.0),
+                    dash: core::Dash::Solid,
+                    cap: core::LineCap::Butt,
+                    join: core::LineJoin::Miter,
+                });
                 self.act(Command::AddShape {
                     page,
                     master: None,
@@ -540,8 +545,13 @@ impl NewpubApp {
             }
             Tool::Line => {
                 let rect = Rect::new(x0, y0, x1 - x0, y1 - y0);
-                let stroke =
-                    Some(core::Stroke { color: core::Color::BLACK, width: Length(1.0), dash: core::Dash::Solid });
+                let stroke = Some(core::Stroke {
+                    color: core::Color::BLACK,
+                    width: Length(1.0),
+                    dash: core::Dash::Solid,
+                    cap: core::LineCap::Butt,
+                    join: core::LineJoin::Miter,
+                });
                 let (rect, fh, fv) = normalize_line(rect);
                 let o =
                     self.act(Command::AddShape { page, master: None, rect, kind: ShapeKind::Line, fill: None, stroke });

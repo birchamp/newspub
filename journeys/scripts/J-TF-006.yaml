@@ -1,0 +1,20 @@
+id: J-TF-006
+title: Frame internal margins and vertical alignment
+covers: [TF-07]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 3in, 3in]}
+    as: f
+  - insert_text: {target: $f, text: "One line"}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/top, approx: [5.76, 0.01]}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/x, approx: [5.76, 0.01]}
+  - set_text_frame: {id: $f, patch: {insets: {top: 0.5in, left: 0.25in, right: 0.25in, bottom: 0.5in}}}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/top, approx: [36, 0.01]}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/x, approx: [18, 0.01]}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/width, approx: [180, 0.01]}
+  # middle: the line is centred between top and bottom insets (216 - 72 = 144 tall area, line 13.43)
+  - set_text_frame: {id: $f, patch: {valign: middle}}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/top, approx: [101.29, 0.05]}
+  - set_text_frame: {id: $f, patch: {valign: bottom}}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/top, approx: [166.57, 0.05]}
+  - expect_png: {page: 0, ink: [{rect: [90, 72, 180, 160], max: 0.0}, {rect: [90, 238, 180, 14], min: 0.02}]}

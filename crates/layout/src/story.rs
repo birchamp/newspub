@@ -688,13 +688,15 @@ fn emit_line(
             ));
         }
         if let Some((_, run, _)) = cur.as_mut() {
+            // The hyphen is not in the story; it maps to a "-" appended to the run text.
             let n = run.text.len();
+            run.text.push('-');
             run.glyphs.push(PGlyph {
                 id: gid,
                 x: pen,
                 y: baseline - s.shift,
                 advance: adv,
-                text_range: n..n,
+                text_range: n..n + 1,
                 char_index: last,
             });
         }

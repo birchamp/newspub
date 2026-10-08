@@ -1,0 +1,33 @@
+id: J-FR-001
+title: Find across stories (match case, whole word); replace and replace all as one undo step
+covers: [FR-01, FR-02]
+steps:
+  - new_document: {width: 8.5in, height: 11in, pages: 2}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 4in, 2in]}
+    as: f1
+  - insert_text: {target: $f1, text: "The Fair is on Saturday. Unfair weather will not stop the fair."}
+  - add_text_frame: {page: 1, rect: [1in, 1in, 4in, 2in]}
+    as: f2
+  - insert_text: {target: $f2, text: "Bring a cake to the FAIR."}
+  - expect: {query: {q: find, text: "fair"}, len: 4}
+  - expect: {query: {q: find, text: "fair", whole_word: true}, len: 3}
+  - expect: {query: {q: find, text: "fair", match_case: true}, len: 2}
+  - expect: {query: {q: find, text: "fair", match_case: true, whole_word: true}, len: 1}
+  - expect: {query: {q: find, text: "Fair", match_case: true}, path: /0/start, equals: 4}
+  - expect: {query: {q: find, text: "FAIR"}, path: /3/end, equals: 24}
+  - expect: {query: {q: find, text: "nothing here"}, len: 0}
+  # replace one match
+  - replace_text: {target: $f1, start: 4, end: 8, text: "Festival"}
+  - expect: {query: {q: story_text, target: $f1}, starts_with: "The Festival is on Saturday."}
+  # replace all whole-word matches, case-insensitively, in one undo step
+  - replace_all: {find: "fair", replace: "fête", whole_word: true}
+  - expect: {query: {q: story_text, target: $f1}, equals: "The Festival is on Saturday. Unfair weather will not stop the fête."}
+  - expect: {query: {q: story_text, target: $f2}, equals: "Bring a cake to the fête."}
+  - undo: {}
+  - expect: {query: {q: story_text, target: $f2}, equals: "Bring a cake to the FAIR."}
+  - expect: {query: {q: story_text, target: $f1}, ends_with: "stop the fair."}
+  # replacement keeps the formatting of the replaced text
+  - format_chars: {target: $f2, start: 20, end: 24, attrs: {bold: true}}
+  - replace_all: {find: "FAIR", replace: "bazaar", match_case: true}
+  - expect: {query: {q: char_attrs, target: $f2, at: 22}, path: /bold, equals: true}
+  - expect: {query: {q: story_text, target: $f2}, equals: "Bring a cake to the bazaar."}

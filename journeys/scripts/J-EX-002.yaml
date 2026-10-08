@@ -1,0 +1,11 @@
+id: J-EX-002
+title: Export a page as PNG or JPEG at a chosen resolution
+covers: [EX-02]
+steps:
+  - new_document: {width: 4in, height: 6in, pages: 2}
+  - add_shape: {page: 1, rect: [1in, 1in, 2in, 2in], kind: ellipse, fill: "#cc2200"}
+  - export_image: {path: p2.png, page: 1, dpi: 150}
+  - expect_image: {file: p2.png, format: png, width: 600, height: 900, pixels: [{at: [300, 300], rgb: [204, 34, 0], tol: 10}, {at: [10, 10], rgb: [255, 255, 255]}]}
+  - export_image: {path: p2.jpg, page: 1, dpi: 72, format: jpeg, quality: 85}
+  - expect_image: {file: p2.jpg, format: jpeg, width: 288, height: 432, pixels: [{at: [144, 144], rgb: [204, 34, 0], tol: 30}]}
+  - expect_error: {export_image: {path: nope.png, page: 7}}

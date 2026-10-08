@@ -1,0 +1,25 @@
+id: J-TY-008
+title: Kerning, tracking, and character scaling
+covers: [TY-08, TY-09]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 6in, 2in]}
+    as: f
+  - set_text_frame: {id: $f, patch: {insets: {top: 0, bottom: 0, left: 0, right: 0}}}
+  - insert_text: {target: $f, text: "AVAWAY To"}
+  - format_chars: {target: $f, attrs: {font: "Liberation Serif", size: 40}}
+  # with font kerning (default) the "AV" pair is tighter than without
+  - let: {kern_on: {q: char_box, target: $f, at: 1}}
+  - expect: {query: {q: char_box, target: $f, at: 1}, path: /x, lt: 27.5}
+  - format_chars: {target: $f, attrs: {kerning: false}}
+  - expect: {query: {q: char_box, target: $f, at: 1}, path: /x, approx: [28.89, 0.05]}
+  - expect: {query: {q: char_attrs, target: $f, at: 0}, path: /kerning, equals: false}
+  # tracking +100 (1/1000 em) adds 4pt after each char at 40pt
+  - format_chars: {target: $f, attrs: {tracking: 100}}
+  - expect: {query: {q: char_box, target: $f, at: 1}, path: /x, approx: [32.89, 0.05]}
+  - expect: {query: {q: char_box, target: $f, at: 2}, path: /x, approx: [65.78, 0.1]}
+  # 50% character scaling halves advances (tracking still applies)
+  - format_chars: {target: $f, attrs: {tracking: 0, scale: 50}}
+  - expect: {query: {q: char_box, target: $f, at: 1}, path: /x, approx: [14.44, 0.05]}
+  - export_pdf: {path: track.pdf}
+  - expect_pdf: {file: track.pdf, text_contains: ["AVAWAY To"]}

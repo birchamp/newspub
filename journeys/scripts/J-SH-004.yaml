@@ -1,0 +1,47 @@
+id: J-SH-004
+title: Group and ungroup; align and distribute objects
+covers: [SH-04]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_shape: {page: 0, rect: [1in, 1in, 1in, 1in], kind: rect, fill: "#ff0000"}
+    as: a
+  - add_shape: {page: 0, rect: [3in, 2in, 2in, 1in], kind: rect, fill: "#00ff00"}
+    as: b
+  - add_shape: {page: 0, rect: [6in, 1.5in, 1in, 0.5in], kind: rect, fill: "#0000ff"}
+    as: c
+  - group: {ids: [$a, $b]}
+    as: g
+  - expect: {query: {q: page_objects, page: 0}, equals: [$g, $c]}
+  - expect: {query: {q: object, id: $g}, path: /rect, equals: {x: 72, y: 72, w: 288, h: 144}}
+  - move_objects: {ids: [$g], dx: 0.5in, dy: 0}
+  - expect: {query: {q: object, id: $a}, path: /rect/x, equals: 108}
+  - expect: {query: {q: object, id: $b}, path: /rect/x, equals: 252}
+  - ungroup: {id: $g}
+  - expect: {query: {q: page_objects, page: 0}, equals: [$a, $b, $c]}
+  # align tops to the selection's top edge
+  - align_objects: {ids: [$a, $b, $c], edge: top}
+  - expect: {query: {q: object, id: $b}, path: /rect/y, equals: 72}
+  - expect: {query: {q: object, id: $c}, path: /rect/y, equals: 72}
+  # align centres horizontally relative to the page (page centre x = 306)
+  - align_objects: {ids: [$a], edge: center, relative: page}
+  - expect: {query: {q: object, id: $a}, path: /rect/x, equals: 270}
+  # align right to the margin guide (margin 0.5in → right edge 576)
+  - align_objects: {ids: [$c], edge: right, relative: margins}
+  - expect: {query: {q: object, id: $c}, path: /rect/x, equals: 504}
+  - align_objects: {ids: [$a, $b, $c], edge: bottom}
+  - expect: {query: {q: object, id: $c}, path: /rect/y, equals: 108}
+  # distribute: three objects at x 36 / ? / 504 with equal gaps
+  - set_object: {id: $a, patch: {rect: [0.5in, 4in, 1in, 1in]}}
+  - set_object: {id: $b, patch: {rect: [2in, 4in, 2in, 1in]}}
+  - set_object: {id: $c, patch: {rect: [7in, 4in, 1in, 1in]}}
+  # total span 36..576 = 540, widths 72+144+72 = 288 → gaps 126 → b.x = 36+72+126 = 234
+  - distribute_objects: {ids: [$c, $a, $b], axis: horizontal}
+  - expect: {query: {q: object, id: $b}, path: /rect/x, equals: 234}
+  - expect: {query: {q: object, id: $a}, path: /rect/x, equals: 36}
+  - expect: {query: {q: object, id: $c}, path: /rect/x, equals: 504}
+  - expect_error: {distribute_objects: {ids: [$a, $b], axis: horizontal}}
+  - set_object: {id: $a, patch: {locked: true}}
+  - expect_error: {align_objects: {ids: [$a, $b], edge: left}}
+  - undo: {}
+  - undo: {}
+  - expect: {query: {q: object, id: $b}, path: /rect/x, equals: 144}

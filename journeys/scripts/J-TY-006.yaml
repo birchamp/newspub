@@ -1,0 +1,32 @@
+id: J-TY-006
+title: Tab stops — left, centre, right, decimal, with leaders
+covers: [TY-06]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 6in, 3in]}
+    as: f
+  - set_text_frame: {id: $f, patch: {insets: {top: 0, bottom: 0, left: 0, right: 0}}}
+  # default tab stops every 0.5in
+  - insert_text: {target: $f, text: "a\tb"}
+  - dump: {query: {q: frame_lines, frame: $f}, file: default.json}
+  - expect: {query: {q: story_text, target: $f}, equals: "a\tb"}
+  - expect: {query: {q: char_box, target: $f, at: 2}, path: /x, approx: [36, 0.01]}
+  - delete_text: {target: $f, start: 0, end: 3}
+  # custom stops: left at 1in, right at 3in, centre at 4in, decimal at 5.5in
+  - insert_text: {target: $f, text: "Item\tLeft\tRight\tMid\t12.50"}
+  - format_paras: {target: $f, attrs: {tabs: [{pos: 1in, align: left}, {pos: 3in, align: right, leader: "."}, {pos: 4in, align: center}, {pos: 5.5in, align: decimal}]}}
+  - dump: {query: {q: frame_lines, frame: $f}, file: custom.json}
+  # left tab: "Left" starts at 1in
+  - expect: {query: {q: char_box, target: $f, at: 5}, path: /x, approx: [72, 0.01]}
+  # right tab: "Right" (chars 10..15) ends at 3in
+  - let: {t: {q: char_box, target: $f, at: 14}}
+  - expect: {query: {q: char_box, target: $f, at: 14}, path: /x, approx: [211.5, 3.0]}
+  - expect: {query: {q: char_box, target: $f, at: 10}, path: /x, lt: 200}
+  # centre tab: "Mid" (16..19) straddles 4in
+  - expect: {query: {q: char_box, target: $f, at: 16}, path: /x, lt: 288}
+  - expect: {query: {q: char_box, target: $f, at: 16}, path: /x, gt: 270}
+  - expect: {query: {q: char_box, target: $f, at: 18}, path: /x, gt: 283}
+  # decimal tab: the "." of 12.50 (char 22) sits at 5.5in
+  - expect: {query: {q: char_box, target: $f, at: 22}, path: /x, approx: [396, 0.01]}
+  # leader dots fill the gap before the right-aligned "Right"
+  - expect_png: {page: 0, dpi: 144, ink: [{rect: [170, 80, 25, 6], min: 0.02}]}

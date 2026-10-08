@@ -1,0 +1,31 @@
+id: J-TY-010
+title: Automatic hyphenation, hyphenation zone, and optional hyphens
+covers: [TY-11]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 1.6in, 6in]}
+    as: f
+  - insert_text: {target: $f, text: "The congregation appreciated extraordinary representatives everywhere and the internationalization committee."}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/hyphenated, equals: false}
+  - let: {plain: {q: frame_lines, frame: $f}}
+  - format_paras: {target: $f, attrs: {hyphenate: true, hyphen_zone: 0}}
+  - dump: {query: {q: frame_lines, frame: $f}, file: hyph.json}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/hyphenated, equals: true}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/text, equals: "The congregation ap-"}
+  - export_pdf: {path: hyph.pdf}
+  - expect_pdf: {file: hyph.pdf, text_contains: ["congregation ap-preciated"]}
+  # a wide hyphenation zone suppresses hyphenation
+  - format_paras: {target: $f, attrs: {hyphen_zone: 1in}}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/hyphenated, equals: false}
+  # optional (soft) hyphen U+00AD breaks there even without auto hyphenation, invisible otherwise
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 1.2in, 2in]}
+    as: g
+  - insert_text: {target: $g, text: "Our neighbour­hood picnic"}
+  - expect: {query: {q: frame_lines, frame: $g}, path: /0/text, starts_with: "Our neighbour"}
+  - expect: {query: {q: frame_lines, frame: $g}, path: /0/text, ends_with: "-"}
+  - expect: {query: {q: frame_lines, frame: $g}, path: /0/hyphenated, equals: true}
+  - set_object: {id: $g, patch: {rect: [1in, 1in, 4in, 2in]}}
+  - expect: {query: {q: frame_lines, frame: $g}, len: 1}
+  - export_pdf: {path: soft.pdf}
+  - expect_pdf: {file: soft.pdf, text_contains: ["neighbourhood picnic"], text_not_contains: ["neighbour-hood"]}

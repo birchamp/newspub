@@ -1,0 +1,22 @@
+id: J-FI-002
+title: Embedded pictures and the fonts in use survive a round trip
+covers: [FI-02]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - insert_picture: {path: fixtures/photo.png, page: 0}
+    as: p
+  - add_text_frame: {page: 0, rect: [1in, 5in, 5in, 1in]}
+    as: f
+  - insert_text: {target: $f, text: "Serif and sans"}
+  - format_chars: {target: $f, start: 0, end: 5, attrs: {font: "Liberation Serif"}}
+  - expect: {query: {q: fonts_used}, equals: ["Carlito", "Liberation Serif"]}
+  - save: {path: assets.npub}
+  - new_document: {width: 8.5in, height: 11in}
+  - open: {path: assets.npub}
+  - expect: {query: {q: fonts_used}, equals: ["Carlito", "Liberation Serif"]}
+  - expect: {query: {q: assets}, len: 1}
+  - expect: {query: {q: assets}, path: /0/px_w, equals: 400}
+  - expect_png: {page: 0, pixels: [{at: [170, 50], rgb: [30, 90, 160], tol: 30}]}
+  # a missing font is reported, not silently swapped
+  - format_chars: {target: $f, start: 0, end: 5, attrs: {font: "No Such Font Family"}}
+  - expect: {query: {q: missing_fonts}, equals: ["No Such Font Family"]}

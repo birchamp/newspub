@@ -1,0 +1,29 @@
+id: J-TY-011
+title: Superscript, subscript, small caps, all caps, strikethrough
+covers: [TY-12]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 6in, 2in]}
+    as: f
+  - insert_text: {target: $f, text: "E=mc2 H2O caps small strike"}
+  # "2" in mc2 is char 4, "2" in H2O is char 7, "caps" 10..14, "small" 15..20, "strike" 21..27
+  - format_chars: {target: $f, start: 4, end: 5, attrs: {baseline: superscript}}
+  - format_chars: {target: $f, start: 7, end: 8, attrs: {baseline: subscript}}
+  - expect: {query: {q: char_box, target: $f, at: 14}, path: /x, gt: 0, as: plain_caps_end}
+  - expect: {query: {q: char_box, target: $f, at: 20}, path: /x, gt: 0, as: plain_small_end}
+  - format_chars: {target: $f, start: 10, end: 14, attrs: {caps: all_caps}}
+  # capitals are wider than the lowercase letters they replace
+  - expect: {query: {q: char_box, target: $f, at: 14}, path: /x, gt: $plain_caps_end}
+  - format_chars: {target: $f, start: 15, end: 20, attrs: {caps: small_caps}}
+  - format_chars: {target: $f, start: 21, end: 27, attrs: {strike: true}}
+  - expect: {query: {q: char_box, target: $f, at: 3}, path: /baseline, approx: [16.23, 0.05], as: base}
+  - expect: {query: {q: char_box, target: $f, at: 4}, path: /baseline, lt: 13.0}
+  - expect: {query: {q: char_box, target: $f, at: 7}, path: /baseline, gt: 17.5}
+  - expect: {query: {q: char_attrs, target: $f, at: 11}, path: /caps, equals: all_caps}
+  # the story (and the PDF text layer) keep the typed lowercase text; only the display changes
+  - expect: {query: {q: story_text, target: $f}, contains: "caps small"}
+  - export_pdf: {path: caps.pdf}
+  - expect_pdf: {file: caps.pdf, text_contains: ["caps small strike"]}
+  - expect: {query: {q: char_attrs, target: $f, at: 22}, path: /strike, equals: true}
+  - expect: {query: {q: decorations, frame: $f}, len: 1}
+  - expect: {query: {q: decorations, frame: $f}, path: /0/kind, equals: strike}

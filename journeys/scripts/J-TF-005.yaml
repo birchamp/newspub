@@ -1,0 +1,26 @@
+id: J-TF-005
+title: Frame columns with gutter; text flows column to column
+covers: [TF-06]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  # 6in frame, 3 columns, 0.25in gutter, insets 0.08in → column width (432-11.52-36)/3 = 128.16pt
+  - add_text_frame: {page: 0, rect: [1in, 1in, 6in, 3in], columns: 3, gutter: 0.25in}
+    as: f
+  - insert_text: {target: $f, text: "@file:fixtures/three-pages.txt"}
+  - dump: {query: {q: frame_lines, frame: $f}, file: lines.json}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/column, equals: 0}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/x, approx: [5.76, 0.01]}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/width, approx: [128.16, 0.05]}
+  # column 2 starts one column width plus gutter to the right, at the top again
+  - expect: {query: {q: frame_lines, frame: $f}, path: /15/column, equals: 1}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /15/x, approx: [151.92, 0.05]}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /15/top, approx: [5.76, 0.01]}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /30/column, equals: 2}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /30/x, approx: [298.08, 0.05]}
+  - expect: {query: {q: frame_lines, frame: $f}, len: 45}
+  - expect: {query: {q: overflow, target: $f}, equals: true}
+  # two columns hold fewer lines in total
+  - set_text_frame: {id: $f, patch: {columns: 2}}
+  - expect: {query: {q: frame_lines, frame: $f}, len: 30}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /15/x, approx: [225.0, 0.05]}
+  - expect_png: {page: 0, ink: [{rect: [72, 72, 200, 200], min: 0.05}, {rect: [281, 80, 14, 200], max: 0.0}]}

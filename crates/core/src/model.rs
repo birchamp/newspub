@@ -169,6 +169,28 @@ pub struct Stroke {
     pub width: Length,
     #[serde(default)]
     pub dash: Dash,
+    #[serde(default)]
+    pub cap: LineCap,
+    #[serde(default)]
+    pub join: LineJoin,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LineCap {
+    #[default]
+    Butt,
+    Round,
+    Square,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LineJoin {
+    #[default]
+    Miter,
+    Round,
+    Bevel,
 }
 fn hairline() -> Length {
     Length(0.75)

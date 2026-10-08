@@ -271,6 +271,7 @@ impl Session {
                 std::fs::write(self.resolve(path), bytes)?;
                 Ok(Outcome::default())
             }
+            ExportImage { .. } | ReplaceAll { .. } => Err(EngineError::Other(format!("{s:?} is not implemented yet"))),
             ExportPng { path, page, dpi } => {
                 let png = self.page_png(*page, *dpi)?;
                 std::fs::write(self.resolve(path), png)?;
@@ -538,6 +539,47 @@ impl Session {
                 self.doc.masters.iter().map(|m| json!({"id": m.id, "name": m.name, "objects": m.objects})).collect(),
             ),
             History => json!({"undo": self.history.undo_len(), "redo": self.history.redo_len()}),
+            CharBox { target, at } => {
+                let sid = self.doc.story_of(*target)?;
+                let l = self.layout();
+                for f in self.doc.story(sid)?.frames.clone() {
+                    let Some(fl) = l.frames.get(&f) else { continue };
+                    for (li, ln) in fl.lines.iter().enumerate() {
+                        for r in &ln.runs {
+                            if let Some(g) = r.glyphs.iter().find(|g| g.char_index == *at && !g.text_range.is_empty()) {
+                                return Ok(
+                                    json!({"frame": f, "page": self.doc.page_of(f), "x": g.x, "baseline": g.y, "width": g.advance, "line": li}),
+                                );
+                            }
+                        }
+                    }
+                }
+                Value::Null
+            }
+            Decorations { frame } => {
+                self.doc.object(*frame)?;
+                let l = self.layout();
+                let v: Vec<Value> = l
+                    .frames
+                    .get(frame)
+                    .map(|f| {
+                        f.decorations
+                            .iter()
+                            .map(|d| {
+                                let kind = match d.kind {
+                                    newpub_layout::DecorationKind::Underline => "underline",
+                                    newpub_layout::DecorationKind::Strike => "strike",
+                                };
+                                json!({"kind": kind, "x0": d.x0, "x1": d.x1, "y": d.y, "thickness": d.thickness})
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Value::Array(v)
+            }
+            PageMargins { .. } | Spreads | FontsUsed | MissingFonts | Assets | Find { .. } | AccessibilityCheck => {
+                return Err(EngineError::Other(format!("query {q:?} is not implemented yet")));
+            }
             TextBounds { frame } => {
                 let o = self.doc.object(*frame)?.clone();
                 let l = self.layout();

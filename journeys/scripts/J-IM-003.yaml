@@ -1,0 +1,36 @@
+id: J-IM-003
+title: Text wrap around objects — square, tight, top-and-bottom, none; wrap distance
+covers: [IM-03]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 6in, 6in]}
+    as: f
+  - set_text_frame: {id: $f, patch: {insets: {top: 0, bottom: 0, left: 0, right: 0}}}
+  - insert_text: {target: $f, text: "@file:fixtures/three-pages.txt"}
+  # picture in the left middle of the frame: frame-local x 0..144, y 72..216; pictures wrap square by default
+  - insert_picture: {path: fixtures/photo.png, page: 0, x: 1in, y: 2in, width: 2in}
+    as: p
+  - expect: {query: {q: object, id: $p}, path: /wrap/mode, equals: square}
+  - set_object: {id: $p, patch: {wrap: {mode: square, distance: 9}}}
+  - dump: {query: {q: frame_lines, frame: $f}, file: square.json}
+  # a line beside the picture starts right of it (144 + 9 distance)
+  - expect: {query: {q: frame_lines, frame: $f}, path: /7/x, approx: [153, 0.01]}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/x, equals: 0}
+  - expect_png: {page: 0, ink: [{rect: [72, 144, 144, 108], min: 0.95}]}
+  # top and bottom: no text beside the picture
+  - set_object: {id: $p, patch: {wrap: {mode: top_bottom, distance: 0}}}
+  - expect_png: {page: 0, ink: [{rect: [226, 150, 200, 100], max: 0.0}]}
+  # none: text runs under the picture's full width
+  - set_object: {id: $p, patch: {wrap: {mode: none}}}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /7/x, equals: 0}
+  # tight around an ellipse: lines near its middle are pushed further right than lines near its top
+  - delete_objects: {ids: [$p]}
+  - add_shape: {page: 0, rect: [1in, 2in, 2in, 2in], kind: ellipse, fill: "#3366cc"}
+    as: e
+  - set_object: {id: $e, patch: {wrap: {mode: tight, distance: 0}}}
+  - dump: {query: {q: frame_lines, frame: $f}, file: tight.json}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /6/x, lt: 120}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /10/x, gt: 140}
+  # text in front of the frame only: objects behind the text frame do not push text
+  - set_z: {id: $e, op: back}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /10/x, equals: 0}

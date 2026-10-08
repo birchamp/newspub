@@ -1,0 +1,33 @@
+id: J-UR-002
+title: Typing coalesces into one undo step; history survives save
+covers: [UR-02]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 4in, 2in]}
+    as: f
+  - type_text: {target: $f, text: "H"}
+  - type_text: {target: $f, text: "e"}
+  - type_text: {target: $f, text: "llo"}
+  - type_text: {target: $f, text: " world"}
+  - expect: {query: {q: history}, path: /undo, equals: 2}
+  - undo: {}
+  - expect: {query: {q: story_text, target: $f}, equals: ""}
+  - redo: {}
+  - expect: {query: {q: story_text, target: $f}, equals: "Hello world"}
+  # moving the insertion point starts a new undo step
+  - type_text: {target: $f, at: 0, text: ">"}
+  - type_text: {target: $f, at: 1, text: " "}
+  - expect: {query: {q: history}, path: /undo, equals: 3}
+  # a new paragraph ends the coalesced run
+  - type_text: {target: $f, text: "\n"}
+  - type_text: {target: $f, text: "Second"}
+  - expect: {query: {q: history}, path: /undo, equals: 5}
+  # any other command breaks coalescing too
+  - format_chars: {target: $f, start: 0, end: 1, attrs: {bold: true}}
+  - type_text: {target: $f, text: "!"}
+  - expect: {query: {q: history}, path: /undo, equals: 7}
+  # saving does not clear undo history
+  - save: {path: keep.npub}
+  - expect: {query: {q: history}, path: /undo, equals: 7}
+  - undo: {}
+  - expect: {query: {q: story_text, target: $f}, equals: "> Hello world\nSecond"}

@@ -1,0 +1,12 @@
+id: J-PG-004
+title: Facing pages — inside/outside margins mirror on left and right pages
+covers: [PG-05]
+steps:
+  - new_document: {width: 5.5in, height: 8.5in, pages: 3, facing: true, margins: {top: 0.5in, bottom: 0.5in, inside: 0.75in, outside: 0.5in}}
+  - expect: {query: {q: page_margins, page: 0}, equals: {top: 36, bottom: 36, left: 54, right: 36}}
+  - expect: {query: {q: page_margins, page: 1}, equals: {top: 36, bottom: 36, left: 36, right: 54}}
+  - expect: {query: {q: page_margins, page: 2}, equals: {top: 36, bottom: 36, left: 54, right: 36}}
+  - expect: {query: {q: spreads}, equals: [[0], [1, 2]]}
+  - set_page_setup: {facing: false}
+  - expect: {query: {q: page_margins, page: 1}, equals: {top: 36, bottom: 36, left: 54, right: 36}}
+  - expect: {query: {q: spreads}, equals: [[0], [1], [2]]}

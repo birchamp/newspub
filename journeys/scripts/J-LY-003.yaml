@@ -1,0 +1,19 @@
+id: J-LY-003
+title: Lock object position
+covers: [LY-03]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_shape: {page: 0, rect: [1in, 1in, 1in, 1in], kind: rect, fill: "#888888"}
+    as: r
+  - set_object: {id: $r, patch: {locked: true}}
+  - expect: {query: {q: object, id: $r}, path: /locked, equals: true}
+  - expect_error: {move_objects: {ids: [$r], dx: 1in, dy: 0}}
+  - expect_error: {set_object: {id: $r, patch: {rect: [2in, 2in, 1in, 1in]}}}
+  - expect_error: {set_object: {id: $r, patch: {rotation: 45}}}
+  - expect_error: {delete_objects: {ids: [$r]}}
+  - expect: {query: {q: object, id: $r}, path: /rect/x, equals: 72}
+  # formatting a locked object is still allowed; unlocking allows moving again
+  - set_shape: {id: $r, patch: {fill: "#ff0000"}}
+  - set_object: {id: $r, patch: {locked: false}}
+  - move_objects: {ids: [$r], dx: 1in, dy: 0}
+  - expect: {query: {q: object, id: $r}, path: /rect/x, equals: 144}

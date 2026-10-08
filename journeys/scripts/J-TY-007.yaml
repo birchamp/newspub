@@ -1,0 +1,33 @@
+id: J-TY-007
+title: Bulleted and numbered lists
+covers: [TY-07]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 4in, 4in]}
+    as: f
+  - set_text_frame: {id: $f, patch: {insets: {top: 0, bottom: 0, left: 0, right: 0}}}
+  - insert_text: {target: $f, text: "Bread\nMilk\nEggs that are fresh from the farm down the lane every single morning"}
+  - format_paras: {target: $f, attrs: {list: {kind: bullet, bullet: "•", indent: 18}}}
+  - expect: {query: {q: para_attrs, target: $f, at: 0}, path: /list/kind, equals: bullet}
+  # the bullet is drawn at the paragraph's left edge; text starts at the list indent
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/text, starts_with: "•"}
+  - expect: {query: {q: char_box, target: $f, at: 0}, path: /x, approx: [18, 0.01]}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/ink_left, approx: [0, 1.0]}
+  # wrapped lines of a list item align with the item's text, not the bullet
+  - expect: {query: {q: frame_lines, frame: $f}, len: 4}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /3/x, approx: [18, 0.01]}
+  # the story text is unchanged: bullets are generated
+  - expect: {query: {q: story_text, target: $f}, starts_with: "Bread\nMilk"}
+  # numbered list: 1. 2. 3., then lower roman starting at 4
+  - format_paras: {target: $f, attrs: {list: {kind: numbered, format: decimal, start: 1, suffix: ".", indent: 24}}}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/text, starts_with: "1."}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /1/text, starts_with: "2."}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /2/text, starts_with: "3."}
+  - format_paras: {target: $f, attrs: {list: {kind: numbered, format: lower_roman, start: 4, suffix: ")", indent: 24}}}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/text, starts_with: "iv)"}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /2/text, starts_with: "vi)"}
+  - export_pdf: {path: lists.pdf}
+  - expect_pdf: {file: lists.pdf, text_contains: ["iv)", "Bread", "vi)"]}
+  # removing the list removes the generated text
+  - format_paras: {target: $f, attrs: {list: {kind: none}}}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/text, equals: "Bread"}

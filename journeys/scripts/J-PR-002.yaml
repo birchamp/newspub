@@ -1,0 +1,29 @@
+id: J-PR-002
+title: Bleed — objects extend past the trim; BleedBox, TrimBox, crop and registration marks
+covers: [PR-02, PR-03]
+steps:
+  - new_document: {width: 5in, height: 7in, bleed: 0.125in}
+  # a full-bleed background box extends 0.125in past every edge
+  - add_shape: {page: 0, rect: [-0.125in, -0.125in, 5.25in, 7.25in], kind: rect, fill: "#2255aa"}
+  # without bleed the PDF is trim size and clips the overhang
+  - export_pdf: {path: trim.pdf}
+  - expect_pdf: {file: trim.pdf, page_size: {w: 360, h: 504}, boxes: [{page: 1, trim: [0, 0, 360, 504], bleed: [0, 0, 360, 504]}]}
+  # with bleed and marks: media = trim + 2 × (bleed + mark area)
+  - export_pdf: {path: bleed.pdf, options: {bleed: true, crop_marks: true}}
+  - expect_pdf:
+      file: bleed.pdf
+      page_size: {w: 430, h: 574}
+      boxes: [{page: 1, trim: [35, 35, 395, 539], bleed: [26, 26, 404, 548]}]
+      ink:
+        # the bleed area is printed
+        - {page: 1, rect: [27, 100, 7, 300], min: 0.95}
+        # beyond the bleed only marks: white between bleed and the crop mark start
+        - {page: 1, rect: [21, 100, 4, 300], max: 0.0}
+        # marks at all four corners
+        - {page: 1, rect: [3, 34, 16, 2], min: 0.1}
+        - {page: 1, rect: [411, 34, 16, 2], min: 0.1}
+        - {page: 1, rect: [3, 538, 16, 2], min: 0.1}
+        - {page: 1, rect: [394, 555, 2, 16], min: 0.1}
+  # bleed without marks
+  - export_pdf: {path: bleed-only.pdf, options: {bleed: true}}
+  - expect_pdf: {file: bleed-only.pdf, page_size: {w: 378, h: 522}, boxes: [{page: 1, trim: [9, 9, 369, 513], bleed: [0, 0, 378, 522]}]}
