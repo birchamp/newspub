@@ -4,6 +4,8 @@ use newpub_core::{Document, FORMAT_VERSION};
 use std::io::{Read, Seek, Write};
 use std::sync::Arc;
 
+mod legacy;
+
 #[derive(Debug, thiserror::Error)]
 pub enum NativeError {
     #[error("io: {0}")]
@@ -45,6 +47,9 @@ pub fn write<W: Write + Seek>(doc: &Document, w: W) -> Result<(), NativeError> {
 
 pub fn read<R: Read + Seek>(r: R) -> Result<Document, NativeError> {
     let mut z = zip::ZipArchive::new(r)?;
+    if let Some(doc) = legacy::try_convert(&mut z)? {
+        return Ok(doc);
+    }
     let mut json = vec![];
     z.by_name("document.json")?.read_to_end(&mut json)?;
     let probe: serde_json::Value = serde_json::from_slice(&json)?;
