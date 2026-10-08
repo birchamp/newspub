@@ -5,7 +5,7 @@ use krilla::color::{cmyk, rgb, separation};
 use krilla::geom::{PathBuilder, Point, Rect as KRect, Size, Transform};
 use krilla::num::NormalizedF32;
 use krilla::page::PageSettings;
-use krilla::paint::{Fill, FillRule, Stroke, StrokeDash};
+use krilla::paint::{Fill, FillRule, LineCap as KLineCap, LineJoin as KLineJoin, Stroke, StrokeDash};
 use krilla::text::{Font, GlyphId, KrillaGlyph};
 use newpub_core::{Affine, Color, Document};
 use newpub_layout::{DocLayout, FaceId, FontStore};
@@ -87,9 +87,21 @@ fn kpath(els: &[PathEl]) -> Option<krilla::geom::Path> {
 
 fn kstroke(s: &StrokeStyle) -> Stroke {
     let (paint, a) = kcolor(&s.color);
+    let line_cap = match s.cap {
+        newpub_core::LineCap::Butt => KLineCap::Butt,
+        newpub_core::LineCap::Round => KLineCap::Round,
+        newpub_core::LineCap::Square => KLineCap::Square,
+    };
+    let line_join = match s.join {
+        newpub_core::LineJoin::Miter => KLineJoin::Miter,
+        newpub_core::LineJoin::Round => KLineJoin::Round,
+        newpub_core::LineJoin::Bevel => KLineJoin::Bevel,
+    };
     Stroke {
         paint,
         width: s.width as f32,
+        line_cap,
+        line_join,
         opacity: NormalizedF32::new(a).unwrap_or(NormalizedF32::ONE),
         dash: (!s.dash.is_empty())
             .then(|| StrokeDash { array: s.dash.iter().map(|d| *d as f32).collect(), offset: 0.0 }),
