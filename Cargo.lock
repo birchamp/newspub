@@ -2364,6 +2364,7 @@ version = "0.1.0"
 dependencies = [
  "cfb",
  "newpub-core",
+ "serde",
  "thiserror 2.0.21",
 ]
 
