@@ -355,47 +355,65 @@ impl Ctx<'_> {
                 s.pop();
             }
             Item::Glyphs { run, transform } => {
-                let Some(font) = self.font(run.face) else { return };
-                let Some(first) = run.glyphs.first() else { return };
-                let (x0, y0) = (first.x, first.y);
-                let size = run.size as f32;
-                let xs = run.x_scale.max(0.01);
-                let glyphs: Vec<KrillaGlyph> = run
-                    .glyphs
-                    .iter()
-                    .enumerate()
-                    .map(|(i, g)| {
-                        let next_x = run.glyphs.get(i + 1).map(|n| n.x).unwrap_or(g.x + g.advance);
-                        let adv = ((next_x - g.x) / xs / run.size) as f32;
-                        KrillaGlyph::new(
-                            GlyphId::new(g.id as u32),
-                            adv,
-                            0.0,
-                            ((g.y - y0) / run.size) as f32,
-                            0.0,
-                            g.text_range.clone(),
-                            None,
-                        )
-                    })
-                    .collect();
-                let skew = if run.synthetic_italic { -0.21 } else { 0.0 };
-                let local = Affine::translate(x0, y0).compose(Affine([xs, 0.0, skew, 1.0, 0.0, 0.0]));
-                s.push_transform(&kt(&transform.compose(local)));
-                let (paint, a) = kcolor(&run.color);
-                let opacity = NormalizedF32::new(a).unwrap_or(NormalizedF32::ONE);
-                s.set_fill(Some(Fill { paint: paint.clone(), opacity, rule: FillRule::NonZero }));
-                s.set_stroke(run.synthetic_bold.then(|| Stroke {
-                    paint,
-                    width: (run.size * 0.03) as f32,
-                    opacity,
-                    ..Default::default()
-                }));
-                s.draw_glyphs(Point::from_xy(0.0, 0.0), &glyphs, font, &run.text, size, false);
-                s.set_stroke(None);
-                s.pop();
+                let (back, front) = if run.effects.is_empty() {
+                    (vec![], vec![])
+                } else {
+                    newpub_render::raster::glyph_effects(self.fonts, run, *transform)
+                };
+                for it in &back {
+                    self.draw_item(s, it);
+                }
+                self.draw_glyph_run(s, run, transform);
+                for it in &front {
+                    self.draw_item(s, it);
+                }
             }
             Item::Tag(_) => {}
         }
+    }
+}
+
+impl Ctx<'_> {
+    /// The run's real text (extractable), drawn with the font.
+    fn draw_glyph_run(&mut self, s: &mut krilla::surface::Surface, run: &newpub_layout::GlyphRun, transform: &Affine) {
+        let Some(font) = self.font(run.face) else { return };
+        let Some(first) = run.glyphs.first() else { return };
+        let (x0, y0) = (first.x, first.y);
+        let size = run.size as f32;
+        let xs = run.x_scale.max(0.01);
+        let glyphs: Vec<KrillaGlyph> = run
+            .glyphs
+            .iter()
+            .enumerate()
+            .map(|(i, g)| {
+                let next_x = run.glyphs.get(i + 1).map(|n| n.x).unwrap_or(g.x + g.advance);
+                let adv = ((next_x - g.x) / xs / run.size) as f32;
+                KrillaGlyph::new(
+                    GlyphId::new(g.id as u32),
+                    adv,
+                    0.0,
+                    ((g.y - y0) / run.size) as f32,
+                    0.0,
+                    g.text_range.clone(),
+                    None,
+                )
+            })
+            .collect();
+        let skew = if run.synthetic_italic { -0.21 } else { 0.0 };
+        let local = Affine::translate(x0, y0).compose(Affine([xs, 0.0, skew, 1.0, 0.0, 0.0]));
+        s.push_transform(&kt(&transform.compose(local)));
+        let (paint, a) = kcolor(&run.color);
+        let opacity = NormalizedF32::new(a).unwrap_or(NormalizedF32::ONE);
+        s.set_fill(Some(Fill { paint: paint.clone(), opacity, rule: FillRule::NonZero }));
+        s.set_stroke(run.synthetic_bold.then(|| Stroke {
+            paint,
+            width: (run.size * 0.03) as f32,
+            opacity,
+            ..Default::default()
+        }));
+        s.draw_glyphs(Point::from_xy(0.0, 0.0), &glyphs, font, &run.text, size, false);
+        s.set_stroke(None);
+        s.pop();
     }
 }
 
