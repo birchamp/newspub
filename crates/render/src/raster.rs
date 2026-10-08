@@ -210,9 +210,15 @@ impl Rasterizer {
     /// Paints a display list. `base` maps page points to pixels.
     pub fn paint(&mut self, pm: &mut Pixmap, doc: &Document, fonts: &FontStore, page: &PageDisplay, base: Affine) {
         for item in &page.items {
+            self.paint_item(pm, doc, fonts, item, base);
+        }
+    }
+
+    fn paint_item(&mut self, pm: &mut Pixmap, doc: &Document, fonts: &FontStore, item: &Item, base: Affine) {
+        {
             match item {
                 Item::Path { path, fill, stroke, transform } => {
-                    let Some(p) = build_path(path) else { continue };
+                    let Some(p) = build_path(path) else { return };
                     let t = ts(&base.compose(*transform));
                     if let Some(f) = fill {
                         pm.fill_path(&p, &paint_for(f), FillRule::Winding, t, None);
@@ -223,11 +229,19 @@ impl Rasterizer {
                 }
                 Item::Tag(_) => {}
                 Item::Glyphs { run, transform } => {
+                    let (back, front) =
+                        if run.effects.is_empty() { (vec![], vec![]) } else { glyph_effects(fonts, run, *transform) };
+                    for it in &back {
+                        self.paint_item(pm, doc, fonts, it, base);
+                    }
                     let t = ts(&base.compose(*transform));
                     self.draw_run(pm, fonts, run, t);
+                    for it in &front {
+                        self.paint_item(pm, doc, fonts, it, base);
+                    }
                 }
                 Item::GradPath { path, paint, transform } => {
-                    let (Some(p), Some(shader)) = (build_path(path), Self::gradient_shader(paint)) else { continue };
+                    let (Some(p), Some(shader)) = (build_path(path), Self::gradient_shader(paint)) else { return };
                     let paint = Paint { anti_alias: true, shader, ..Default::default() };
                     pm.fill_path(&p, &paint, FillRule::Winding, ts(&base.compose(*transform)), None);
                 }
@@ -236,11 +250,11 @@ impl Rasterizer {
                         .images
                         .entry((*asset, format!("{adjust:?}")))
                         .or_insert_with(|| doc.assets.get(asset).and_then(|a| decode_adjusted(&a.bytes, adjust)));
-                    let Some(img) = img.as_ref() else { continue };
+                    let Some(img) = img.as_ref() else { return };
                     let Some(rect) =
                         tiny_skia::Rect::from_xywh(clip.x as f32, clip.y as f32, clip.w as f32, clip.h as f32)
                     else {
-                        continue;
+                        return;
                     };
                     let p = PathBuilder::from_rect(rect);
                     let paint = Paint {
@@ -262,7 +276,7 @@ impl Rasterizer {
                         Some(cm)
                     });
                     if mask.is_some() && clip_mask.is_none() {
-                        continue;
+                        return;
                     }
                     pm.fill_path(&p, &paint, FillRule::Winding, t, clip_mask.as_ref());
                 }
@@ -285,4 +299,155 @@ pub fn render_page(
     pm.fill(tiny_skia::Color::WHITE);
     r.paint(&mut pm, doc, fonts, page, Affine::scale(k, k));
     Some(pm)
+}
+
+/// Vector layers for a glyph run's text effects (TY-18), both in page space via `transform`.
+/// Returns (behind the glyphs, in front of them). Order behind to front: glow, shadow, emboss/engrave,
+/// reflection, glyphs, outline. Both back ends draw these as ordinary path items.
+pub fn glyph_effects(fonts: &FontStore, run: &GlyphRun, transform: Affine) -> (Vec<Item>, Vec<Item>) {
+    let (mut back, mut front) = (vec![], vec![]);
+    let fx = &run.effects;
+    if fx.is_empty() {
+        return (back, front);
+    }
+    let face = fonts.face(run.face);
+    let Some(ttf) = face.ttf() else { return (back, front) };
+    let upem = face.units_per_em;
+    let sx = run.size * run.x_scale / upem;
+    let sy = run.size / upem;
+    let skew = if run.synthetic_italic { 0.21 } else { 0.0 };
+    // Frame-local outlines (y down); `mirror` reflects each glyph about its own baseline plus the gap.
+    let outline = |mirror: Option<f64>| -> Vec<PathEl> {
+        let mut out = vec![];
+        for g in &run.glyphs {
+            let map = |x: f64, y: f64| {
+                let (px, py) = (g.x + sx * x - skew * sy * y, g.y - sy * y);
+                match mirror {
+                    Some(gap) => (px, 2.0 * g.y + gap - py),
+                    None => (px, py),
+                }
+            };
+            for e in crate::display::glyph_outline(&ttf, g.id) {
+                out.push(match e {
+                    PathEl::Move(x, y) => {
+                        let (x, y) = map(x, y);
+                        PathEl::Move(x, y)
+                    }
+                    PathEl::Line(x, y) => {
+                        let (x, y) = map(x, y);
+                        PathEl::Line(x, y)
+                    }
+                    PathEl::Cubic(a, b, c, d, e, f) => {
+                        let (a, b) = map(a, b);
+                        let (c, d) = map(c, d);
+                        let (e, f) = map(e, f);
+                        PathEl::Cubic(a, b, c, d, e, f)
+                    }
+                    PathEl::Close => PathEl::Close,
+                });
+            }
+        }
+        out
+    };
+    let shifted = |dx: f64, dy: f64| transform.compose(Affine::translate(dx, dy));
+    let stroke = |color: Color, width: f64| StrokeStyle {
+        color,
+        width,
+        dash: vec![],
+        cap: LineCap::Round,
+        join: LineJoin::Round,
+    };
+    let plain = outline(None);
+    if plain.is_empty() {
+        return (back, front);
+    }
+
+    if let Some(glow) = &fx.glow
+        && glow.radius > 0.0
+    {
+        const N: usize = 8;
+        // Layer k (1..=N) strokes out to radius k/N of the glow; the composite opacity in ring j is
+        // 0.8 * (1 - (j - 0.5) / N), so it falls from 0.8 at the glyph edge to 0 at the radius.
+        let target = |j: usize| 0.8 * (1.0 - (j as f64 - 0.5) / N as f64);
+        let base_a = f64::from(glow.color.alpha()).clamp(0.0, 1.0);
+        for k in (1..=N).rev() {
+            let t_next = if k == N { 0.0 } else { target(k + 1) };
+            let a = (1.0 - (1.0 - target(k)) / (1.0 - t_next)) * base_a;
+            back.push(Item::Path {
+                path: plain.clone(),
+                fill: None,
+                stroke: Some(stroke(glow.color.clone().with_alpha(a as f32), 2.0 * glow.radius * k as f64 / N as f64)),
+                transform,
+            });
+        }
+    }
+
+    if let Some(sh) = &fx.shadow {
+        let blur = sh.blur.max(0.0);
+        let steps = if blur > 0.0 { 4 } else { 0 };
+        let a = f64::from(sh.color.alpha()).clamp(0.0, 1.0);
+        let layer_a = 1.0 - (1.0 - a).powf(1.0 / (steps + 1) as f64);
+        let color = sh.color.clone().with_alpha(layer_a as f32);
+        for i in 0..=steps {
+            let grow = blur * (steps - i) as f64 / steps.max(1) as f64;
+            back.push(Item::Path {
+                path: plain.clone(),
+                fill: Some(color.clone()),
+                stroke: (grow > 0.0).then(|| stroke(color.clone(), 2.0 * grow)),
+                transform: shifted(sh.dx, sh.dy),
+            });
+        }
+    }
+
+    if fx.emboss || fx.engrave {
+        let dark = Color::Rgb { r: 0, g: 0, b: 0, a: 0.6 };
+        let light = Color::Rgb { r: 255, g: 255, b: 255, a: 0.85 };
+        // Emboss: dark down-right, light up-left. Engrave swaps them.
+        let (down_right, up_left) = if fx.engrave && !fx.emboss { (light, dark) } else { (dark, light) };
+        for (c, d) in [(down_right, 1.0), (up_left, -1.0)] {
+            back.push(Item::Path { path: plain.clone(), fill: Some(c), stroke: None, transform: shifted(d, d) });
+        }
+    }
+
+    if let Some(refl) = fx.reflection {
+        let o = refl.clamp(0.0, 1.0);
+        if o > 0.0
+            && let Some(first) = run.glyphs.first()
+        {
+            let gap = 0.0;
+            let h = if face.cap_height > 0.0 { face.cap_height * run.size } else { 0.7 * run.size };
+            let (x0, y0) = (first.x, first.y + gap);
+            let c = run.color.clone();
+            let base_a = f64::from(c.alpha());
+            back.push(Item::GradPath {
+                path: outline(Some(gap)),
+                paint: GradientPaint {
+                    radial: false,
+                    from: (x0, y0),
+                    to: (x0, y0 + h),
+                    radius: 0.0,
+                    stops: vec![(0.0, c.clone().with_alpha((base_a * o) as f32)), (1.0, c.with_alpha(0.0))],
+                },
+                transform,
+            });
+        }
+    }
+
+    if let Some(ol) = &fx.outline
+        && ol.width > 0.0
+    {
+        front.push(Item::Path {
+            path: plain,
+            fill: None,
+            stroke: Some(StrokeStyle {
+                color: ol.color.clone(),
+                width: ol.width,
+                dash: vec![],
+                cap: LineCap::Butt,
+                join: LineJoin::Round,
+            }),
+            transform,
+        });
+    }
+    (back, front)
 }

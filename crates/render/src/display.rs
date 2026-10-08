@@ -1,8 +1,9 @@
 //! Display lists: the shared, back-end-independent description of what a page shows.
 //! Both the raster back end (tiny-skia) and the PDF back end (krilla) consume these.
 
+use newpub_core::wordart::{Warp, WordArt};
 use newpub_core::*;
-use newpub_layout::{DocLayout, GlyphRun};
+use newpub_layout::{DocLayout, FontStore, GlyphRun};
 use std::f64::consts::PI;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -840,8 +841,26 @@ fn push_object_inner(
                 }
             }
         }
-        // Drawn by the TEXTART task (TY-19).
-        ObjectKind::WordArt(_) => {}
+        ObjectKind::WordArt(wa) => {
+            let path = wordart_path(art_fonts(), wa, w, h);
+            if path.is_empty() {
+                return;
+            }
+            let grad = wa.gradient.as_ref().and_then(|g| gradient_paint(g, w, h));
+            if let Some(sh) = &o.shadow {
+                push_shadow(items, sh, &path, true, wa.outline.as_ref(), t);
+            }
+            let stroke = wa.outline.as_ref().map(stroke_style);
+            match grad {
+                Some(paint) => {
+                    items.push(Item::GradPath { path: path.clone(), paint, transform: t });
+                    if stroke.is_some() {
+                        items.push(Item::Path { path, fill: None, stroke, transform: t });
+                    }
+                }
+                None => items.push(Item::Path { path, fill: Some(wa.fill.clone()), stroke, transform: t }),
+            }
+        }
         ObjectKind::Group { children } => {
             // Children are stored in page coordinates; the group's own transform is not applied.
             for c in children {
@@ -883,4 +902,214 @@ pub fn page_display_for(doc: &Document, layout: &DocLayout, index: usize, screen
         }
     }
     PageDisplay { width: w, height: h, items }
+}
+
+/// Bundled fonts used to lay out WordArt in display lists (which carry no font store).
+fn art_fonts() -> &'static FontStore {
+    static FONTS: std::sync::OnceLock<FontStore> = std::sync::OnceLock::new();
+    FONTS.get_or_init(FontStore::bundled)
+}
+
+struct OutlinePath {
+    els: Vec<PathEl>,
+    cur: (f64, f64),
+}
+
+impl ttf_parser::OutlineBuilder for OutlinePath {
+    fn move_to(&mut self, x: f32, y: f32) {
+        self.cur = (x as f64, y as f64);
+        self.els.push(PathEl::Move(self.cur.0, self.cur.1));
+    }
+    fn line_to(&mut self, x: f32, y: f32) {
+        self.cur = (x as f64, y as f64);
+        self.els.push(PathEl::Line(self.cur.0, self.cur.1));
+    }
+    fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
+        let (x0, y0) = self.cur;
+        let (x1, y1, x, y) = (x1 as f64, y1 as f64, x as f64, y as f64);
+        self.els.push(PathEl::Cubic(
+            x0 + 2.0 / 3.0 * (x1 - x0),
+            y0 + 2.0 / 3.0 * (y1 - y0),
+            x + 2.0 / 3.0 * (x1 - x),
+            y + 2.0 / 3.0 * (y1 - y),
+            x,
+            y,
+        ));
+        self.cur = (x, y);
+    }
+    fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
+        self.els.push(PathEl::Cubic(x1 as f64, y1 as f64, x2 as f64, y2 as f64, x as f64, y as f64));
+        self.cur = (x as f64, y as f64);
+    }
+    fn close(&mut self) {
+        self.els.push(PathEl::Close);
+    }
+}
+
+/// A glyph's outline in font units (y up). Empty for blank glyphs.
+pub fn glyph_outline(face: &ttf_parser::Face, gid: u16) -> Vec<PathEl> {
+    let mut b = OutlinePath { els: vec![], cur: (0.0, 0.0) };
+    face.outline_glyph(ttf_parser::GlyphId(gid), &mut b);
+    b.els
+}
+
+fn cubic_at(p: [(f64, f64); 4], t: f64) -> (f64, f64) {
+    let m = 1.0 - t;
+    let (a, b, c, d) = (m * m * m, 3.0 * m * m * t, 3.0 * m * t * t, t * t * t);
+    (a * p[0].0 + b * p[1].0 + c * p[2].0 + d * p[3].0, a * p[0].1 + b * p[1].1 + c * p[2].1 + d * p[3].1)
+}
+
+/// Applies `f` to every point of `els`.
+pub(crate) fn map_els(els: &[PathEl], f: impl Fn((f64, f64)) -> (f64, f64)) -> Vec<PathEl> {
+    els.iter()
+        .map(|e| match *e {
+            PathEl::Move(x, y) => {
+                let (x, y) = f((x, y));
+                PathEl::Move(x, y)
+            }
+            PathEl::Line(x, y) => {
+                let (x, y) = f((x, y));
+                PathEl::Line(x, y)
+            }
+            PathEl::Cubic(a, b, c, d, e, g) => {
+                let (a, b) = f((a, b));
+                let (c, d) = f((c, d));
+                let (e, g) = f((e, g));
+                PathEl::Cubic(a, b, c, d, e, g)
+            }
+            PathEl::Close => PathEl::Close,
+        })
+        .collect()
+}
+
+/// Lays `wa.text` out as one line of glyph outlines (em units, y up, pen starting at 0).
+fn wordart_outlines(fonts: &FontStore, wa: &WordArt) -> Vec<PathEl> {
+    let main = fonts.face(fonts.resolve(&wa.font, wa.bold, wa.italic));
+    let skew = if wa.italic && !main.italic { 0.21 } else { 0.0 };
+    let mut out = vec![];
+    let mut pen = 0.0;
+    for ch in wa.text.chars() {
+        let ch = if ch.is_control() { ' ' } else { ch };
+        let face = if main.has_glyph(ch) {
+            main.clone()
+        } else {
+            fonts.fallback_for(ch, wa.bold, wa.italic).map_or_else(|| main.clone(), |id| fonts.face(id))
+        };
+        let Some(ttf) = face.ttf() else { continue };
+        let gid = ttf.glyph_index(ch).unwrap_or(ttf_parser::GlyphId(0));
+        let k = 1.0 / face.units_per_em;
+        out.extend(map_els(&glyph_outline(&ttf, gid.0), |(x, y)| (pen + x * k + skew * y * k, y * k)));
+        pen += ttf.glyph_hor_advance(gid).map_or(0.0, f64::from) * k;
+    }
+    out
+}
+
+/// Top and bottom of the glyph band at horizontal fraction `u`, as fractions of the rect height.
+fn warp_band(warp: Warp, u: f64) -> (f64, f64) {
+    let k = 1.0 - (2.0 * u - 1.0).powi(2);
+    match warp {
+        Warp::None => (0.0, 1.0),
+        Warp::ArchUp => {
+            let bottom = 1.0 - 0.4 * k;
+            (bottom - 0.6, bottom)
+        }
+        Warp::ArchDown => {
+            let top = 0.4 * k;
+            (top, top + 0.6)
+        }
+        Warp::Wave => {
+            let bottom = 0.85 - 0.15 * (2.0 * PI * u).sin();
+            (bottom - 0.7, bottom)
+        }
+        Warp::SlantUp => {
+            let bottom = 1.0 - 0.3 * u;
+            (bottom - 0.7, bottom)
+        }
+        Warp::SlantDown => {
+            let bottom = 0.7 + 0.3 * u;
+            (bottom - 0.7, bottom)
+        }
+        Warp::Inflate => {
+            let gh = 0.5 + 0.5 * (PI * u).sin();
+            ((1.0 - gh) / 2.0, (1.0 + gh) / 2.0)
+        }
+    }
+}
+
+/// The WordArt text as filled outlines in the object's local box (`w` x `h`): the line is stretched to fill
+/// the box, then bent by the warp (see [`Warp`]). Empty when there is nothing to draw.
+pub fn wordart_path(fonts: &FontStore, wa: &WordArt, w: f64, h: f64) -> Vec<PathEl> {
+    let src = wordart_outlines(fonts, wa);
+    // Ink bounds, sampling curves.
+    let (mut x0, mut x1, mut y0, mut y1) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
+    let mut note = |p: (f64, f64)| {
+        x0 = x0.min(p.0);
+        x1 = x1.max(p.0);
+        y0 = y0.min(p.1);
+        y1 = y1.max(p.1);
+    };
+    let mut cur = (0.0, 0.0);
+    for e in &src {
+        match *e {
+            PathEl::Move(x, y) | PathEl::Line(x, y) => {
+                cur = (x, y);
+                note(cur);
+            }
+            PathEl::Cubic(a, b, c, d, e, f) => {
+                for i in 1..=8 {
+                    note(cubic_at([cur, (a, b), (c, d), (e, f)], i as f64 / 8.0));
+                }
+                cur = (e, f);
+            }
+            PathEl::Close => {}
+        }
+    }
+    if x0 >= x1 || y0 >= y1 || w <= 0.0 || h <= 0.0 {
+        return vec![];
+    }
+    let (dx, dy) = (x1 - x0, y1 - y0);
+    let map = |p: (f64, f64)| -> (f64, f64) {
+        let u = (p.0 - x0) / dx;
+        let s = (y1 - p.1) / dy;
+        let (top, bot) = warp_band(wa.warp, u);
+        (u * w, (top + s * (bot - top)) * h)
+    };
+    if wa.warp == Warp::None {
+        return map_els(&src, map);
+    }
+    // Warped: flatten, and split long runs so the bent baseline is followed.
+    let mut out = vec![];
+    let line_to = |out: &mut Vec<PathEl>, from: (f64, f64), to: (f64, f64)| {
+        let n = (((to.0 - from.0).abs() / dx) * 96.0).ceil().clamp(1.0, 256.0) as usize;
+        for i in 1..=n {
+            let t = i as f64 / n as f64;
+            let (x, y) = map((from.0 + (to.0 - from.0) * t, from.1 + (to.1 - from.1) * t));
+            out.push(PathEl::Line(x, y));
+        }
+    };
+    let mut cur = (0.0, 0.0);
+    for e in &src {
+        match *e {
+            PathEl::Move(x, y) => {
+                cur = (x, y);
+                let (mx, my) = map(cur);
+                out.push(PathEl::Move(mx, my));
+            }
+            PathEl::Line(x, y) => {
+                line_to(&mut out, cur, (x, y));
+                cur = (x, y);
+            }
+            PathEl::Cubic(a, b, c, d, e, f) => {
+                let mut prev = cur;
+                for i in 1..=12 {
+                    let p = cubic_at([cur, (a, b), (c, d), (e, f)], i as f64 / 12.0);
+                    line_to(&mut out, prev, p);
+                    prev = p;
+                }
+                cur = (e, f);
+            }
+            PathEl::Close => out.push(PathEl::Close),
+        }
+    }
+    out
 }

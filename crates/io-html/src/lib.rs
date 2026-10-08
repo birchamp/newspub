@@ -189,8 +189,12 @@ impl Ctx<'_> {
                 o.push_str("</div>\n");
             }
             ObjectKind::Image(im) => self.image_html(o, ob, im, &label),
-            // Exported by the TEXTART task (TY-19).
-            ObjectKind::WordArt(_) => {}
+            ObjectKind::WordArt(wa) => {
+                let st = object_style(ob);
+                let _ = writeln!(o, "<div class=\"obj wordart\"{label} style=\"{st}\">");
+                wordart_svg(o, ob, wa, self.fonts);
+                o.push_str("</div>\n");
+            }
             ObjectKind::Table(tb) => {
                 // Cell text is laid out relative to the table's top-left corner.
                 let st = object_style(ob);
@@ -411,6 +415,70 @@ fn svg_paint(sh: &Shape, id_hint: u64, defs: &mut String) -> String {
         return format!("url(#{gid})");
     }
     sh.fill.as_ref().map(css_color).unwrap_or_else(|| "none".to_string())
+}
+
+/// WordArt (TY-19) as an inline SVG with the same outlines the other back ends draw.
+fn wordart_svg(o: &mut String, ob: &Object, wa: &newpub_core::wordart::WordArt, fonts: &FontStore) {
+    use newpub_render::PathEl;
+    let (w, h) = (ob.rect.w.max(0.0), ob.rect.h.max(0.0));
+    let mut d = String::new();
+    for el in newpub_render::display::wordart_path(fonts, wa, w, h) {
+        match el {
+            PathEl::Move(x, y) => d.push_str(&format!("M{x:.2} {y:.2} ")),
+            PathEl::Line(x, y) => d.push_str(&format!("L{x:.2} {y:.2} ")),
+            PathEl::Cubic(a, b, c, e, x, y) => d.push_str(&format!("C{a:.2} {b:.2} {c:.2} {e:.2} {x:.2} {y:.2} ")),
+            PathEl::Close => d.push_str("Z "),
+        }
+    }
+    let mut defs = String::new();
+    let mut fill = css_color(&wa.fill);
+    if let Some(g) = wa.gradient.as_ref().filter(|g| !g.stops.is_empty()) {
+        let gid = format!("wa{}", ob.id.0);
+        let stops: String = g
+            .stops
+            .iter()
+            .map(|s| format!("<stop offset=\"{:.3}\" stop-color=\"{}\"/>", s.at.clamp(0.0, 1.0), css_color(&s.color)))
+            .collect();
+        match g.kind {
+            newpub_core::GradientKind::Linear => {
+                let a = g.angle.to_radians();
+                let (dx, dy) = (a.cos() / 2.0, a.sin() / 2.0);
+                let _ = write!(
+                    defs,
+                    "<linearGradient id=\"{gid}\" x1=\"{:.3}\" y1=\"{:.3}\" x2=\"{:.3}\" y2=\"{:.3}\">{stops}</linearGradient>",
+                    0.5 - dx,
+                    0.5 - dy,
+                    0.5 + dx,
+                    0.5 + dy
+                );
+            }
+            newpub_core::GradientKind::Radial => {
+                let _ = write!(defs, "<radialGradient id=\"{gid}\">{stops}</radialGradient>");
+            }
+        }
+        fill = format!("url(#{gid})");
+    }
+    let stroke = match &wa.outline {
+        Some(s) => {
+            format!(" stroke=\"{}\" stroke-width=\"{}\" stroke-linejoin=\"round\"", css_color(&s.color), s.width.0)
+        }
+        None => " stroke=\"none\"".to_string(),
+    };
+    let defs = if defs.is_empty() { String::new() } else { format!("<defs>{defs}</defs>") };
+    let alt = if ob.decorative { String::new() } else { ob.alt_text.clone().unwrap_or_else(|| wa.text.clone()) };
+    let aria = if alt.is_empty() {
+        " aria-hidden=\"true\"".to_string()
+    } else {
+        format!(" role=\"img\" aria-label=\"{}\"", escape(&alt))
+    };
+    let _ = writeln!(
+        o,
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{}\" height=\"{}\" viewBox=\"0 0 {w} {h}\" \
+         style=\"position:absolute;left:0;top:0;overflow:visible\"{aria}>{defs}<path d=\"{}\" fill=\"{fill}\"{stroke}/></svg>",
+        px(w),
+        px(h),
+        d.trim_end()
+    );
 }
 
 fn shape_svg(o: &mut String, ob: &Object, sh: &Shape) {
