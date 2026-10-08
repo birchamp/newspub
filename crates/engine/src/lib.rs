@@ -692,9 +692,7 @@ impl Session {
                 }
                 Value::Array(out)
             }
-            AccessibilityCheck => {
-                return Err(EngineError::Other(format!("query {q:?} is not implemented yet")));
-            }
+            AccessibilityCheck => self.accessibility_check(),
             TextBounds { frame } => {
                 let o = self.doc.object(*frame)?.clone();
                 let l = self.layout();
@@ -760,4 +758,98 @@ fn find_matches(hay: &str, needle: &str, match_case: bool, whole_word: bool) -> 
         }
     }
     out
+}
+
+/// WCAG relative luminance of an sRGB colour.
+fn relative_luminance(c: &Color) -> f64 {
+    let [r, g, b, _] = c.to_rgba8();
+    let lin = |v: u8| {
+        let v = f64::from(v) / 255.0;
+        if v <= 0.03928 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+    };
+    0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+}
+
+fn contrast_ratio(a: &Color, b: &Color) -> f64 {
+    let (la, lb) = (relative_luminance(a), relative_luminance(b));
+    (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
+}
+
+impl Session {
+    /// Page objects in z-order, descending into groups.
+    fn flat_page_objects(&self, ids: &[Id], out: &mut Vec<Id>) {
+        for id in ids {
+            if let Some(o) = self.doc.objects.get(id) {
+                out.push(*id);
+                if let ObjectKind::Group { children } = &o.kind {
+                    self.flat_page_objects(children, out);
+                }
+            }
+        }
+    }
+
+    fn accessibility_check(&mut self) -> Value {
+        let layout = self.layout();
+        let mut out = vec![];
+        let issue = |rule: &str, object: Id, page: usize, message: &str| json!({"rule": rule, "object": object, "page": page, "message": message});
+        for pi in 0..self.doc.pages.len() {
+            let page = &self.doc.pages[pi];
+            let bg = page
+                .background
+                .clone()
+                .or_else(|| self.doc.master_for_page(pi).and_then(|m| m.background.clone()))
+                .unwrap_or(Color::WHITE);
+            let mut ids = vec![];
+            self.flat_page_objects(&page.objects, &mut ids);
+            // Overflow is reported on the last frame of a story, once.
+            for id in ids {
+                let Some(o) = self.doc.objects.get(&id) else { continue };
+                let (mut missing, mut low, mut small, mut over) = (None, false, false, false);
+                match &o.kind {
+                    ObjectKind::Image(_) | ObjectKind::Shape(_) => {
+                        let has_alt = o.alt_text.as_deref().is_some_and(|t| !t.trim().is_empty());
+                        if !o.decorative && !has_alt {
+                            let m = if matches!(o.kind, ObjectKind::Image(_)) {
+                                "Picture has no alt text"
+                            } else {
+                                "Shape has no alt text"
+                            };
+                            missing = Some(m);
+                        }
+                    }
+                    ObjectKind::Text(t) => {
+                        if let Some(st) = self.doc.stories.get(&t.story) {
+                            let text: Vec<char> = st.text.chars().collect();
+                            for (range, _) in st.runs() {
+                                if !text[range.clone()].iter().any(|c| !c.is_whitespace() && *c != PARA_SEP) {
+                                    continue;
+                                }
+                                let at = range.start;
+                                let pi_ = st.para_index_at(at);
+                                let rc = self.doc.resolve_char(&st.paras[pi_], &st.span_attrs_at(at));
+                                low |= contrast_ratio(&rc.color, &bg) < 4.5;
+                                small |= rc.size < 8.0;
+                            }
+                            over = st.frames.last() == Some(&id)
+                                && layout.stories.get(&t.story).is_some_and(|s| s.overflow_at.is_some());
+                        }
+                    }
+                    ObjectKind::Group { .. } => {}
+                }
+                if let Some(m) = missing {
+                    out.push(issue("missing_alt_text", id, pi, m));
+                }
+                if low {
+                    out.push(issue("low_contrast", id, pi, "Text colour has low contrast with the page"));
+                }
+                if small {
+                    out.push(issue("small_text", id, pi, "Text is smaller than 8 pt"));
+                }
+                if over {
+                    out.push(issue("overflow", id, pi, "Text does not fit in its text box"));
+                }
+            }
+        }
+        Value::Array(out)
+    }
 }
