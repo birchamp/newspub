@@ -29,7 +29,8 @@ pub fn write<W: Write + Seek>(doc: &Document, w: W) -> Result<(), NativeError> {
     z.start_file("document.json", opts)?;
     z.write_all(&serde_json::to_vec_pretty(doc)?)?;
     for a in doc.assets.values() {
-        if a.link.is_some() && a.bytes.is_empty() {
+        // Linked pictures are never stored inside the file; only the link path is kept.
+        if a.link.is_some() {
             continue;
         }
         z.start_file(
@@ -53,20 +54,20 @@ pub fn read<R: Read + Seek>(r: R) -> Result<Document, NativeError> {
     }
     let mut doc: Document = serde_json::from_value(migrate(probe, v))?;
     for a in doc.assets.values_mut() {
-        let name = format!("media/{}", a.id.0);
-        match z.by_name(&name) {
-            Ok(mut f) => {
-                let mut b = vec![];
-                f.read_to_end(&mut b)?;
-                a.bytes = Arc::from(b);
-            }
-            Err(_) if a.link.is_some() => {
-                if let Some(bytes) = a.link.as_ref().and_then(|p| std::fs::read(p).ok()) {
-                    a.bytes = Arc::from(bytes);
-                }
-            }
-            Err(_) => return Err(NativeError::MissingMedia(name)),
+        if let Some(link) = &a.link {
+            // A linked picture is loaded from its file. If the file is gone the bytes stay empty
+            // (the picture is reported as missing); this is not an error.
+            a.bytes = match std::fs::read(link) {
+                Ok(bytes) => Arc::from(bytes),
+                Err(_) => Arc::from(Vec::new()),
+            };
+            continue;
         }
+        let name = format!("media/{}", a.id.0);
+        let mut f = z.by_name(&name).map_err(|_| NativeError::MissingMedia(name.clone()))?;
+        let mut b = vec![];
+        f.read_to_end(&mut b)?;
+        a.bytes = Arc::from(b);
     }
     doc.version = FORMAT_VERSION;
     Ok(doc)
@@ -90,4 +91,10 @@ pub fn save(doc: &Document, path: &std::path::Path) -> Result<(), NativeError> {
 
 pub fn open(path: &std::path::Path) -> Result<Document, NativeError> {
     read(std::io::BufReader::new(std::fs::File::open(path)?))
+}
+
+/// Names of all entries inside a saved `.npub` file, in archive order.
+pub fn entries(path: &std::path::Path) -> Result<Vec<String>, NativeError> {
+    let z = zip::ZipArchive::new(std::io::BufReader::new(std::fs::File::open(path)?))?;
+    Ok(z.file_names().map(str::to_string).collect())
 }
