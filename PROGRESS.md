@@ -166,3 +166,13 @@ The dashboard parses this file:
 - SH-08 UI (Sonnet, approved by the lead's review): Freeform tool (click points, Enter or click the first point to finish) and on-canvas point editing ("Edit Points": Point n handles, drag, smooth, corner, add, delete). The journey's JSON path was my own error (`/kind/kind/bezier/closed`).
 - CI conformance job (Linux): veraPDF PDF/UA-1 on J-AX-003 and J-EX-007 output, epubcheck 5.1.0 on the EPUB, libgxps `xpstopdf` rendering of the XPS plus a text check, and a real `lp` print to a CUPS cups-pdf printer (conformance journey UI-PR-101 with NEWPUB_REAL_PRINT=1).
   - PDF/X-4 has no free validator, so it stays unvalidated externally (noted in REPORT.md).
+
+### 2026-10-09 00:55 — Conformance green; next steps done
+- CI run 37860525724 (commit 545d57d) is green: 120/120 journeys on all three OSes, plus the conformance job.
+  - veraPDF PDF/UA-1 passes on J-AX-003 and the J-EX-007 UA export.
+  - epubcheck 5.1.0 passes on the EPUB.
+  - libgxps renders the XPS with its text intact.
+  - A real `lp` print to the CUPS cups-pdf printer arrives with its text.
+- My first conformance run also validated a plain, non-UA export as UA-1, which was a wrong expectation. veraPDF now runs only on files that claim PDF/UA and logs the failed rules.
+- PARITY: 130/130 (PF-01 and SH-08 checked from CI 41e16cb).
+- REPORT.md updated. Remaining work needs people (B-003 usability testing) or real Windows/macOS printers and viewers.

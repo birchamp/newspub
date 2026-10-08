@@ -1,10 +1,20 @@
 # newpub-rs: status report
 
-**Date:** 2026-10-08.
-**Commit:** 6c64ad8, branch `claude/happy-davinci-r0kfpv`.
-**CI:** run 37854377656. Clippy, build and 116/116 journeys pass on Linux, macOS and Windows.
+**Date:** 2026-10-09.
+**Commit:** 545d57d, branch `claude/happy-davinci-r0kfpv`.
+**CI:** run 37860525724. Clippy, build and 120/120 journeys pass on Linux, macOS and Windows, and the conformance job is green.
 
-**All 129 PARITY items, P0–P3, pass their journeys on all three OSes.** IM-11 (EMF/WMF) was split out of IM-09 so that each could be checked honestly.
+**All 130 PARITY items, P0–P3 plus the new PF-01, pass their journeys on all three OSes.** IM-11 (EMF/WMF) was split out of IM-09 so that each could be checked honestly.
+
+## External conformance (CI job `conformance`, Linux)
+
+| Check | Tool | Result |
+|-------|------|--------|
+| PDF/UA-1, accessibility journey and newsletter exports | veraPDF | compliant |
+| EPUB 3 fixed layout | epubcheck 5.1.0 | valid |
+| XPS | libgxps `xpstopdf` (independent renderer) and pdftotext | renders, text intact |
+| Print hand-off | `lp`, then CUPS, then the cups-pdf virtual printer | job printed, text intact |
+| PDF/X-4 | none (no free validator exists) | not externally validated |
 
 ## Parity by area
 
@@ -30,14 +40,19 @@
 
 Each of these is real behaviour that a journey does not cover, or that is only partly done.
 
-1. **Right-to-left text in PDFs.** The PDF text layer is in visual order, so copying Hebrew or Arabic reverses it. Fix: tag every export and wrap RTL runs in /ActualText spans; krilla allows these only inside a tag tree.
-2. **Printing to a real printer.** The print hand-off (`lp`, PowerShell PrintTo) has not run against a real printer; CI checks the spooled PDF.
-3. **XPS.** The output is well-formed, but has not been opened in an XPS viewer. GIF and WebP pictures are dropped from XPS. EPUB does not embed .ttc fonts.
-4. **EMF/WMF.** Only the common drawing records are converted. Bitmaps, clipping regions, gradients and some text features inside metafiles are skipped. Real-world clip art may need more records.
-5. **Separations.** Overprint is ignored on group children. Overprinting images at partial opacity are approximated. Composite PDFs do not carry an overprint flag.
-6. **Freeform shapes.** Point editing is available through commands and the API. The canvas has no point-editing handles yet.
-7. **Tagged PDF.** No table header cells or scope. veraPDF has not been run on PDF/UA or PDF/X output.
-8. **.pub import.** Covers text, frames, pictures, fonts and basic formatting. Masters, tables, shapes and WordArt are not imported.
+1. **PDF/X-4** has no external validator. Our own checks cover the output intent, the ICC profile, the XMP identification and the boxes.
+2. **Printing** is verified on Linux through CUPS. The macOS (`lp`) and Windows (PowerShell PrintTo) hand-offs have not run against a printer.
+3. **XPS** renders in libgxps but has not been tried in Microsoft's XPS Viewer. GIF and WebP pictures are dropped from XPS. EPUB does not embed .ttc fonts.
+4. **EMF/WMF** conversion covers the common drawing records only. Bitmaps, clipping and gradients inside metafiles are skipped.
+5. **Separations** ignore overprint on group children. Composite PDFs carry no overprint flag.
+6. **Tagged PDF**: tables have no TH or scope. PDF/UA is validated only for the two journey documents.
+7. **.pub import** covers text, frames, pictures, fonts and basic formatting only.
+8. **Freeform point editing** covers Bézier shapes. Older polyline `Path` shapes can enter point editing, but their edits are refused with a status message.
+
+Fixed since the previous report:
+- Right-to-left copy and paste: tagged export everywhere, with /ActualText.
+- Layout performance: per-keystroke layout of a 20-page story went from 8 s to about 45 ms.
+- On-canvas freeform drawing and point editing.
 
 ## Top risks
 
@@ -49,9 +64,8 @@ Each of these is real behaviour that a journey does not cover, or that is only p
 
 ## Recommended next steps
 
-1. Fix RTL copy and paste: make every PDF tagged and add ActualText.
-2. Add a veraPDF check in CI for PDF/UA and PDF/X-4.
-3. On-canvas Bézier point editing, and a freeform drawing tool in the app.
-4. Real-device tests: printing on each OS, and opening XPS and EPUB output in viewers.
-5. Incremental layout for performance on long documents.
-6. Usability testing with the target users (newsletter and bulletin makers), then a polish pass on the UI.
+1. **Usability testing with real target users** (blocker B-003 in PROGRESS.md: needs people). Then a UI polish pass based on what they find.
+2. **Print and XPS on Windows and macOS**, checked by hand on a real printer and in XPS Viewer.
+3. **Wider PDF/UA coverage:** table headers (TH, scope), and veraPDF across all built-in templates.
+4. **Truly incremental layout:** re-flow only from the first changed paragraph. The caches make edits cheap today, but a 100-page story still re-flows in full.
+5. **Point editing for legacy polyline shapes:** convert them to Bézier on the first edit.
