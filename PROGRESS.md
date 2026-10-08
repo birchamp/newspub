@@ -63,6 +63,7 @@ The dashboard parses this file:
 - Not approved, then fixed by the lead:
   - LAYERS (LY-02). Escalation: Haiku failed twice and moved to Sonnet, which also failed twice. Every failure was the same blocker: the Object query omitted `layer` when it was None (serde skip), so the fix lay outside the task's files. Lead decision: the Object query reports `"layer": null`; the file format is unchanged.
   - EFFECTS (SH-05/07, IM-06/07). Blocked by the lead's ShapeKinds stub, which was already on the lead branch, and by a wrong J-IM-006 probe: [216,180] sits on the yellow box's corner. The probe moved to [288,144], image pixel (300,100), which is blue.
+- ESCALATION: LAYERS (LY-02). Haiku failed twice, so it moved to Sonnet; Sonnet failed twice; the lead resolved it. Root cause was the out-of-scope Object query field.
 - Lead merge work:
   - render `push_object` merged as page-aware plus the screen flag;
   - Table arms in io-html and pdfq;
