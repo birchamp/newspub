@@ -229,6 +229,12 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | FR-02 | P1 | Replace / replace all (one undo step) | J-FR-001 | [x] |
 | FR-03 | P3 | Find/replace formatting and special characters | J-FR-002 | [x] |
 
+## PF: Performance
+
+| ID | P | Feature | Journeys | Done |
+|----|---|---------|----------|------|
+| PF-01 | P2 | Editing and exporting a long publication stays responsive (no quadratic slow-downs) | J-PF-001 | [ ] |
+
 ## UI: Application shell (real-UI journeys)
 
 | ID | P | Feature | Journeys | Done |

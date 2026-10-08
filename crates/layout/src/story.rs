@@ -1079,7 +1079,7 @@ fn emit_line(
         } else {
             let t = match field {
                 Some(f) => f.to_string(),
-                None => story.slice(chars.clone()).to_string(),
+                None => crate::text::slice(story, chars.clone()).to_string(),
             };
             let b0 = run.text.len();
             run.text.push_str(&t);
@@ -1123,7 +1123,7 @@ fn emit_line(
         let st = &p.styles[g.style];
         let gx = pen + g.dx;
         let gy = baseline - st.shift - g.dy;
-        if !(g.tab || g.adv == 0.0 && g.chars.len() == 1 && story.slice(g.chars.clone()) == "\u{2028}") {
+        if !(g.tab || g.adv == 0.0 && g.chars.len() == 1 && crate::text::slice(story, g.chars.clone()) == "\u{2028}") {
             push(g.style, g.glyph, g.chars.clone(), gx, gy, g.adv, false, g.field.as_deref(), &mut cur, &mut runs);
         }
         if g.tab
@@ -1268,7 +1268,7 @@ fn marker_run(p: &Para, m: &para::Marker, para_start: usize, x: f64, baseline: f
 
 /// Run for the dropped capital(s); glyphs keep their story char indices.
 fn drop_run(story: &Story, p: &Para, d: &para::DropGlyphs, x: f64, baseline: f64) -> GlyphRun {
-    let text = story.slice(d.chars.clone()).to_string();
+    let text = crate::text::slice(story, d.chars.clone()).to_string();
     let style = d.glyphs.first().map(|g| g.style).unwrap_or(0);
     let mut pen = x;
     let mut glyphs = vec![];

@@ -38,7 +38,22 @@ impl Face {
         ttf_parser::Face::parse(self.bytes(), self.index).ok()
     }
     pub fn has_glyph(&self, c: char) -> bool {
-        self.ttf().and_then(|f| f.glyph_index(c)).is_some()
+        // Cached per face data and char: parsing the face for every lookup dominated layout time.
+        static CACHE: std::sync::LazyLock<
+            std::sync::Mutex<std::collections::HashMap<(usize, usize, u32, char), bool>>,
+        > = std::sync::LazyLock::new(Default::default);
+        let key = (self.bytes().as_ptr() as usize, self.bytes().len(), self.index, c);
+        if let Some(v) = CACHE.lock().ok().and_then(|m| m.get(&key).copied()) {
+            return v;
+        }
+        let v = self.ttf().and_then(|f| f.glyph_index(c)).is_some();
+        if let Ok(mut m) = CACHE.lock() {
+            if m.len() > 200_000 {
+                m.clear();
+            }
+            m.insert(key, v);
+        }
+        v
     }
     /// Natural line height in em.
     pub fn line_height(&self) -> f64 {

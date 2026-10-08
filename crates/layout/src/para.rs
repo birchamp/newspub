@@ -161,7 +161,7 @@ pub fn build(
     let mark_rc = doc.resolve_char(pattrs, &mark_attrs);
     styles.push(RunStyle::new(fonts, &mark_rc, scale, None));
     let mark = 0;
-    let levels = bidi_levels(story.slice(range.clone()), doc.resolve_para(pattrs).rtl);
+    let levels = bidi_levels(crate::text::slice(story, range.clone()), doc.resolve_para(pattrs).rtl);
 
     for (rr, attrs) in story.runs() {
         let (s, e) = (rr.start.max(range.start), rr.end.min(range.end));
@@ -185,7 +185,7 @@ pub fn build(
             }
             continue;
         }
-        let text: Vec<char> = story.slice(s..e).chars().collect();
+        let text: Vec<char> = crate::text::slice(story, s..e).chars().collect();
         // Caps transform, 1:1 per char so indices stay aligned.
         let disp: Vec<char> = text
             .iter()
@@ -360,7 +360,7 @@ pub fn bidi_levels(text: &str, rtl_base: bool) -> Vec<u8> {
 
 /// Splits glyphs at UAX #14 break opportunities (and around tabs).
 fn segment(story: &Story, range: Range<usize>, glyphs: Vec<G>) -> VecDeque<Seg> {
-    let text = story.slice(range.clone());
+    let text = crate::text::slice(story, range.clone());
     let chars: Vec<char> = text.chars().collect();
     let mut b2c = vec![0usize; text.len() + 1];
     for (ci, (b, _)) in text.char_indices().enumerate() {
@@ -424,7 +424,8 @@ pub fn hyphen_points(story: &Story, seg: &Seg) -> Vec<usize> {
     let Some(dict) = DICT.get_or_init(|| Standard::from_embedded(Language::EnglishUS).ok()) else {
         return vec![];
     };
-    let word: String = story.slice(seg.start..seg.end).chars().take_while(|c| c.is_alphabetic()).collect();
+    let word: String =
+        crate::text::slice(story, seg.start..seg.end).chars().take_while(|c| c.is_alphabetic()).collect();
     if word.chars().count() < 5 {
         return vec![];
     }
@@ -493,7 +494,11 @@ pub fn drop_cap(
     body_cap: f64,
 ) -> Option<DropGlyphs> {
     let range = p.range.clone();
-    let wanted = story.slice(range.clone()).chars().take(dc.chars as usize).take_while(|c| !c.is_whitespace()).count();
+    let wanted = crate::text::slice(story, range.clone())
+        .chars()
+        .take(dc.chars as usize)
+        .take_while(|c| !c.is_whitespace())
+        .count();
     if wanted == 0 || dc.lines == 0 {
         return None;
     }
@@ -509,7 +514,7 @@ pub fn drop_cap(
             break;
         }
     }
-    let text = story.slice(range.start..cutoff).to_string();
+    let text = crate::text::slice(story, range.start..cutoff).to_string();
     let chars: Vec<char> = text.chars().collect();
     let mut rc = first_rc(doc, story, pi, &range);
     rc.baseline = Baseline::Normal;

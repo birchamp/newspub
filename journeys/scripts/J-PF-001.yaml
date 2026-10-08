@@ -1,0 +1,67 @@
+id: J-PF-001
+title: Editing a long publication stays responsive (layout scales with document length)
+covers: [PF-01]
+steps:
+  # ~100 KB of text in one two-column story flowed over ~20 pages
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [0.75in, 0.75in, 7in, 9.5in], columns: 2}
+    as: f
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  # limits are about 4× what a laptop takes, so slower CI machines pass and quadratic regressions do not
+  - timed:
+      max_ms: 3000
+      steps:
+        - autoflow: {frame: $f}
+  - expect: {query: {q: page_count}, gte: 18}
+  - expect: {query: {q: overflow, target: $f}, equals: false}
+  # typing on page 1 re-flows every page: 10 keystrokes, each followed by a layout query, within 2 s
+  - timed:
+      max_ms: 2000
+      steps:
+        - type_text: {target: $f, at: 10, text: "a"}
+        - expect: {query: {q: frame_text, frame: $f}, len: {gt: 0}}
+        - type_text: {target: $f, at: 11, text: "b"}
+        - expect: {query: {q: frame_text, frame: $f}, len: {gt: 0}}
+        - type_text: {target: $f, at: 12, text: "c"}
+        - expect: {query: {q: frame_text, frame: $f}, len: {gt: 0}}
+        - type_text: {target: $f, at: 13, text: "d"}
+        - expect: {query: {q: frame_text, frame: $f}, len: {gt: 0}}
+        - type_text: {target: $f, at: 14, text: "e"}
+        - expect: {query: {q: frame_text, frame: $f}, len: {gt: 0}}
+        - type_text: {target: $f, at: 15, text: "f"}
+        - expect: {query: {q: frame_text, frame: $f}, len: {gt: 0}}
+        - type_text: {target: $f, at: 16, text: "g"}
+        - expect: {query: {q: frame_text, frame: $f}, len: {gt: 0}}
+        - type_text: {target: $f, at: 17, text: "h"}
+        - expect: {query: {q: frame_text, frame: $f}, len: {gt: 0}}
+        - type_text: {target: $f, at: 18, text: "i"}
+        - expect: {query: {q: frame_text, frame: $f}, len: {gt: 0}}
+        - type_text: {target: $f, at: 19, text: "j"}
+        - expect: {query: {q: frame_text, frame: $f}, len: {gt: 0}}
+  # keystroke plus re-render of the visible page, 5 times, within 2 s
+  - timed:
+      max_ms: 2000
+      steps:
+        - type_text: {target: $f, at: 20, text: "k"}
+        - snapshot: {page: 0, name: s1, dpi: 96}
+        - type_text: {target: $f, at: 21, text: "l"}
+        - snapshot: {page: 0, name: s2, dpi: 96}
+        - type_text: {target: $f, at: 22, text: "m"}
+        - snapshot: {page: 0, name: s3, dpi: 96}
+        - type_text: {target: $f, at: 23, text: "n"}
+        - snapshot: {page: 0, name: s4, dpi: 96}
+        - type_text: {target: $f, at: 24, text: "o"}
+        - snapshot: {page: 0, name: s5, dpi: 96}
+  # export of the whole publication
+  - timed:
+      max_ms: 6000
+      steps:
+        - export_pdf: {path: long.pdf}
+  - expect_pdf: {file: long.pdf, text_contains: ["abcdefghij"]}

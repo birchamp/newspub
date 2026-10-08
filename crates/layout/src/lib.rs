@@ -5,6 +5,7 @@ pub mod fonts;
 mod para;
 pub mod shape;
 mod story;
+mod text;
 
 pub use fonts::{Face, FaceId, FontStore};
 
@@ -138,6 +139,7 @@ impl FrameLayout {
 
 /// Lays out one story (no per-page master layouts). Used by the engine's autofit fixups.
 pub fn layout_one(doc: &Document, fonts: &FontStore, story: Id) -> Option<(StoryLayout, Vec<FrameLayout>)> {
+    let _pass = text::Pass::begin();
     doc.stories.get(&story).map(|s| story::layout_story(doc, fonts, s, None))
 }
 
@@ -149,6 +151,7 @@ pub fn cell_natural_height(
     row: usize,
     col: usize,
 ) -> f64 {
+    let _pass = text::Pass::begin();
     let (Some(cell), Some(mut rect)) = (table.cell(row, col), table.cell_rect(row, col)) else { return 0.0 };
     let Some(story) = doc.stories.get(&cell.story) else { return 0.0 };
     rect.h = 1.0e6;
@@ -161,6 +164,7 @@ pub fn cell_natural_height(
 
 /// Lays out every story in the document.
 pub fn layout_document(doc: &Document, fonts: &FontStore) -> DocLayout {
+    let _pass = text::Pass::begin();
     let mut out = DocLayout::default();
     for story in doc.stories.values() {
         let (sl, frames) = story::layout_story(doc, fonts, story, None);

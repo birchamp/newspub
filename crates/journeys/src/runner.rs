@@ -257,6 +257,19 @@ pub fn run_step(s: &mut Session, ctx: &mut Ctx, step: &Value) -> Result<()> {
                 std::fs::remove_file(path_of("path")?)?;
             }
         }
+        "timed" => {
+            // timed: {max_ms, steps: [...]} — runs the steps and fails if they take longer than max_ms (wall clock).
+            let max = args.get("max_ms").and_then(|v| v.as_f64()).ok_or_else(|| anyhow!("timed needs max_ms"))?;
+            let inner = m[name].get("steps").and_then(|v| v.as_array()).ok_or_else(|| anyhow!("timed needs steps"))?;
+            let t0 = std::time::Instant::now();
+            for st in inner {
+                run_step(s, ctx, st)?;
+            }
+            let ms = t0.elapsed().as_secs_f64() * 1000.0;
+            if ms > max {
+                bail!("took {ms:.0} ms, limit {max} ms");
+            }
+        }
         "let" => {
             // let: {name: value-or-query}
             let spec = args.as_object().ok_or_else(|| anyhow!("let needs a map"))?;

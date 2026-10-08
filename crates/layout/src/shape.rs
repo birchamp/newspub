@@ -29,8 +29,46 @@ fn tag(s: &str) -> Option<Tag> {
     (b.len() == 4).then(|| Tag::from_bytes(&[b[0], b[1], b[2], b[3]]))
 }
 
+/// Shaping results are cached: layout re-runs after every edit, but most paragraphs are unchanged.
+/// Key: the face's data address and index (a FontStore's faces never change), the text and the options.
+type ShapeKey = (usize, usize, u32, String, String, u8, Vec<String>);
+
+static SHAPE_CACHE: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<ShapeKey, Vec<ShapedGlyph>>>> =
+    std::sync::LazyLock::new(Default::default);
+const SHAPE_CACHE_MAX: usize = 50_000;
+
 /// Shapes `text` with `face`. Returns glyphs in visual order with em-unit metrics.
 pub fn shape(face: &Face, text: &str, o: &ShapeOpts) -> Vec<ShapedGlyph> {
+    let flags = o.kerning as u8
+        | (o.ligatures as u8) << 1
+        | (o.dlig as u8) << 2
+        | (o.small_caps as u8) << 3
+        | (o.rtl as u8) << 4;
+    let key: ShapeKey = (
+        face.bytes().as_ptr() as usize,
+        face.bytes().len(),
+        face.index,
+        face.postscript_name.clone(),
+        text.to_string(),
+        flags,
+        o.extra.to_vec(),
+    );
+    if let Ok(cache) = SHAPE_CACHE.lock()
+        && let Some(hit) = cache.get(&key)
+    {
+        return hit.clone();
+    }
+    let out = shape_uncached(face, text, o);
+    if let Ok(mut cache) = SHAPE_CACHE.lock() {
+        if cache.len() >= SHAPE_CACHE_MAX {
+            cache.clear();
+        }
+        cache.insert(key, out.clone());
+    }
+    out
+}
+
+fn shape_uncached(face: &Face, text: &str, o: &ShapeOpts) -> Vec<ShapedGlyph> {
     let Some(rb) = rustybuzz::Face::from_slice(face.bytes(), face.index) else {
         return vec![];
     };

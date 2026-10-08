@@ -7,7 +7,9 @@ The dashboard parses this file:
 
 ## Open blockers (need human input)
 
-(none; B-001 resolved 2026-10-08: the dashboard is published as a claude.ai page at the user's request, and GitHub Pages also deploys from CI)
+- [B-003] Usability testing with the target users (newsletter and bulletin makers) needs real people: recruit 3–5 users, give them the starter templates and a short task list (make a 4-page newsletter, print a bulletin booklet, mail-merge a letter), and record where they get stuck. The UI polish backlog depends on what they find.
+
+(B-001 resolved 2026-10-08: the dashboard is published as a claude.ai page at the user's request, and GitHub Pages also deploys from CI.)
 
 ## Log
 
@@ -150,3 +152,14 @@ The dashboard parses this file:
 - Checked off 16 P3 items: TB-05, FR-03, IM-09, IM-10, IM-11, LY-04, PG-11, TY-18, TY-19, SH-08, BB-05, MM-05, MM-06, PR-08, PR-09, EX-06.
 - PARITY now stands at 129/129.
 - REPORT.md is rewritten with the gaps, risks and next steps that remain.
+
+### 2026-10-09 00:30 — Next steps (user: "go ahead with the recommended next steps")
+- RTL copy and paste fixed: every PDF export is now tagged, not only PDF/UA. Right-to-left runs are drawn in visual order inside marked content whose /ActualText holds the logical text.
+  - J-TY-016 asserts the Hebrew in logical order through the new pdfcheck `actual_text_contains`.
+  - New J-EX-007 asserts that a plain export carries structure, alt text, language and title.
+- Performance (new PARITY area PF, item PF-01; J-PF-001 with a new `timed` runner step):
+  - Before: a 20-page, ~100 KB story took 8 s to lay out after each keystroke. `Story::slice` scans from the start, which made layout quadratic in story length.
+  - Fixes: per-pass offset tables for slicing in layout; a shaping cache keyed by face, text and options, so unchanged paragraphs are not reshaped; a glyph-coverage cache.
+  - After: about 45 ms per edit and 550 ms to autoflow 21 pages. The journey limits are about 4× the local times.
+- SH-08 scope widened to include the on-canvas freeform tool and point handles (UI-SH-008), so SH-08 is unchecked again until that work lands. A Sonnet agent is on it.
+- Usability testing with real target users needs people, so it is a blocker for a human (B-003).
