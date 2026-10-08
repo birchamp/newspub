@@ -2400,6 +2400,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "newpub-io-metafile"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "newpub-io-native"
 version = "0.1.0"
 dependencies = [

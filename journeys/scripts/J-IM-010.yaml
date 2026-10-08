@@ -1,0 +1,29 @@
+id: J-IM-010
+title: Insert Windows metafiles (EMF and WMF) as vector pictures
+covers: [IM-11]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  # both fixtures draw, in a 200 × 100 frame: a blue rectangle (left half), a red ellipse (right half),
+  # and a green 4-unit line along the bottom (tools/fixtures/make_metafiles.py)
+  - insert_picture: {path: fixtures/shapes.emf, page: 0, x: 1in, y: 1in, width: 2in}
+    as: e
+  - expect: {query: {q: object, id: $e}, path: /rect/h, approx: [72, 0.5]}
+  - insert_picture: {path: fixtures/shapes.wmf, page: 0, x: 1in, y: 3in, width: 2in}
+    as: w
+  - expect: {query: {q: object, id: $w}, path: /rect/h, approx: [72, 0.5]}
+  - expect_png:
+      page: 0
+      dpi: 144
+      pixels:
+        - {at: [100, 108], rgb: [30, 90, 160], tol: 30}
+        - {at: [180, 108], rgb: [220, 40, 40], tol: 30}
+        - {at: [180, 141], rgb: [40, 160, 60], tol: 40}
+        - {at: [212, 83], rgb: [255, 255, 255], tol: 10}
+        - {at: [100, 252], rgb: [30, 90, 160], tol: 30}
+        - {at: [180, 252], rgb: [220, 40, 40], tol: 30}
+        - {at: [180, 285], rgb: [40, 160, 60], tol: 40}
+        - {at: [212, 227], rgb: [255, 255, 255], tol: 10}
+  # in PDF the metafiles stay vector artwork
+  - export_pdf: {path: metafiles.pdf}
+  - expect_pdf: {file: metafiles.pdf, images: 0, ink: [{page: 1, rect: [80, 80, 50, 50], min: 0.95}, {page: 1, rect: [80, 224, 50, 50], min: 0.95}]}
+  - expect_roundtrip: {}
