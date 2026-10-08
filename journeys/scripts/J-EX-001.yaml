@@ -1,0 +1,27 @@
+id: J-EX-001
+title: Export PDF — vector text with embedded subset fonts, images, and shapes
+covers: [EX-01]
+steps:
+  - new_document: {width: 210mm, height: 297mm, pages: 2}
+  - set_meta: {title: "Spring Newsletter", author: "Parish Office"}
+  - add_text_frame: {page: 0, rect: [20mm, 20mm, 170mm, 40mm]}
+    as: h
+  - insert_text: {target: $h, text: "Spring Newsletter"}
+  - format_chars: {target: $h, attrs: {size: 32, bold: true, font: "Liberation Sans"}}
+  - add_text_frame: {page: 0, rect: [20mm, 70mm, 170mm, 200mm]}
+    as: body
+  - insert_text: {target: $body, text: "@file:fixtures/short.txt"}
+  - insert_picture: {path: fixtures/photo.png, page: 1, x: 20mm, y: 20mm, width: 100mm}
+  - add_shape: {page: 1, rect: [20mm, 120mm, 170mm, 10mm], kind: rect, fill: "#336699"}
+  - export_pdf: {path: newsletter.pdf}
+  - expect_pdf:
+      file: newsletter.pdf
+      pages: 2
+      page_size: {w: 595.28, h: 841.89}
+      fonts: {contains: ["LiberationSans-Bold", "Carlito-Regular"], embedded: true, count: 2}
+      images: 1
+      page_text:
+        - {page: 1, contains: ["Spring Newsletter", "Welcome to the spring newsletter.", "next month's concert."]}
+        - {page: 2, empty: true}
+      ink:
+        - {page: 2, rect: [60, 345, 470, 20], min: 0.99}

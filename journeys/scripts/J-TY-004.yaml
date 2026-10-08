@@ -1,0 +1,41 @@
+id: J-TY-004
+title: Named paragraph and character styles — apply, modify, based-on
+covers: [TY-04]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - define_para_style: {name: "Body", para: {space_after: 6}, chars: {font: "Liberation Serif", size: 10}}
+  - define_para_style: {name: "Heading 1", based_on: "Body", para: {space_before: 12}, chars: {size: 20, bold: true}}
+  - define_char_style: {name: "Emphasis", chars: {italic: true, color: "#1f4e79"}}
+  - expect: {query: {q: styles}, equals: {para: ["Body", "Heading 1"], chars: ["Emphasis"]}}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 6in, 4in]}
+    as: f
+  - insert_text: {target: $f, text: "Harvest Supper\nJoin us on Saturday for the harvest supper in the parish hall."}
+  - apply_para_style: {target: $f, style: "Body"}
+  - apply_para_style: {target: $f, start: 0, end: 0, style: "Heading 1"}
+  # Heading 1 inherits the Body font and overrides size and weight
+  - expect: {query: {q: char_attrs, target: $f, at: 2}, path: /font, equals: "Liberation Serif"}
+  - expect: {query: {q: char_attrs, target: $f, at: 2}, path: /size, equals: 20}
+  - expect: {query: {q: char_attrs, target: $f, at: 2}, path: /bold, equals: true}
+  - expect: {query: {q: para_attrs, target: $f, at: 2}, path: /style, equals: "Heading 1"}
+  - expect: {query: {q: para_attrs, target: $f, at: 20}, path: /style, equals: "Body"}
+  - expect: {query: {q: char_attrs, target: $f, at: 20}, path: /size, equals: 10}
+  # character style on "Saturday" (chars 26..34)
+  - apply_char_style: {target: $f, start: 26, end: 34, style: "Emphasis"}
+  - expect: {query: {q: char_attrs, target: $f, at: 30}, path: /italic, equals: true}
+  - expect: {query: {q: char_attrs, target: $f, at: 30}, path: /size, equals: 10}
+  - expect: {query: {q: char_attrs, target: $f, at: 37}, path: /italic, equals: false}
+  # modifying Body changes every paragraph using it, including Heading 1 through based-on
+  - let: {before: {q: frame_lines, frame: $f}}
+  - define_para_style: {name: "Body", chars: {font: "Liberation Sans"}}
+  - expect: {query: {q: char_attrs, target: $f, at: 2}, path: /font, equals: "Liberation Sans"}
+  - expect: {query: {q: char_attrs, target: $f, at: 20}, path: /font, equals: "Liberation Sans"}
+  - expect: {query: {q: char_attrs, target: $f, at: 2}, path: /size, equals: 20}
+  - export_pdf: {path: styles.pdf}
+  - expect_pdf: {file: styles.pdf, fonts: {contains: ["LiberationSans-Bold", "LiberationSans-Italic", "LiberationSans"]}}
+  # a local override beats the style; clearing overrides restores it
+  - format_chars: {target: $f, start: 15, end: 19, attrs: {size: 14}}
+  - expect: {query: {q: char_attrs, target: $f, at: 16}, path: /size, equals: 14}
+  - apply_para_style: {target: $f, start: 20, end: 20, style: "Body", clear_overrides: true}
+  - expect: {query: {q: char_attrs, target: $f, at: 16}, path: /size, equals: 10}
+  - expect_error: {apply_para_style: {target: $f, style: "No Such Style"}}
+  - expect_roundtrip: {}

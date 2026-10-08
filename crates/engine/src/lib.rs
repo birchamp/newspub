@@ -57,6 +57,8 @@ pub struct Session {
     pub dirty: bool,
     /// Directory relative paths are resolved against.
     pub base_dir: PathBuf,
+    /// Incremented on every document change (for view caches).
+    revision: u64,
 }
 
 impl Session {
@@ -72,6 +74,7 @@ impl Session {
             path: None,
             dirty: false,
             base_dir: PathBuf::from("."),
+            revision: 0,
         }
     }
 
@@ -112,6 +115,12 @@ impl Session {
     fn changed(&mut self) {
         self.layout = None;
         self.dirty = true;
+        self.revision += 1;
+    }
+
+    /// Changes whenever the document changes.
+    pub fn revision(&self) -> u64 {
+        self.revision
     }
 
     /// Replaces the document wholesale as one undoable step.
@@ -317,10 +326,9 @@ impl Session {
         let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
         let mut d = self.doc.clone();
         let aid = d.add_asset(&name, mime, Arc::from(bytes), pw, ph);
-        if link
-            && let Some(a) = d.assets.get_mut(&aid) {
-                a.link = Some(p.to_string_lossy().to_string());
-            }
+        if link && let Some(a) = d.assets.get_mut(&aid) {
+            a.link = Some(p.to_string_lossy().to_string());
+        }
         if let Some(frame) = into {
             d.apply(&Command::SetImage {
                 id: frame,

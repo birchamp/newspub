@@ -1,0 +1,44 @@
+id: J-FI-001
+title: Save and open .npub — round trip preserves the publication
+covers: [FI-01]
+steps:
+  - new_document: {width: 148mm, height: 210mm, pages: 2, facing: true, bleed: 3mm}
+  - set_meta: {title: "Round trip", author: "Tester"}
+  - define_para_style: {name: "Body", chars: {font: "Liberation Serif", size: 10.5}, para: {align: justify}}
+  - define_char_style: {name: "Strong", chars: {bold: true}}
+  - add_master: {name: "Main"}
+    as: m
+  - add_text_frame: {master: $m, rect: [10mm, 5mm, 128mm, 12mm]}
+    as: mh
+  - insert_text: {target: $mh, text: "Header text"}
+  - apply_master: {master: $m}
+  - add_text_frame: {page: 0, rect: [15mm, 15mm, 118mm, 80mm], columns: 2, gutter: 5mm}
+    as: f1
+  - add_text_frame: {page: 1, rect: [12mm, 15mm, 118mm, 180mm]}
+    as: f2
+  - link_frames: {from: $f1, to: $f2}
+  - insert_text: {target: $f1, text: "@file:fixtures/three-pages.txt"}
+  - apply_para_style: {target: $f1, style: "Body"}
+  - apply_char_style: {target: $f1, start: 0, end: 9, style: "Strong"}
+  - format_chars: {target: $f1, start: 10, end: 20, attrs: {color: "cmyk(0,100,100,0)", underline: true}}
+  - insert_picture: {path: fixtures/stripes.jpg, page: 1, x: 20mm, y: 150mm, width: 60mm}
+    as: pic
+  - set_image: {id: $pic, patch: {crop: {top: 0.1, bottom: 0.1}}}
+  - set_object: {id: $pic, patch: {rotation: 15, alt_text: "Green and white stripes", wrap: {mode: square, distance: 6}}}
+  - add_shape: {page: 1, rect: [100mm, 150mm, 30mm, 30mm], kind: {star: {points: 5, inner: 0.5}}, fill: "#ffaa00"}
+  - set_page_background: {page: 1, color: "#fff8e0"}
+  - expect_roundtrip: {}
+  - save: {path: saved.npub}
+  - let: {text_before: {q: frame_text, frame: $f2}}
+  - new_document: {width: 8.5in, height: 11in}
+  - expect: {query: {q: page_count}, equals: 1}
+  - open: {path: saved.npub}
+  - expect: {query: {q: page_count}, equals: 2}
+  - expect: {query: {q: frame_text, frame: $f2}, equals: $text_before}
+  - expect: {query: {q: object, id: $pic}, path: /alt_text, equals: "Green and white stripes"}
+  - expect: {query: {q: char_attrs, target: $f1, at: 12}, path: /color, equals: {space: cmyk, c: 0.0, m: 1.0, y: 1.0, k: 0.0, a: 1.0}}
+  # opening a file starts a fresh undo history
+  - expect: {query: {q: history}, equals: {undo: 0, redo: 0}}
+  - export_pdf: {path: reopened.pdf}
+  - expect_pdf: {file: reopened.pdf, pages: 2, images: 1, page_text: [{page: 1, contains: "Header text"}]}
+  - expect_error: {open: {path: does-not-exist.npub}}

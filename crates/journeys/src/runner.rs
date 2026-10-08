@@ -260,9 +260,10 @@ pub fn run_step(s: &mut Session, ctx: &mut Ctx, step: &Value) -> Result<()> {
                 Ok(_) => bail!("expected {an} to fail, but it succeeded"),
                 Err(e) => {
                     if let Some(msg) = spec.get("message").and_then(|m| m.as_str())
-                        && !e.to_string().contains(msg) {
-                            bail!("expected error containing {msg:?}, got {e}");
-                        }
+                        && !e.to_string().contains(msg)
+                    {
+                        bail!("expected error containing {msg:?}, got {e}");
+                    }
                 }
             }
         }
@@ -284,11 +285,12 @@ pub fn run_step(s: &mut Session, ctx: &mut Ctx, step: &Value) -> Result<()> {
             let out = s.run(&action).map_err(|e| anyhow!("{name} failed: {e}"))?;
             // Record exported files as artifacts.
             if matches!(name, "export_pdf" | "export_png" | "save")
-                && let Some(p) = args.get("path").and_then(|p| p.as_str()) {
-                    let full = ctx.out.join(p);
-                    let r = ctx.rel(&full);
-                    ctx.artifacts.push(r);
-                }
+                && let Some(p) = args.get("path").and_then(|p| p.as_str())
+            {
+                let full = ctx.out.join(p);
+                let r = ctx.rel(&full);
+                ctx.artifacts.push(r);
+            }
             match bind {
                 Some(Value::String(v)) => {
                     let id = out.created.first().ok_or_else(|| anyhow!("`as: {v}` but {name} created nothing"))?;
@@ -402,7 +404,13 @@ pub fn run_journey(script: &Value, root: &Path, results_root: &Path) -> JourneyR
         result.message = format!("golden images awaiting approval: {}", ctx.needs_approval.join(", "));
     }
     // Screenshots of the final state for the dashboard gallery.
-    if !ui {
+    if ui {
+        if let Ok(rd) = std::fs::read_dir(out.join("screens")) {
+            let mut files: Vec<PathBuf> = rd.filter_map(|e| e.ok().map(|e| e.path())).collect();
+            files.sort();
+            result.screenshots = files.iter().map(|f| ctx.rel(f)).collect();
+        }
+    } else {
         let shots = out.join("screens");
         let _ = std::fs::create_dir_all(&shots);
         let n = session.doc().pages.len().min(8);

@@ -1,0 +1,24 @@
+id: UI-SH-001
+title: App launches with canvas, page navigator, and toolbars reachable through accessibility
+covers: [UI-01]
+ui: true
+steps:
+  - expect_ui: {label: "Page canvas"}
+  - expect_ui: {label: "Page 1"}
+  - expect_ui: {label: "New"}
+  - expect_ui: {label: "Open"}
+  - expect_ui: {label: "Save"}
+  - expect_ui: {label: "Export PDF"}
+  - expect_ui: {label: "Text Box"}
+  - expect_ui: {label: "Rectangle"}
+  - expect_ui: {label: "Picture"}
+  - expect_ui: {label: "Add Page"}
+  - expect: {query: {q: page_count}, equals: 1}
+  # page navigator follows the document
+  - click: {label: "Add Page"}
+  - expect_ui: {label: "Page 2"}
+  - expect: {query: {q: page_count}, equals: 2}
+  - click: {label: "Undo"}
+  - expect_ui: {label: "Page 2", exists: false}
+  - click: {label: "Redo"}
+  - expect_ui: {label: "Page 2"}

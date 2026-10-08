@@ -1,0 +1,23 @@
+id: J-IM-002
+title: Crop a picture and fit or fill it in its frame
+covers: [IM-02]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - insert_picture: {path: fixtures/photo.png, page: 0, x: 1in, y: 1in, width: 4in}
+    as: p
+  # 4in × 3in. Crop away the left half: the red circle (px 220..360) now fills the right part
+  - set_image: {id: $p, patch: {crop: {left: 0.5}}}
+  - expect: {query: {q: object, id: $p}, path: /kind/crop/left, equals: 0.5}
+  # visible source x 200..400 maps onto 72..360pt; circle centre px 290 → 72 + 90/200*288 = 201.6pt, y px 190 → 72+190/300*216 = 208.8pt
+  - expect_png: {page: 0, pixels: [{at: [201.6, 208.8], rgb: [220, 60, 60], tol: 30}, {at: [80, 80], rgb: [30, 90, 160], tol: 30}]}
+  - expect_error: {set_image: {id: $p, patch: {crop: {left: 0.6, right: 0.5}}}}
+  - set_image: {id: $p, patch: {crop: {left: 0, top: 0, right: 0, bottom: 0}}}
+  # square frame, fit: the 4:3 picture is letterboxed — white bands above and below
+  - set_object: {id: $p, patch: {rect: [1in, 1in, 3in, 3in]}}
+  - set_image: {id: $p, patch: {fit: fit}}
+  - expect_png: {page: 0, pixels: [{at: [180, 80], rgb: [255, 255, 255]}, {at: [150, 250], rgb: [30, 90, 160], tol: 30}]}
+  # fill: the frame is covered, left and right of the picture are cropped
+  - set_image: {id: $p, patch: {fit: fill}}
+  - expect_png: {page: 0, pixels: [{at: [180, 76], rgb: [30, 90, 160], tol: 30}], ink: [{rect: [72, 72, 216, 216], min: 0.99}]}
+  - export_pdf: {path: crop.pdf}
+  - expect_pdf: {file: crop.pdf, images: 1, ink: [{page: 1, rect: [74, 74, 212, 212], min: 0.99}, {page: 1, rect: [290, 72, 50, 216], max: 0.0}]}

@@ -32,6 +32,12 @@ impl<'de> Deserialize<'de> for Action {
     }
 }
 
+impl From<SessionAction> for Action {
+    fn from(s: SessionAction) -> Self {
+        Action::Session(s)
+    }
+}
+
 impl From<Command> for Action {
     fn from(c: Command) -> Self {
         Action::Doc(c)

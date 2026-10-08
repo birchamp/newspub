@@ -1,0 +1,38 @@
+id: J-SH-001
+title: Rectangle, ellipse, and line with fill, stroke colour, and weight
+covers: [SH-01]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_shape: {page: 0, rect: [1in, 1in, 2in, 1in], kind: rect, fill: "#ff0000"}
+    as: r
+  - add_shape: {page: 0, rect: [4in, 1in, 2in, 2in], kind: ellipse, fill: "#0000ff", stroke: {color: "#000000", width: 4}}
+    as: e
+  - add_shape: {page: 0, rect: [1in, 5in, 5in, 0in], kind: line, stroke: {color: "#00aa00", width: 6}}
+    as: l
+  - expect: {query: {q: object_count, page: 0}, equals: 3}
+  - expect: {query: {q: object, id: $r}, path: /kind/fill, equals: {space: rgb, r: 255, g: 0, b: 0, a: 1.0}}
+  - expect: {query: {q: object, id: $l}, path: /kind/stroke/width, equals: 6}
+  - expect_png:
+      page: 0
+      dpi: 72
+      pixels:
+        - {at: [144, 108], rgb: [255, 0, 0]}
+        - {at: [360, 144], rgb: [0, 0, 255]}
+        # ellipse corner area is outside the ellipse: white
+        - {at: [292, 76], rgb: [255, 255, 255]}
+        # ellipse stroke at its leftmost point
+        - {at: [288, 144], rgb: [0, 0, 0], tol: 90}
+        - {at: [250, 360], rgb: [0, 170, 0]}
+        - {at: [250, 368], rgb: [255, 255, 255]}
+  # restyle the rectangle
+  - set_shape: {id: $r, patch: {fill: "#ffcc00", stroke: {color: "#000000", width: 2, dash: dash}}}
+  - expect_png: {page: 0, pixels: [{at: [144, 108], rgb: [255, 204, 0]}]}
+  - set_shape: {id: $r, patch: {no_fill: true}}
+  - expect_png: {page: 0, pixels: [{at: [144, 108], rgb: [255, 255, 255]}]}
+  - export_pdf: {path: shapes.pdf}
+  - expect_pdf:
+      file: shapes.pdf
+      ink:
+        - {page: 1, rect: [300, 120, 40, 40], min: 0.95}
+        - {page: 1, rect: [100, 357, 200, 6], min: 0.95}
+        - {page: 1, rect: [100, 420, 200, 100], max: 0.0}

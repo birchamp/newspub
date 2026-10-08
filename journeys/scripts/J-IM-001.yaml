@@ -1,0 +1,33 @@
+id: J-IM-001
+title: Insert PNG and JPEG pictures at their native aspect ratio
+covers: [IM-01]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - insert_picture: {path: fixtures/photo.png, page: 0}
+    as: p1
+  # 400×300 px at 96 dpi = 300×225 pt, centred between the margins, top margin
+  - expect: {query: {q: object, id: $p1}, path: /rect/w, approx: [300, 0.01]}
+  - expect: {query: {q: object, id: $p1}, path: /rect/h, approx: [225, 0.01]}
+  - expect: {query: {q: object, id: $p1}, path: /rect/y, approx: [36, 0.01]}
+  - expect: {query: {q: object, id: $p1}, path: /rect/x, approx: [156, 0.01]}
+  - insert_picture: {path: fixtures/stripes.jpg, page: 0, x: 1in, y: 5in, width: 3in}
+    as: p2
+  # 600×400 → height keeps the 3:2 aspect
+  - expect: {query: {q: object, id: $p2}, path: /rect/h, approx: [144, 0.01]}
+  - expect_png:
+      page: 0
+      pixels:
+        # yellow rectangle in the photo (px 40..200, 40..160 → pt 156+30..156+150, 36+30..36+120)
+        - {at: [220, 100], rgb: [240, 200, 40], tol: 30}
+        - {at: [170, 50], rgb: [30, 90, 160], tol: 30}
+        # first white stripe of the JPEG (px 0..24 of 600 → pt 72..81 wide at 3in)
+        - {at: [75, 430], rgb: [240, 240, 240], tol: 40}
+        - {at: [84, 430], rgb: [20, 120, 60], tol: 40}
+  - export_pdf: {path: pictures.pdf}
+  - expect_pdf:
+      file: pictures.pdf
+      images: 2
+      ink:
+        - {page: 1, rect: [160, 40, 290, 215], min: 0.95}
+  - expect_error: {insert_picture: {path: fixtures/short.txt, page: 0}}
+  - expect_roundtrip: {}

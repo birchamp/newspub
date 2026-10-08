@@ -1,0 +1,30 @@
+id: J-LY-001
+title: Z-order — bring to front, forward, send backward, to back
+covers: [LY-01]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_shape: {page: 0, rect: [1in, 1in, 2in, 2in], kind: rect, fill: "#ff0000"}
+    as: red
+  - add_shape: {page: 0, rect: [2in, 2in, 2in, 2in], kind: rect, fill: "#0000ff"}
+    as: blue
+  - add_shape: {page: 0, rect: [1.5in, 1.5in, 2in, 2in], kind: rect, fill: "#00ff00"}
+    as: green
+  - expect: {query: {q: page_objects, page: 0}, equals: [$red, $blue, $green]}
+  # (2.25in, 2.25in) is inside all three; the last added (green) is on top
+  - expect_png: {page: 0, pixels: [{at: [162, 162], rgb: [0, 255, 0]}]}
+  - set_z: {id: $red, op: front}
+  - expect: {query: {q: page_objects, page: 0}, equals: [$blue, $green, $red]}
+  - expect_png: {page: 0, pixels: [{at: [162, 162], rgb: [255, 0, 0]}]}
+  - set_z: {id: $red, op: backward}
+  - expect: {query: {q: page_objects, page: 0}, equals: [$blue, $red, $green]}
+  - expect_png: {page: 0, pixels: [{at: [162, 162], rgb: [0, 255, 0]}]}
+  - set_z: {id: $green, op: back}
+  - expect: {query: {q: page_objects, page: 0}, equals: [$green, $blue, $red]}
+  - set_z: {id: $green, op: forward}
+  - expect: {query: {q: page_objects, page: 0}, equals: [$blue, $green, $red]}
+  - set_z: {id: $red, op: back}
+  - expect_png: {page: 0, pixels: [{at: [162, 162], rgb: [0, 255, 0]}, {at: [270, 270], rgb: [0, 0, 255]}]}
+  - export_pdf: {path: z.pdf}
+  - expect_roundtrip: {}
+  - undo: {}
+  - expect: {query: {q: page_objects, page: 0}, equals: [$blue, $green, $red]}

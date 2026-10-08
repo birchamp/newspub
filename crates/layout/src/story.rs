@@ -311,13 +311,16 @@ fn fill_line(p: &mut Para, story: &Story, width: f64, indent: f64, rp: &Resolved
             continue;
         }
         // Does not fit. Try hyphenation.
-        if rp.hyphenate && !taken.is_empty() && width - x >= 0.0
-            && let Some((a, b)) = split_hyphen(p, story, &seg, width - x, rp) {
-                taken.push(a);
-                p.segs.push_front(b);
-                hyphen = true;
-                break;
-            }
+        if rp.hyphenate
+            && !taken.is_empty()
+            && width - x >= 0.0
+            && let Some((a, b)) = split_hyphen(p, story, &seg, width - x, rp)
+        {
+            taken.push(a);
+            p.segs.push_front(b);
+            hyphen = true;
+            break;
+        }
         if taken.is_empty() && may_force {
             // Emergency break: as many glyphs as fit (at least one).
             let mut acc = 0.0;
@@ -351,10 +354,9 @@ fn fill_line(p: &mut Para, story: &Story, width: f64, indent: f64, rp: &Resolved
         }
         hyphen = true;
     }
-    if hyphen
-        && let Some(s) = taken.last_mut() {
-            s.add_hyphen = true;
-        }
+    if hyphen && let Some(s) = taken.last_mut() {
+        s.add_hyphen = true;
+    }
     let ends_para = p.segs.is_empty();
     Fill { segs: taken, ends_para, hard, hyphen }
 }
@@ -567,12 +569,13 @@ fn emit_line(
     let glyphs: Vec<&G> = fill.segs.iter().flat_map(|s| s.glyphs.iter()).collect();
     let mut hyphen: Option<(usize, u16, f64)> = None;
     if fill.hyphen
-        && let Some(last) = glyphs.last() {
-            let st = last.style;
-            if let Some((gid, adv)) = p.styles[st].hyphen {
-                hyphen = Some((st, gid, adv));
-            }
+        && let Some(last) = glyphs.last()
+    {
+        let st = last.style;
+        if let Some((gid, adv)) = p.styles[st].hyphen {
+            hyphen = Some((st, gid, adv));
         }
+    }
     let total: f64 = glyphs.iter().map(|g| g.adv).sum::<f64>() + hyphen.map(|h| h.2).unwrap_or(0.0);
     let trail: f64 =
         if hyphen.is_some() { 0.0 } else { glyphs.iter().rev().take_while(|g| g.space && !g.tab).map(|g| g.adv).sum() };
@@ -709,10 +712,14 @@ fn emit_line(
             }
         };
         if let Some(d) = decos.last_mut()
-            && d.kind == kind && (d.x1 - x0).abs() < 0.01 && (d.y - y).abs() < 0.01 && d.color == st.color {
-                d.x1 = x1;
-                continue;
-            }
+            && d.kind == kind
+            && (d.x1 - x0).abs() < 0.01
+            && (d.y - y).abs() < 0.01
+            && d.color == st.color
+        {
+            d.x1 = x1;
+            continue;
+        }
         decos.push(Decoration { kind, x0, x1, y, thickness: th.max(0.25), color: st.color.clone() });
     }
     Line {

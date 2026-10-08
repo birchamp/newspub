@@ -204,26 +204,31 @@ fn push_object(doc: &Document, layout: &DocLayout, id: Id, parent: Affine, items
         }
         ObjectKind::Image(im) => {
             if let Some(aid) = im.asset
-                && let Some(a) = doc.assets.get(&aid) {
-                    let (pw, ph) = (a.px_w.max(1) as f64, a.px_h.max(1) as f64);
-                    let c = im.crop;
-                    let (vx, vy) = (c.left * pw, c.top * ph);
-                    let (vw, vh) = ((1.0 - c.left - c.right) * pw, (1.0 - c.top - c.bottom) * ph);
-                    let (sx, sy) = (w / vw.max(1e-9), h / vh.max(1e-9));
-                    let (sx, sy, ox, oy) = match im.fit {
-                        Fit::Stretch => (sx, sy, 0.0, 0.0),
-                        Fit::Fit => {
-                            let s = sx.min(sy);
-                            (s, s, (w - vw * s) / 2.0, (h - vh * s) / 2.0)
-                        }
-                        Fit::Fill => {
-                            let s = sx.max(sy);
-                            (s, s, (w - vw * s) / 2.0, (h - vh * s) / 2.0)
-                        }
-                    };
-                    let local = Affine::translate(ox - vx * sx, oy - vy * sy).compose(Affine::scale(sx, sy));
-                    items.push(Item::Image { asset: aid, local, clip: Rect::new(0.0, 0.0, w, h), transform: t });
-                }
+                && let Some(a) = doc.assets.get(&aid)
+            {
+                let (pw, ph) = (a.px_w.max(1) as f64, a.px_h.max(1) as f64);
+                let c = im.crop;
+                let (vx, vy) = (c.left * pw, c.top * ph);
+                let (vw, vh) = ((1.0 - c.left - c.right) * pw, (1.0 - c.top - c.bottom) * ph);
+                let (sx, sy) = (w / vw.max(1e-9), h / vh.max(1e-9));
+                let (sx, sy, ox, oy) = match im.fit {
+                    Fit::Stretch => (sx, sy, 0.0, 0.0),
+                    Fit::Fit => {
+                        let s = sx.min(sy);
+                        (s, s, (w - vw * s) / 2.0, (h - vh * s) / 2.0)
+                    }
+                    Fit::Fill => {
+                        let s = sx.max(sy);
+                        (s, s, (w - vw * s) / 2.0, (h - vh * s) / 2.0)
+                    }
+                };
+                let local = Affine::translate(ox - vx * sx, oy - vy * sy).compose(Affine::scale(sx, sy));
+                // Clip to the frame ∩ the visible part of the image (letterboxing leaves the rest empty).
+                let (cx0, cy0) = (ox.max(0.0), oy.max(0.0));
+                let (cx1, cy1) = ((ox + vw * sx).min(w), (oy + vh * sy).min(h));
+                let clip = Rect::new(cx0, cy0, (cx1 - cx0).max(0.0), (cy1 - cy0).max(0.0));
+                items.push(Item::Image { asset: aid, local, clip, transform: t });
+            }
             if let Some(s) = &im.stroke {
                 items.push(Item::Path {
                     path: rect_path(0.0, 0.0, w, h),

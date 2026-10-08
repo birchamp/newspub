@@ -1,0 +1,50 @@
+id: J-PR-001
+title: Booklet imposition — saddle-stitch page order with blank padding
+covers: [PR-01]
+steps:
+  - new_document: {width: 5.5in, height: 8.5in, pages: 6, facing: true}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 3in, 1in]}
+    as: t1
+  - insert_text: {target: $t1, text: "Folio one"}
+  - add_text_frame: {page: 1, rect: [1in, 1in, 3in, 1in]}
+    as: t2
+  - insert_text: {target: $t2, text: "Folio two"}
+  - add_text_frame: {page: 2, rect: [1in, 1in, 3in, 1in]}
+    as: t3
+  - insert_text: {target: $t3, text: "Folio three"}
+  - add_text_frame: {page: 3, rect: [1in, 1in, 3in, 1in]}
+    as: t4
+  - insert_text: {target: $t4, text: "Folio four"}
+  - add_text_frame: {page: 4, rect: [1in, 1in, 3in, 1in]}
+    as: t5
+  - insert_text: {target: $t5, text: "Folio five"}
+  - add_text_frame: {page: 5, rect: [1in, 1in, 3in, 1in]}
+    as: t6
+  - insert_text: {target: $t6, text: "Folio six"}
+  # 6 pages pad to 8 → 2 sheets, 4 sheet sides of 11×8.5in
+  - export_pdf: {path: booklet.pdf, options: {imposition: booklet}}
+  - expect_pdf:
+      file: booklet.pdf
+      pages: 4
+      page_size: {w: 792, h: 612}
+      page_text:
+        # sheet 1 front: [8 | 1], back: [2 | 7], sheet 2 front: [6 | 3], back: [4 | 5]; pages 7–8 are blank
+        - {page: 1, contains: "Folio one", not_contains: ["Folio two", "Folio six"]}
+        - {page: 2, contains: "Folio two", not_contains: ["Folio one", "Folio three"]}
+        - {page: 3, contains: ["Folio six", "Folio three"]}
+        - {page: 4, contains: ["Folio four", "Folio five"]}
+      ink:
+        # sheet 1 front: left half is blank page 8, right half holds page 1's text
+        - {page: 1, rect: [0, 0, 396, 612], max: 0.0}
+        - {page: 1, rect: [468, 72, 216, 30], min: 0.01}
+        # sheet 2 front: page 6 on the left, page 3 on the right
+        - {page: 3, rect: [72, 72, 216, 30], min: 0.01}
+        - {page: 3, rect: [468, 72, 216, 30], min: 0.01}
+  # with exactly 8 pages there is no padding
+  - insert_pages: {count: 2}
+  - export_pdf: {path: booklet8.pdf, options: {imposition: booklet}}
+  - expect_pdf: {file: booklet8.pdf, pages: 4}
+  # a 9-page publication needs 12 page slots → 3 sheets → 6 sides
+  - insert_pages: {count: 1}
+  - export_pdf: {path: booklet9.pdf, options: {imposition: booklet}}
+  - expect_pdf: {file: booklet9.pdf, pages: 6}

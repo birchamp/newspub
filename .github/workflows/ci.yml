@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  journeys:
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, label: linux }
+          - { os: macos-latest, label: macos }
+          - { os: windows-latest, label: windows }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libgtk-3-dev
+      - name: fmt
+        id: fmt
+        if: runner.os == 'Linux'
+        run: cargo fmt --all -- --check
+      - name: clippy
+        id: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: build
+        id: build
+        run: cargo build --workspace --release
+      - name: journeys
+        id: journeys
+        continue-on-error: true
+        run: cargo run -p newpub-journeys --release -- --out target/journeys --os ${{ matrix.label }}
+      - name: record job status
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p target/journeys
+          cat > target/journeys/job-status.json <<JSON
+          {"os": "${{ matrix.label }}", "fmt": "${{ steps.fmt.outcome }}", "clippy": "${{ steps.clippy.outcome }}",
+           "build": "${{ steps.build.outcome }}", "journeys": "${{ steps.journeys.outcome }}",
+           "run_id": "${{ github.run_id }}", "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+           "sha": "${{ github.sha }}", "ref": "${{ github.ref_name }}"}
+          JSON
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: journey-results-${{ matrix.label }}
+          path: target/journeys
+          if-no-files-found: warn
+      - name: fail if journeys failed
+        if: steps.journeys.outcome != 'success'
+        run: exit 1
+
+  dashboard:
+    needs: journeys
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: ci-results
+          pattern: journey-results-*
+      - name: build dashboard
+        run: python3 tools/dashboard/build.py --results ci-results --out dashboard
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dashboard
+          path: dashboard
+      - uses: actions/configure-pages@v5
+        continue-on-error: true
+      - uses: actions/upload-pages-artifact@v3
+        continue-on-error: true
+        with:
+          path: dashboard
+      - uses: actions/deploy-pages@v4
+        id: deploy
+        continue-on-error: true

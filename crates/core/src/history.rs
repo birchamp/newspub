@@ -20,9 +20,10 @@ impl<T: Clone> History<T> {
     pub fn record(&mut self, before: T, coalesce: Option<String>) {
         self.redo.clear();
         if let (Some(k), Some((_, Some(prev)))) = (&coalesce, self.undo.last())
-            && k == prev {
-                return;
-            }
+            && k == prev
+        {
+            return;
+        }
         self.undo.push((before, coalesce));
         if self.undo.len() > self.limit {
             self.undo.remove(0);

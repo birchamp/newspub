@@ -695,9 +695,10 @@ impl Document {
             }
             AddImage { page, master, rect, asset } => {
                 if let Some(a) = asset
-                    && !self.assets.contains_key(a) {
-                        return Err(CoreError::NoSuchAsset(*a));
-                    }
+                    && !self.assets.contains_key(a)
+                {
+                    return Err(CoreError::NoSuchAsset(*a));
+                }
                 let img = ImageFrame { asset: *asset, crop: CropFrac::default(), fit: Fit::Stretch, stroke: None };
                 let mut obj = self.new_object(*rect, ObjectKind::Image(img));
                 obj.wrap = Wrap { mode: WrapMode::Square, distance: Length(7.2) };
@@ -857,9 +858,10 @@ impl Document {
             }
             SetImage { id, patch } => {
                 if let Some(a) = patch.asset
-                    && !self.assets.contains_key(&a) {
-                        return Err(CoreError::NoSuchAsset(a));
-                    }
+                    && !self.assets.contains_key(&a)
+                {
+                    return Err(CoreError::NoSuchAsset(a));
+                }
                 let ObjectKind::Image(im) = &mut self.object_mut(*id)?.kind else {
                     return Err(CoreError::WrongKind(*id, "image"));
                 };
@@ -948,9 +950,10 @@ impl Document {
                 let sid = self.story_of(*target)?;
                 let r = self.range_or_all(sid, *start, *end)?;
                 if let Some(s) = attrs.style
-                    && !self.styles.chars.contains_key(&s) {
-                        return Err(CoreError::NoSuchStyle(s.0.to_string()));
-                    }
+                    && !self.styles.chars.contains_key(&s)
+                {
+                    return Err(CoreError::NoSuchStyle(s.0.to_string()));
+                }
                 self.story_mut(sid)?.format_chars(r, attrs)?;
                 Ok(Applied::default())
             }
@@ -964,9 +967,10 @@ impl Document {
                 let sid = self.story_of(*target)?;
                 let r = self.range_or_all(sid, *start, *end)?;
                 if let Some(s) = attrs.style
-                    && !self.styles.para.contains_key(&s) {
-                        return Err(CoreError::NoSuchStyle(s.0.to_string()));
-                    }
+                    && !self.styles.para.contains_key(&s)
+                {
+                    return Err(CoreError::NoSuchStyle(s.0.to_string()));
+                }
                 self.story_mut(sid)?.format_paras(r, attrs)?;
                 Ok(Applied::default())
             }

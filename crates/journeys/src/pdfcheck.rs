@@ -67,9 +67,10 @@ pub fn check(ctx: &mut Ctx, spec: &Value) -> Result<()> {
     let pdf = Pdf::load_mem(&bytes).map_err(|e| anyhow!("not a readable PDF: {e}"))?;
     let pages = pdf.get_pages();
     if let Some(n) = spec.get("pages").and_then(|v| v.as_u64())
-        && pages.len() as u64 != n {
-            bail!("expected {n} pages, PDF has {}", pages.len());
-        }
+        && pages.len() as u64 != n
+    {
+        bail!("expected {n} pages, PDF has {}", pages.len());
+    }
     let tol = spec.get("tolerance").and_then(|v| v.as_f64()).unwrap_or(0.5);
     // boxes: [{page, media: [llx,lly,urx,ury], trim, bleed, crop}]
     if let Some(Value::Array(list)) = spec.get("boxes") {
@@ -140,9 +141,10 @@ pub fn check(ctx: &mut Ctx, spec: &Value) -> Result<()> {
                 }
             }
             if let Some(e) = pt.get("empty").and_then(|v| v.as_bool())
-                && e != t.trim().is_empty() {
-                    bail!("page {n} text emptiness: expected {e}, text {:?}", t.chars().take(100).collect::<String>());
-                }
+                && e != t.trim().is_empty()
+            {
+                bail!("page {n} text emptiness: expected {e}, text {:?}", t.chars().take(100).collect::<String>());
+            }
         }
     }
     if let Some(f) = spec.get("fonts") {
@@ -174,9 +176,10 @@ pub fn check(ctx: &mut Ctx, spec: &Value) -> Result<()> {
             bail!("fonts not embedded: {unembedded:?}");
         }
         if let Some(n) = f.get("count").and_then(|v| v.as_u64())
-            && names.len() as u64 != n {
-                bail!("expected {n} fonts, found {names:?}");
-            }
+            && names.len() as u64 != n
+        {
+            bail!("expected {n} fonts, found {names:?}");
+        }
     }
     if let Some(n) = spec.get("images").and_then(|v| v.as_u64()) {
         let mut smasks = BTreeSet::new();

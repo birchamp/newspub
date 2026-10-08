@@ -1,0 +1,63 @@
+id: J-UR-001
+title: Multi-level undo and redo of document commands
+covers: [UR-01]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - expect: {query: {q: history}, equals: {undo: 0, redo: 0}}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 4in, 2in]}
+    as: f
+  - insert_text: {target: $f, text: "Hello world"}
+  - format_chars: {target: $f, start: 0, end: 5, attrs: {bold: true}}
+  - insert_pages: {count: 2}
+  - add_shape: {page: 1, rect: [1in, 1in, 1in, 1in], kind: ellipse, fill: "#00ff00"}
+  - set_page_setup: {width: 6in}
+  - delete_text: {target: $f, start: 5, end: 11}
+  - expect: {query: {q: history}, equals: {undo: 7, redo: 0}}
+  - expect: {query: {q: story_text, target: $f}, equals: "Hello"}
+  - undo: {}
+  - expect: {query: {q: story_text, target: $f}, equals: "Hello world"}
+  - undo: {}
+  - expect: {query: {q: document}, path: /setup/width, equals: 612}
+  - undo: {}
+  - expect: {query: {q: object_count, page: 1}, equals: 0}
+  - undo: {}
+  - expect: {query: {q: page_count}, equals: 1}
+  - undo: {}
+  - expect: {query: {q: char_attrs, target: $f, at: 0}, path: /bold, equals: false}
+  - undo: {}
+  - expect: {query: {q: story_text, target: $f}, equals: ""}
+  - undo: {}
+  - expect: {query: {q: object_count, page: 0}, equals: 0}
+  - expect: {query: {q: history}, equals: {undo: 0, redo: 7}}
+  - expect_error: {undo: {}}
+  # redo everything
+  - redo: {}
+  - redo: {}
+  - redo: {}
+  - redo: {}
+  - redo: {}
+  - redo: {}
+  - redo: {}
+  - expect: {query: {q: story_text, target: $f}, equals: "Hello"}
+  - expect: {query: {q: page_count}, equals: 3}
+  - expect: {query: {q: document}, path: /setup/width, equals: 432}
+  - expect: {query: {q: char_attrs, target: $f, at: 0}, path: /bold, equals: true}
+  - expect_error: {redo: {}}
+  # a new command after undo clears the redo stack
+  - undo: {}
+  - insert_text: {target: $f, text: "!"}
+  - expect: {query: {q: history}, path: /redo, equals: 0}
+  - expect: {query: {q: story_text, target: $f}, equals: "Hello world!"}
+  # failed commands do not change the document or the history
+  - expect_error: {delete_text: {target: $f, start: 5, end: 500}}
+  - expect: {query: {q: history}, equals: {undo: 7, redo: 0}}
+  # an undo group is one step
+  - begin_group: {}
+  - insert_text: {target: $f, text: " A"}
+  - insert_text: {target: $f, text: " B"}
+  - add_shape: {page: 0, rect: [1in, 5in, 1in, 1in], kind: rect}
+  - end_group: {}
+  - expect: {query: {q: history}, path: /undo, equals: 8}
+  - undo: {}
+  - expect: {query: {q: story_text, target: $f}, equals: "Hello world!"}
+  - expect: {query: {q: object_count, page: 0}, equals: 1}

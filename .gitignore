@@ -1,4 +1,4 @@
 target/
 *.npub.tmp
-/dashboard/index.html
+/dashboard/
 __pycache__/
