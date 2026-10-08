@@ -14,3 +14,4 @@ lopdf.workspace = true
 thiserror.workspace = true
 usvg.workspace = true
 krilla-svg.workspace = true
+serde_json.workspace = true
