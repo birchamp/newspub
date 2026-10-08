@@ -2,7 +2,9 @@
 
 use crate::fonts::{Face, FontStore};
 use crate::shape::{ShapeOpts, has_feature, shape};
-use newpub_core::{Baseline, Caps, CharAttrs, Color, Document, LINE_SEP, ParaAttrs, ResolvedChar, Story};
+use newpub_core::{
+    Baseline, Caps, CharAttrs, Color, Document, DropCap, LINE_SEP, NumberFormat, ParaAttrs, ResolvedChar, Story,
+};
 use std::collections::VecDeque;
 use std::ops::Range;
 use std::sync::Arc;
@@ -69,6 +71,17 @@ impl RunStyle {
     }
 }
 
+impl RunStyle {
+    /// Glyph id and advance (points, scaled and tracked) of a single character in this style.
+    pub fn glyph_for(&self, c: char) -> Option<(u16, f64)> {
+        let opts =
+            ShapeOpts { kerning: false, ligatures: false, dlig: false, small_caps: false, extra: &[], rtl: false };
+        let g = shape(&self.face, &c.to_string(), &opts);
+        let g = g.first()?;
+        Some((g.glyph, g.advance * self.size * self.x_scale + self.tracking))
+    }
+}
+
 /// A shaped glyph within a paragraph.
 #[derive(Clone, Debug)]
 pub struct G {
@@ -83,6 +96,8 @@ pub struct G {
     pub space: bool,
     pub tab: bool,
     pub decimal: bool,
+    /// Leader character to fill this tab glyph's gap with (set when the tab is placed).
+    pub leader: Option<char>,
 }
 
 /// Text between two break opportunities.
@@ -251,6 +266,7 @@ fn shape_chunk(
             space: ch == ' ' || ch == '\u{3000}' || is_tab,
             tab: is_tab,
             decimal: ch == '.',
+            leader: None,
         });
     }
 }
@@ -331,4 +347,162 @@ pub fn hyphen_points(story: &Story, seg: &Seg) -> Vec<usize> {
     }
     let h = dict.hyphenate(&lower);
     h.breaks.iter().map(|&b| seg.start + word[..b].chars().count()).collect()
+}
+
+/// Generated list marker, shaped in the paragraph's first run style.
+pub struct Marker {
+    pub style: usize,
+    pub text: String,
+    pub glyphs: Vec<G>,
+}
+
+/// Shaped drop-cap glyphs (they keep their story char indices).
+pub struct DropGlyphs {
+    pub glyphs: Vec<G>,
+    /// Story chars covered.
+    pub chars: Range<usize>,
+    pub width: f64,
+}
+
+/// Style for generated text (markers) at the start of a paragraph.
+fn first_rc(doc: &Document, story: &Story, pi: usize, range: &Range<usize>) -> ResolvedChar {
+    let attrs = story.span_attrs_at(range.start);
+    doc.resolve_char(&story.paras[pi], &attrs)
+}
+
+/// Shapes marker `text` for the paragraph at `pi`; the style is appended to `p.styles`.
+pub fn shape_marker(
+    p: &mut Para,
+    doc: &Document,
+    fonts: &FontStore,
+    story: &Story,
+    pi: usize,
+    scale: f64,
+    text: &str,
+) -> Option<Marker> {
+    let rc = first_rc(doc, story, pi, &p.range);
+    let chars: Vec<char> = text.chars().collect();
+    let primary = fonts.face(fonts.resolve(&rc.font, rc.bold, rc.italic));
+    let fb = chars.iter().find(|&&c| !primary.has_glyph(c)).and_then(|&c| fonts.fallback_for(c, rc.bold, rc.italic));
+    let si = p.styles.len();
+    p.styles.push(RunStyle::new(fonts, &rc, scale, fb));
+    let mut glyphs = vec![];
+    shape_chunk(&mut glyphs, &p.styles[si], si, text, 0, &rc, false, &chars);
+    (!glyphs.is_empty()).then(|| Marker { style: si, text: text.to_string(), glyphs })
+}
+
+/// Shapes the drop cap and removes the dropped chars from the paragraph's segments.
+/// `pitch` is the body line pitch and `body_cap` the body cap height, both in points.
+#[allow(clippy::too_many_arguments)]
+pub fn drop_cap(
+    p: &mut Para,
+    doc: &Document,
+    fonts: &FontStore,
+    story: &Story,
+    pi: usize,
+    scale: f64,
+    dc: &DropCap,
+    pitch: f64,
+    body_cap: f64,
+) -> Option<DropGlyphs> {
+    let range = p.range.clone();
+    let wanted = story.slice(range.clone()).chars().take(dc.chars as usize).take_while(|c| !c.is_whitespace()).count();
+    if wanted == 0 || dc.lines == 0 {
+        return None;
+    }
+    // Whole glyphs are removed: a ligature crossing the cut takes its whole cluster along.
+    let mut cutoff = range.start + wanted;
+    for s in p.segs.iter() {
+        for g in &s.glyphs {
+            if g.chars.start < cutoff {
+                cutoff = cutoff.max(g.chars.end.min(range.end));
+            }
+        }
+        if s.end >= cutoff {
+            break;
+        }
+    }
+    let text = story.slice(range.start..cutoff).to_string();
+    let chars: Vec<char> = text.chars().collect();
+    let mut rc = first_rc(doc, story, pi, &range);
+    rc.baseline = Baseline::Normal;
+    rc.caps = Caps::Normal;
+    rc.tracking = 0.0;
+    if let Some(f) = &dc.font {
+        rc.font = f.clone();
+    }
+    if let Some(c) = &dc.color {
+        rc.color = c.clone();
+    }
+    let face = fonts.face(fonts.resolve(&rc.font, rc.bold, rc.italic));
+    let cap_em = if face.cap_height > 0.1 { face.cap_height } else { 0.7 };
+    let target = (dc.lines as f64 - 1.0) * pitch + body_cap;
+    rc.size = target / cap_em / scale;
+    let si = p.styles.len();
+    p.styles.push(RunStyle::new(fonts, &rc, scale, None));
+    let mut glyphs = vec![];
+    shape_chunk(&mut glyphs, &p.styles[si], si, &text, range.start, &rc, false, &chars);
+    if glyphs.is_empty() {
+        p.styles.pop();
+        return None;
+    }
+    let width = glyphs.iter().map(|g| g.adv).sum();
+    // Remove the dropped glyphs from the body.
+    for s in p.segs.iter_mut() {
+        s.glyphs.retain(|g| g.chars.start >= cutoff);
+        s.start = s.start.max(cutoff).min(s.end);
+    }
+    p.segs.retain(|s| !s.glyphs.is_empty() || s.hard_break || s.start < s.end);
+    Some(DropGlyphs { glyphs, chars: range.start..cutoff, width })
+}
+
+/// Formats list number `n` (1-based) in `fmt`.
+pub fn format_number(fmt: NumberFormat, n: u32) -> String {
+    let alpha = |upper: bool| -> String {
+        let mut v = vec![];
+        let mut k = n;
+        while k > 0 {
+            k -= 1;
+            let c = (b'a' + (k % 26) as u8) as char;
+            v.push(if upper { c.to_ascii_uppercase() } else { c });
+            k /= 26;
+        }
+        v.iter().rev().collect()
+    };
+    let roman = |upper: bool| -> String {
+        const T: [(u32, &str); 13] = [
+            (1000, "m"),
+            (900, "cm"),
+            (500, "d"),
+            (400, "cd"),
+            (100, "c"),
+            (90, "xc"),
+            (50, "l"),
+            (40, "xl"),
+            (10, "x"),
+            (9, "ix"),
+            (5, "v"),
+            (4, "iv"),
+            (1, "i"),
+        ];
+        let mut k = n;
+        let mut out = String::new();
+        for (v, s) in T {
+            while k >= v {
+                out.push_str(s);
+                k -= v;
+            }
+        }
+        if upper { out.to_uppercase() } else { out }
+    };
+    match fmt {
+        _ if n == 0 || (matches!(fmt, NumberFormat::LowerRoman | NumberFormat::UpperRoman) && n >= 4000) => {
+            n.to_string()
+        }
+        NumberFormat::Decimal => n.to_string(),
+        NumberFormat::LowerAlpha => alpha(false),
+        NumberFormat::UpperAlpha => alpha(true),
+        NumberFormat::LowerRoman => roman(false),
+        NumberFormat::UpperRoman => roman(true),
+    }
 }

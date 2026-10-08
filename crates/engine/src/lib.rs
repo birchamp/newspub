@@ -546,7 +546,11 @@ impl Session {
                     let Some(fl) = l.frames.get(&f) else { continue };
                     for (li, ln) in fl.lines.iter().enumerate() {
                         for r in &ln.runs {
-                            if let Some(g) = r.glyphs.iter().find(|g| g.char_index == *at && !g.text_range.is_empty()) {
+                            if let Some(g) = r
+                                .glyphs
+                                .iter()
+                                .find(|g| g.char_index == *at && !g.generated && !g.text_range.is_empty())
+                            {
                                 return Ok(
                                     json!({"frame": f, "page": self.doc.page_of(f), "x": g.x, "baseline": g.y, "width": g.advance, "line": li}),
                                 );
