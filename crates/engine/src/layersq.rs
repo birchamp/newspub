@@ -1,12 +1,19 @@
 //! Layer queries (LY-02).
-//! Owner: Batch 2 task LAYERS. Placeholder until that task lands.
 
-#![allow(unused_imports)]
-use crate::{Action, EngineError, Outcome, Query, Session, SessionAction};
-use serde_json::Value;
+use crate::{EngineError, Query, Session};
+use serde_json::{Value, json};
 
 impl Session {
     pub(crate) fn layers_query(&mut self, q: &Query) -> Result<Value, EngineError> {
-        Err(EngineError::Other(format!("query {q:?} is not implemented yet")))
+        match q {
+            Query::Layers => Ok(json!(
+                self.doc
+                    .layers
+                    .iter()
+                    .map(|l| json!({"id": l.id, "name": l.name, "visible": l.visible, "locked": l.locked}))
+                    .collect::<Vec<_>>()
+            )),
+            other => Err(EngineError::Other(format!("query {other:?} is not a layer query"))),
+        }
     }
 }

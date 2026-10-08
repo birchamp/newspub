@@ -749,7 +749,7 @@ impl Document {
         ids.iter()
             .map(|id| {
                 let o = self.object(*id)?;
-                if o.locked {
+                if self.object_locked(*id) {
                     return Err(CoreError::Locked(*id));
                 }
                 Ok((*id, o.rect))
@@ -1078,11 +1078,12 @@ impl Document {
                 Ok(Applied::ids(vec![id]))
             }
             SetObject { id, patch } => {
+                let locked = self.object_locked(*id);
                 let o = self.object_mut(*id)?;
                 let p = patch.clone();
                 // A locked object keeps its geometry; locking, naming, wrap etc. stay editable so it can be unlocked.
                 let geometry = p.rect.is_some() || p.rotation.is_some() || p.flip_h.is_some() || p.flip_v.is_some();
-                if geometry && o.locked {
+                if geometry && locked {
                     return Err(CoreError::Locked(*id));
                 }
                 if let Some(v) = p.rect {
@@ -1128,10 +1129,10 @@ impl Document {
             }
             MoveObjects { ids, dx, dy } => {
                 for id in ids {
-                    let o = self.object_mut(*id)?;
-                    if o.locked {
+                    if self.object_locked(*id) {
                         return Err(CoreError::Locked(*id));
                     }
+                    let o = self.object_mut(*id)?;
                     o.rect.x += dx.0;
                     o.rect.y += dy.0;
                     if let ObjectKind::Group { children } = o.kind.clone() {
@@ -1146,7 +1147,8 @@ impl Document {
             }
             DeleteObjects { ids } => {
                 for id in ids {
-                    if self.object(*id)?.locked {
+                    self.object(*id)?;
+                    if self.object_locked(*id) {
                         return Err(CoreError::Locked(*id));
                     }
                 }
