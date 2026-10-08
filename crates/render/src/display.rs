@@ -380,11 +380,7 @@ fn push_shadow(items: &mut Vec<Item>, sh: &Shadow, path: &[PathEl], filled: bool
 }
 
 fn with_alpha(c: &Color, alpha: f32) -> Color {
-    let mut c = c.clone();
-    match &mut c {
-        Color::Rgb { a, .. } | Color::Cmyk { a, .. } | Color::Spot { a, .. } => *a = alpha,
-    }
-    c
+    c.clone().with_alpha(alpha)
 }
 
 /// Screen-only stand-in for an empty picture frame: a light grey box with a small picture glyph.

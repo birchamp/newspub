@@ -481,6 +481,16 @@ pub enum Query {
     },
     /// `{fields, records (after filter), path}` or null when no data source is attached.
     DataSource,
+    /// Built-in colour schemes `[{name, main, accent1..accent5, hyperlink, followed_hyperlink}]`.
+    ColorSchemes,
+    /// The publication's colour scheme (same shape).
+    ColorScheme,
+    /// Built-in font schemes `[{name, major, minor}]`.
+    FontSchemes,
+    /// Concrete fill colour of a shape or text frame (scheme colours resolved), or null.
+    ResolvedFill {
+        id: Id,
+    },
     /// `[{name, category, user}]`: built-in blocks then the user library.
     BuildingBlocks,
     /// `{path, user_count}` of the user building-block library.

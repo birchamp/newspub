@@ -541,6 +541,12 @@ pub struct Document {
     /// Mail-merge data source (MM-01..MM-04): a snapshot of the data plus filter/sort options.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub merge: Option<MergeData>,
+    /// Colour scheme (BB-04); None = the default scheme.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_scheme: Option<crate::schemes::ColorScheme>,
+    /// Font scheme (BB-04); None = the default scheme.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_scheme: Option<crate::schemes::FontScheme>,
     pub next_id: u64,
 }
 
@@ -707,6 +713,8 @@ impl Document {
             sections: vec![],
             baseline_grid: None,
             merge: None,
+            color_scheme: None,
+            font_scheme: None,
             next_id: 1,
         };
         for _ in 0..pages.max(1) {
@@ -825,7 +833,11 @@ impl Document {
     }
 
     pub fn resolve_char(&self, para: &ParaAttrs, run: &CharAttrs) -> ResolvedChar {
-        ResolvedChar::from_attrs(&self.effective_char_attrs(para, run))
+        let mut r = ResolvedChar::from_attrs(&self.effective_char_attrs(para, run));
+        // Scheme fonts and colours (BB-04).
+        r.font = self.scheme_font(&r.font);
+        r.color = self.scheme_color(&r.color);
+        r
     }
 
     pub fn effective_para_attrs(&self, para: &ParaAttrs) -> ParaAttrs {

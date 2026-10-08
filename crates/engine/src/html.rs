@@ -8,7 +8,8 @@ impl Session {
             SessionAction::ExportHtml { path } => {
                 let dir = self.resolve(path);
                 let layout = self.layout();
-                newpub_io_html::export(&self.doc, &layout, &self.fonts, &dir)
+                let doc = self.view.as_deref().unwrap_or(&self.doc);
+                newpub_io_html::export(doc, &layout, &self.fonts, &dir)
                     .map_err(|e| EngineError::Other(e.to_string()))?;
                 Ok(Outcome::default())
             }

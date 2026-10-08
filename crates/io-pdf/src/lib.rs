@@ -78,6 +78,11 @@ fn kcolor(c: &Color) -> (krilla::paint::Paint, f32) {
     let u = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
     let p: krilla::paint::Paint = match c {
         Color::Rgb { r, g, b, .. } => rgb::Color::new(*r, *g, *b).into(),
+        // Scheme colours are resolved before export; an unresolved one prints as its default-scheme RGB.
+        Color::Scheme { .. } => {
+            let [r, g, b, _] = c.to_rgba8();
+            rgb::Color::new(r, g, b).into()
+        }
         Color::Cmyk { c, m, y, k, .. } => cmyk::Color::new(u(*c), u(*m), u(*y), u(*k)).into(),
         Color::Spot { name, c, m, y, k, tint, .. } => {
             let fallback = krilla::color::RegularColor::Cmyk(cmyk::Color::new(u(*c), u(*m), u(*y), u(*k)));

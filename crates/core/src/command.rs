@@ -167,6 +167,14 @@ pub enum Command {
         #[serde(default)]
         dy: Length,
     },
+    /// Switch the publication's colour scheme (by built-in name); scheme colours follow.
+    ApplyColorScheme {
+        name: String,
+    },
+    /// Switch the font scheme (by built-in name); "+major" / "+minor" fonts follow.
+    ApplyFontScheme {
+        name: String,
+    },
     SetPageBackground {
         page: usize,
         #[serde(default)]
@@ -1663,6 +1671,7 @@ impl Document {
             | ClearBaselineGrid
             | InsertSpecialChar { .. }
             | AddShapeText { .. } => crate::textops::apply(self, cmd),
+            ApplyColorScheme { .. } | ApplyFontScheme { .. } => crate::schemes::apply(self, cmd),
             AddLayer { name } => {
                 let id = self.alloc();
                 self.layers.push(Layer { id, name: name.clone(), visible: true, locked: false });

@@ -201,7 +201,8 @@ impl Session {
                 })
             }
             MergeToPdf { path, options } => {
-                let d = self.merged_publication()?;
+                let mut d = self.merged_publication()?;
+                d.resolve_object_colors();
                 let layout = newpub_layout::layout_document(&d, &self.fonts);
                 let bytes = newpub_io_pdf::export_pdf(&d, &layout, &self.fonts, &options.clone().unwrap_or_default())?;
                 std::fs::write(self.resolve(path), bytes)?;

@@ -176,6 +176,11 @@ images) → PI-04 (formatting). Stop and ask a human if the approach needs code 
 | 2026-10-08 | Batch 2 lead additions: fields/sections, tables (`ObjectKind::Table`), baseline grid, special chars, shape text, guides/links/layers/words module hooks, per-task engine modules | Batch 2 dispatch and lead layout work |
 | 2026-10-08 | Mail merge: `Document.merge: Option<MergeData>`, `InsertMergeField`, `SetPictureField`, `core::merge` (`Document::merged`, `merge_publication`); engine merge actions and `DataSource` query; Session keeps a preview `view` document used by layout, rendering and PDF export | MM-01..MM-04 |
 | 2026-10-08 | `Story::insert` with inherited attrs never extends a field run | Typing after a field duplicated it |
+| 2026-10-08 | `Command::DuplicateObjects{ids, dx, dy}` (deep copy via `duplicate_object`) | App Cmd+D rebuilt objects command by command and could not copy groups/tables |
+| 2026-10-08 | `core::fragment` (`Fragment`, `Document::extract_fragment`, `paste_fragment`); engine `SaveBuildingBlock`/`InsertBuildingBlock`, `BuildingBlocks`/`BuildingBlockLibrary` queries, `Session.library_dir` | BB-03 building blocks (and a future clipboard) |
+| 2026-10-08 | `Color::Scheme{slot, a}` (short form `{scheme: accent1}`), `Color::with_alpha`; `core::schemes`; `Document.color_scheme`/`font_scheme`; `ApplyColorScheme`/`ApplyFontScheme`; fonts "+major"/"+minor"; `resolve_char` resolves scheme fonts/colours; engine view doc resolves object scheme colours; queries ColorSchemes/ColorScheme/FontSchemes/ResolvedFill | BB-04 |
+| 2026-10-08 | Object query always reports `layer` (null when unset) | LY-02 journey; file format unchanged |
+| 2026-10-08 | App: `NewpubApp.startup_picker`, `print_spool`; journey runner steps `focus`, `scroll`, journey option `startup_template_picker` | UI-08, PR-07, AX-04, UI-06 journeys |
 
 ## 12. Predecessor survey (NewsPub, Electron + React + TS) and what we adopt
 

@@ -98,7 +98,7 @@ pub struct Session {
     /// Mail-merge preview record (index into the filtered, sorted records).
     pub(crate) merge_preview: Option<usize>,
     /// The document as displayed when it differs from `doc` (merge preview); computed with the layout.
-    view: Option<Arc<Document>>,
+    pub(crate) view: Option<Arc<Document>>,
     /// Folder of the user building-block library; None = `<base_dir>/library`.
     pub library_dir: Option<PathBuf>,
 }
@@ -156,8 +156,15 @@ impl Session {
     /// Current layout (cached until the document changes).
     pub fn layout(&mut self) -> Arc<DocLayout> {
         if self.layout.is_none() {
-            self.view = self.preview_doc().map(Arc::new);
-            if self.view.is_some() {
+            let mut view = self.preview_doc();
+            // Scheme colours on objects become concrete colours for display and export (text resolves itself).
+            if view.as_ref().unwrap_or(&self.doc).uses_object_scheme_colors() {
+                let mut d = view.unwrap_or_else(|| self.doc.clone());
+                d.resolve_object_colors();
+                view = Some(d);
+            }
+            self.view = view.map(Arc::new);
+            if self.merge_preview.is_some() {
                 // Preview pictures get fresh asset ids each time.
                 self.raster.clear_images();
             }
@@ -789,6 +796,17 @@ impl Session {
             }
             TableFormats => json!(newpub_core::table::FORMATS.iter().map(|f| f.0).collect::<Vec<_>>()),
             DataSource => self.merge_query(q)?,
+            ColorSchemes => to(&newpub_core::schemes::color_schemes()),
+            ColorScheme => to(&self.doc.color_scheme()),
+            FontSchemes => to(&newpub_core::schemes::font_schemes()),
+            ResolvedFill { id } => {
+                let fill = match &self.doc.object(*id)?.kind {
+                    ObjectKind::Shape(s) => s.fill.clone(),
+                    ObjectKind::Text(t) => t.fill.clone(),
+                    _ => return Err(CoreError::WrongKind(*id, "shape or text box").into()),
+                };
+                to(&fill.map(|c| self.doc.scheme_color(&c)))
+            }
             BuildingBlocks | BuildingBlockLibrary => self.blocks_query(q)?,
             PageLabel { page } => {
                 if *page >= self.doc.pages.len() {

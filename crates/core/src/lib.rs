@@ -11,6 +11,7 @@ pub mod layers;
 pub mod links;
 pub mod merge;
 pub mod model;
+pub mod schemes;
 pub mod story;
 pub mod table;
 pub mod textops;

@@ -13,6 +13,8 @@ pub enum Color {
     Cmyk { c: f32, m: f32, y: f32, k: f32, a: f32 },
     /// Named spot colour with a CMYK alternate and a tint 0–1.
     Spot { name: String, c: f32, m: f32, y: f32, k: f32, tint: f32, a: f32 },
+    /// A slot of the publication's colour scheme (BB-04); written `{scheme: accent1}` for short.
+    Scheme { slot: crate::schemes::SchemeSlot, a: f32 },
 }
 
 impl Color {
@@ -25,8 +27,18 @@ impl Color {
 
     pub fn alpha(&self) -> f32 {
         match self {
-            Color::Rgb { a, .. } | Color::Cmyk { a, .. } | Color::Spot { a, .. } => *a,
+            Color::Rgb { a, .. } | Color::Cmyk { a, .. } | Color::Spot { a, .. } | Color::Scheme { a, .. } => *a,
         }
+    }
+
+    /// The same colour with alpha `a`.
+    pub fn with_alpha(mut self, alpha: f32) -> Color {
+        match &mut self {
+            Color::Rgb { a, .. } | Color::Cmyk { a, .. } | Color::Spot { a, .. } | Color::Scheme { a, .. } => {
+                *a = alpha
+            }
+        }
+        self
     }
 
     /// Naive device conversion to sRGB for screen display.
@@ -44,6 +56,11 @@ impl Color {
             }
             Color::Spot { c, m, y, k, tint, .. } => {
                 let [r, g, b] = cmyk(c * tint, m * tint, y * tint, k * tint);
+                [r, g, b, a8]
+            }
+            // Unresolved scheme colours (no document at hand) show the default scheme.
+            Color::Scheme { slot, .. } => {
+                let [r, g, b, _] = crate::schemes::default_slot_color(*slot).to_rgba8();
                 [r, g, b, a8]
             }
         }
@@ -117,6 +134,18 @@ impl<'de> Deserialize<'de> for Color {
                 #[serde(default = "one")]
                 a: f32,
             },
+            Scheme {
+                slot: crate::schemes::SchemeSlot,
+                #[serde(default = "one")]
+                a: f32,
+            },
+        }
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Short {
+            scheme: crate::schemes::SchemeSlot,
+            #[serde(default = "one")]
+            a: f32,
         }
         fn one() -> f32 {
             1.0
@@ -126,12 +155,15 @@ impl<'de> Deserialize<'de> for Color {
         enum Any {
             Str(String),
             Tagged(Tagged),
+            Short(Short),
         }
         match Any::deserialize(d)? {
             Any::Str(s) => Color::parse(&s).ok_or_else(|| de::Error::custom(format!("invalid colour {s:?}"))),
             Any::Tagged(Tagged::Rgb { r, g, b, a }) => Ok(Color::Rgb { r, g, b, a }),
             Any::Tagged(Tagged::Cmyk { c, m, y, k, a }) => Ok(Color::Cmyk { c, m, y, k, a }),
             Any::Tagged(Tagged::Spot { name, c, m, y, k, tint, a }) => Ok(Color::Spot { name, c, m, y, k, tint, a }),
+            Any::Tagged(Tagged::Scheme { slot, a }) => Ok(Color::Scheme { slot, a }),
+            Any::Short(Short { scheme, a }) => Ok(Color::Scheme { slot: scheme, a }),
         }
     }
 }
