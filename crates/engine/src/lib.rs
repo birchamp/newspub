@@ -271,12 +271,21 @@ impl Session {
                 std::fs::write(self.resolve(path), bytes)?;
                 Ok(Outcome::default())
             }
+            ReplaceAll { find, replace, match_case, whole_word } => {
+                let mut d = self.doc.clone();
+                for (sid, story) in &self.doc.stories {
+                    for (start, end) in find_matches(&story.text, find, *match_case, *whole_word).into_iter().rev() {
+                        d.apply(&Command::ReplaceText { target: *sid, start, end, text: replace.clone() })?;
+                    }
+                }
+                self.commit(d, None);
+                Ok(Outcome::default())
+            }
             ExportImage { path, page, dpi, format, quality } => {
                 let bytes = self.page_image(*page, *dpi, *format, *quality)?;
                 std::fs::write(self.resolve(path), bytes)?;
                 Ok(Outcome::default())
             }
-            ReplaceAll { .. } => Err(EngineError::Other(format!("{s:?} is not implemented yet"))),
             ExportPng { path, page, dpi } => {
                 let png = self.page_png(*page, *dpi)?;
                 std::fs::write(self.resolve(path), png)?;
@@ -674,7 +683,16 @@ impl Session {
                     })
                     .collect(),
             ),
-            Find { .. } | AccessibilityCheck => {
+            Find { text, match_case, whole_word } => {
+                let mut out = Vec::new();
+                for (sid, story) in &self.doc.stories {
+                    for (start, end) in find_matches(&story.text, text, *match_case, *whole_word) {
+                        out.push(json!({"story": sid, "start": start, "end": end}));
+                    }
+                }
+                Value::Array(out)
+            }
+            AccessibilityCheck => {
                 return Err(EngineError::Other(format!("query {q:?} is not implemented yet")));
             }
             TextBounds { frame } => {
@@ -705,4 +723,41 @@ mod erased {
             serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
         }
     }
+}
+
+/// Non-overlapping matches of `needle` in `hay` as char index ranges. Case-insensitive matching uses simple
+/// per-char lowercase folding so that char indices stay aligned.
+fn find_matches(hay: &str, needle: &str, match_case: bool, whole_word: bool) -> Vec<(usize, usize)> {
+    let fold = |c: char| {
+        if match_case {
+            c
+        } else {
+            let mut l = c.to_lowercase();
+            match (l.next(), l.next()) {
+                (Some(x), None) => x,
+                _ => c,
+            }
+        }
+    };
+    let h: Vec<char> = hay.chars().collect();
+    let hf: Vec<char> = h.iter().map(|&c| fold(c)).collect();
+    let n: Vec<char> = needle.chars().map(fold).collect();
+    let mut out = Vec::new();
+    if n.is_empty() || n.len() > h.len() {
+        return out;
+    }
+    let mut i = 0;
+    while i + n.len() <= h.len() {
+        let end = i + n.len();
+        let ok = hf[i..end] == n[..]
+            && (!whole_word
+                || ((i == 0 || !h[i - 1].is_alphanumeric()) && (end == h.len() || !h[end].is_alphanumeric())));
+        if ok {
+            out.push((i, end));
+            i = end;
+        } else {
+            i += 1;
+        }
+    }
+    out
 }
