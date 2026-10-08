@@ -758,6 +758,11 @@ impl Document {
             SetObject { id, patch } => {
                 let o = self.object_mut(*id)?;
                 let p = patch.clone();
+                // A locked object keeps its geometry; locking, naming, wrap etc. stay editable so it can be unlocked.
+                let geometry = p.rect.is_some() || p.rotation.is_some() || p.flip_h.is_some() || p.flip_v.is_some();
+                if geometry && o.locked {
+                    return Err(CoreError::Locked(*id));
+                }
                 if let Some(v) = p.rect {
                     if v.w < 0.0 || v.h < 0.0 {
                         return Err(CoreError::Invalid("negative size".into()));
@@ -812,6 +817,11 @@ impl Document {
                 Ok(Applied::default())
             }
             DeleteObjects { ids } => {
+                for id in ids {
+                    if self.object(*id)?.locked {
+                        return Err(CoreError::Locked(*id));
+                    }
+                }
                 for id in ids {
                     self.remove_object(*id)?;
                 }
