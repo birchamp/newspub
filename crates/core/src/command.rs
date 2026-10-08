@@ -937,7 +937,7 @@ impl Document {
                 }
                 Ok(Applied::default())
             }
-            AlignObjects { .. } | DistributeObjects { .. } | ReplaceText { .. } => {
+            AlignObjects { .. } | DistributeObjects { .. } => {
                 Err(CoreError::Unsupported(format!("{cmd:?} is not implemented yet")))
             }
             Group { ids } => {
@@ -997,6 +997,21 @@ impl Document {
             DeleteText { target, start, end } => {
                 let sid = self.story_of(*target)?;
                 self.story_mut(sid)?.delete(*start..*end)?;
+                Ok(Applied::default())
+            }
+            ReplaceText { target, start, end, text } => {
+                let sid = self.story_of(*target)?;
+                let st = self.story_mut(sid)?;
+                if start > end || *end > st.len() {
+                    return Err(CoreError::BadRange { start: *start, end: *end, len: st.len() });
+                }
+                if start == end {
+                    st.insert(*start, text, None)?;
+                } else {
+                    let attrs = st.span_attrs_at(*start);
+                    st.delete(*start..*end)?;
+                    st.insert(*start, text, Some(attrs))?;
+                }
                 Ok(Applied::default())
             }
             FormatChars { target, start, end, attrs } => {
