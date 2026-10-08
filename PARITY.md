@@ -6,7 +6,8 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 **Rules**
 - An item is checked (`[x]`) only when every journey listed for it passes in CI on macOS, Windows, and Linux.
   The first items were checked from CI run 37839317947 (commit addfc94), whose job logs show 93/97 journeys passing on all three OSes;
-  the failing set (J-AX-003, J-BB-003, J-BB-004, UI-SH-007) is the same on every OS.
+  the failing set (J-AX-003, J-BB-003, J-BB-004, UI-SH-007) is the same on every OS. The remaining P0–P2 items were checked
+  from CI run 37842573100 (commit bb529dc): 100/100 journeys pass on macOS, Windows, and Linux.
 - Journeys are written by the lead **before** an item is dispatched. The implementing agent never edits them.
 - Priorities: **P0** means newpub is unusable without it. **P1** means everyday work needs it.
   **P2** covers professional and occasional workflows. **P3** is rare, legacy, or research.
@@ -117,7 +118,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | GD-01 | P1 | Margin and column/row grid guides | J-GD-001 | [x] |
 | GD-02 | P1 | Ruler guides (add, move, delete) | J-GD-001 | [x] |
 | GD-03 | P1 | Snap to guides, objects, and margins when moving/resizing | J-GD-002 | [x] |
-| GD-04 | P2 | Rulers, zoom, measurement units (in, cm, mm, pt, pi) | J-GD-003, UI-GD-001 | [ ] |
+| GD-04 | P2 | Rulers, zoom, measurement units (in, cm, mm, pt, pi) | J-GD-003, UI-GD-001 | [x] |
 | GD-05 | P2 | Object position/size panel (exact numeric placement) | J-GD-003 | [x] |
 
 ## LY: Layers and z-order
@@ -135,8 +136,8 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 |----|---|---------|----------|------|
 | BB-01 | P1 | Save publication as template; new publication from template | J-BB-001 | [x] |
 | BB-02 | P1 | Built-in starter templates (original designs: newsletter, flyer, bulletin, booklet) | J-BB-002 | [x] |
-| BB-03 | P2 | Building blocks: save selection, insert block; built-in originals (headings, sidebars, pull quotes) | J-BB-003 | [ ] |
-| BB-04 | P2 | Colour schemes and font schemes applied publication-wide | J-BB-004 | [ ] |
+| BB-03 | P2 | Building blocks: save selection, insert block; built-in originals (headings, sidebars, pull quotes) | J-BB-003 | [x] |
+| BB-04 | P2 | Colour schemes and font schemes applied publication-wide | J-BB-004 | [x] |
 | BB-05 | P3 | Business information sets (fields auto-filled into publication) | J-BB-005 | [ ] |
 
 ## MM: Mail merge and catalog merge
@@ -160,7 +161,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | PR-04 | P1 | Multiple pages per sheet (n-up) and duplex settings | J-PR-003 | [x] |
 | PR-05 | P2 | CMYK colours in the document model and DeviceCMYK output | J-PR-004 | [x] |
 | PR-06 | P2 | Spot colours (Separation colourspace) | J-PR-004 | [x] |
-| PR-07 | P2 | Print to system printer (OS print dialog) | UI-PR-001 | [ ] |
+| PR-07 | P2 | Print to system printer (OS print dialog) | UI-PR-001 | [x] |
 | PR-08 | P3 | Colour separations and overprint control | J-PR-005 | [ ] |
 | PR-09 | P3 | Pack and Go (collect fonts/images into a folder) | J-PR-006 | [ ] |
 
@@ -215,8 +216,8 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 |----|---|---------|----------|------|
 | AX-01 | P1 | Alt text on all non-text objects; mark decorative | J-AX-001 | [x] |
 | AX-02 | P1 | Accessibility checker (missing alt text, low contrast, reading order, tiny text) | J-AX-002 | [x] |
-| AX-03 | P2 | Tagged PDF (PDF/UA) with reading order and alt text | J-AX-003 | [ ] |
-| AX-04 | P2 | App UI fully operable by keyboard and screen reader (AccessKit tree) | UI-AX-001 | [ ] |
+| AX-03 | P2 | Tagged PDF (PDF/UA) with reading order and alt text | J-AX-003 | [x] |
+| AX-04 | P2 | App UI fully operable by keyboard and screen reader (AccessKit tree) | UI-AX-001 | [x] |
 
 ## FR: Find and replace
 
@@ -235,6 +236,6 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | UI-03 | P1 | Select, move, and resize objects with mouse and keyboard nudges | UI-SH-003 | [x] |
 | UI-04 | P1 | Format panels (font, paragraph, object) wired to commands | UI-SH-004 | [x] |
 | UI-05 | P1 | Open/save dialogs, recent files | UI-SH-005 | [x] |
-| UI-06 | P2 | Zoom, scroll, two-page spread view, rulers | UI-GD-001 | [ ] |
+| UI-06 | P2 | Zoom, scroll, two-page spread view, rulers | UI-GD-001 | [x] |
 | UI-07 | P1 | Keyboard shortcuts carried over from NewsPub (duplicate, z-order, zoom stops, fit, nudge, Tab through story frames) | UI-SH-006 | [x] |
-| UI-08 | P2 | Template picker at startup; new publication from a built-in or saved template | UI-SH-007 | [ ] |
+| UI-08 | P2 | Template picker at startup; new publication from a built-in or saved template | UI-SH-007 | [x] |

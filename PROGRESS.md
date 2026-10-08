@@ -7,7 +7,7 @@ The dashboard parses this file:
 
 ## Open blockers (need human input)
 
-- [B-001] Partly answered: the existing source is birchamp/newspub (Electron + React + TypeScript on branches `master` and `claude/ui-testing-responsiveness-smep9u`). Target users are now taken from the predecessor's spec (non-technical users making multi-page newsletters). Still open: the dashboard location (assumed: GitHub Pages, which already deploys from CI). Reply only to change it.
+(none; B-001 resolved 2026-10-08: the dashboard is published as a claude.ai page at the user's request, and GitHub Pages also deploys from CI)
 
 ## Log
 
@@ -102,3 +102,9 @@ The dashboard parses this file:
 - Merge conflict in app/lib.rs (fields, `view_state`, and `ui()` hooks from both UI tasks) resolved by the lead. VIEWAX made `view_state` report the TextBox tool as "Text" to fit the original journey wording; the merge keeps the uniform debug name "TextBox", which matches the corrected UI-AX-001.
 - Local: 100/100 journeys pass, clippy and fmt clean. All P0–P2 items are implemented; check-off waits for CI on all three OSes.
 - Untested: the real OS print hand-off (CI has no printer).
+
+### 2026-10-08 23:10 — Stop condition reached: all P0–P2 items pass on all three OSes
+- CI run 37842573100 at commit bb529dc: clippy, build and 100/100 journeys pass on Linux, macOS and Windows.
+- Checked off: BB-03, BB-04, AX-03, UI-08, PR-07, GD-04, UI-06, AX-04. PARITY now stands at 113/128; P0–P2 at 110/110.
+- B-001 closed: the dashboard is the claude.ai page, with GitHub Pages as a CI mirror.
+- Final report: REPORT.md (parity by area, known gaps, top risks, P3 recommendations).
