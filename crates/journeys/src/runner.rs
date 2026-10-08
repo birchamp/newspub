@@ -223,7 +223,12 @@ pub fn run_step(s: &mut Session, ctx: &mut Ctx, step: &Value) -> Result<()> {
             let q = spec.get("query").ok_or_else(|| anyhow!("expect needs a query"))?;
             let mut actual = run_query(s, q)?;
             if let Some(p) = spec.get("path").and_then(|p| p.as_str()) {
-                actual = pointer(&actual, p)?.clone();
+                // An absent optional field reads as null for `is_null` (the model omits empty options).
+                actual = match actual.pointer(p) {
+                    Some(v) => v.clone(),
+                    None if spec.contains_key("is_null") => Value::Null,
+                    None => pointer(&actual, p)?.clone(),
+                };
             }
             check_matchers(&actual, spec).map_err(|e| anyhow!("{} — query {}", e, q))?;
             if let Some(Value::String(var)) = spec.get("as") {

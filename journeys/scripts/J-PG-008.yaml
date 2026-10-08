@@ -16,13 +16,13 @@ steps:
   - insert_text: {target: $f, text: "Jane Smith"}
   # exported on its own the card is one card-sized page
   - export_pdf: {path: card.pdf}
-  - expect_pdf: {file: card.pdf, pages: 1, page_size: [252, 144]}
+  - expect_pdf: {file: card.pdf, pages: 1, page_size: {w: 252, h: 144}}
   # printed on the sheet: ten copies on one Letter page; the sheet is 0.75 in from the left, 0.5 in from the top
   - export_pdf: {path: sheet.pdf, options: {imposition: document_sheet}}
   - expect_pdf:
       file: sheet.pdf
       pages: 1
-      page_size: [612, 792]
+      page_size: {w: 612, h: 792}
       page_text: [{page: 1, contains: "Jane Smith"}]
       ink:
         # the name on the first card (top left) and on the tenth (bottom right)

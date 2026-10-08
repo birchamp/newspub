@@ -2415,6 +2415,7 @@ dependencies = [
  "image",
  "newpub-core",
  "newpub-io-html",
+ "newpub-io-metafile",
  "newpub-io-native",
  "newpub-io-pdf",
  "newpub-io-pub",

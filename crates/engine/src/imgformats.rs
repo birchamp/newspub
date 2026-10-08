@@ -1,5 +1,5 @@
 //! Picture formats (IM-09): decoding files into assets.
-//! Owner: Batch 4 task IMAGES. PNG and JPEG are stored as they are; other formats are placeholders.
+//! PNG and JPEG are stored as they are; GIF, BMP and TIFF become PNG; SVG, EMF and WMF are stored as SVG.
 
 use crate::EngineError;
 
@@ -18,6 +18,11 @@ pub(crate) struct Picture {
 pub(crate) fn decode_picture(bytes: &[u8]) -> Result<Picture, EngineError> {
     if looks_like_svg(bytes) {
         return decode_svg(bytes);
+    }
+    // Windows metafiles become SVG drawings (IM-11).
+    if newpub_io_metafile::is_emf(bytes) || newpub_io_metafile::is_wmf(bytes) {
+        let svg = newpub_io_metafile::to_svg(bytes).map_err(|e| EngineError::Image(e.to_string()))?;
+        return decode_svg(svg.as_bytes());
     }
     let reader = image::ImageReader::new(std::io::Cursor::new(bytes))
         .with_guessed_format()

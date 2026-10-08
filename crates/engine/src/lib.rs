@@ -384,7 +384,7 @@ impl Session {
         }
         let layout = self.layout();
         let doc = self.view.as_deref().unwrap_or(&self.doc);
-        let disp = newpub_render::page_display_for(doc, &layout, page, true);
+        let disp = newpub_render::page_display_for(doc, &layout, &self.fonts, page, true);
         newpub_render::render_page(&mut self.raster, doc, &self.fonts, &disp, dpi)
             .ok_or_else(|| EngineError::Other("render failed".into()))
     }
@@ -559,6 +559,8 @@ impl Session {
                 // Optional fields the file format omits are reported as null.
                 if let Some(m) = v.as_object_mut() {
                     m.entry("layer").or_insert(Value::Null);
+                    m.entry("hidden").or_insert(Value::Bool(false));
+                    m.entry("overprint").or_insert(Value::Bool(false));
                 }
                 v
             }

@@ -1,5 +1,5 @@
 {
- "updated": "2026-10-08T22:40:00Z",
+ "updated": "2026-10-08T23:45:00Z",
  "tasks": [
   {
    "item": "LY-03",
@@ -509,97 +509,97 @@
    "item": "TB-05",
    "agent": "TABLEPASTE",
    "tier": "haiku",
-   "state": "in_progress",
+   "state": "merged",
    "batch": "B4",
-   "note": ""
+   "note": "approved first attempt"
   },
   {
    "item": "FR-03",
    "agent": "FINDFMT",
    "tier": "sonnet",
-   "state": "in_progress",
+   "state": "merged",
    "batch": "B4",
-   "note": ""
+   "note": "approved first attempt"
   },
   {
    "item": "IM-09",
    "agent": "IMAGES",
    "tier": "sonnet",
-   "state": "in_progress",
+   "state": "merged",
    "batch": "B4",
-   "note": ""
+   "note": "approved first attempt"
   },
   {
    "item": "IM-10",
    "agent": "OBJECTS",
    "tier": "sonnet",
-   "state": "in_progress",
+   "state": "merged",
    "batch": "B4",
-   "note": ""
+   "note": "approved first attempt"
   },
   {
    "item": "LY-04",
    "agent": "OBJECTS",
    "tier": "sonnet",
-   "state": "in_progress",
+   "state": "merged",
    "batch": "B4",
-   "note": ""
+   "note": "approved first attempt"
   },
   {
    "item": "PG-11",
    "agent": "PRODUCTS",
    "tier": "sonnet",
-   "state": "in_progress",
+   "state": "merged",
    "batch": "B4",
-   "note": ""
+   "note": "approved first attempt"
   },
   {
    "item": "TY-18",
    "agent": "TEXTART",
    "tier": "sonnet",
-   "state": "in_progress",
+   "state": "merged",
    "batch": "B4",
-   "note": ""
+   "note": "approved first attempt"
   },
   {
    "item": "TY-19",
    "agent": "TEXTART",
    "tier": "sonnet",
-   "state": "in_progress",
+   "state": "merged",
    "batch": "B4",
-   "note": ""
+   "note": "approved first attempt"
   },
   {
    "item": "SH-08",
    "agent": "FREEFORM",
    "tier": "sonnet",
-   "state": "in_progress",
+   "state": "merged",
    "batch": "B4",
-   "note": ""
+   "note": "approved first attempt"
   },
   {
    "item": "PR-08",
    "agent": "SEPARATIONS",
    "tier": "sonnet",
-   "state": "in_progress",
+   "state": "merged",
    "batch": "B4",
-   "note": ""
+   "note": "approved first attempt"
   },
   {
    "item": "PR-09",
    "agent": "PACKGO",
    "tier": "haiku",
-   "state": "in_progress",
+   "state": "merged",
    "batch": "B4",
-   "note": ""
+   "note": "approved first attempt"
   },
   {
    "item": "EX-06",
    "agent": "EXPORT",
    "tier": "sonnet",
-   "state": "in_progress",
+   "state": "merged",
    "batch": "B4",
-   "note": ""
+   "note": "approved first attempt"
   },
   {
    "item": "MM-05",
@@ -627,11 +627,11 @@
   },
   {
    "item": "IM-11",
-   "agent": "",
-   "tier": "",
-   "state": "blocked",
-   "batch": "",
-   "note": "EMF/WMF: research, no maintained Rust parser"
+   "agent": "lead",
+   "tier": "lead",
+   "state": "merged",
+   "batch": "B4",
+   "note": "EMF/WMF to SVG converter (common drawing records) by lead"
   }
  ]
 }

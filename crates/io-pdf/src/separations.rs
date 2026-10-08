@@ -183,8 +183,8 @@ impl Mapper {
 }
 
 /// The page's display items, each flagged with whether its top-level object overprints.
-fn flagged_items(doc: &Document, layout: &DocLayout, pi: usize) -> Vec<(Item, bool)> {
-    let full = page_display(doc, layout, pi);
+fn flagged_items(doc: &Document, layout: &DocLayout, fonts: &FontStore, pi: usize) -> Vec<(Item, bool)> {
+    let full = page_display(doc, layout, fonts, pi);
     if !doc.objects.values().any(|o| o.overprint) {
         return full.items.into_iter().map(|i| (i, false)).collect();
     }
@@ -201,7 +201,7 @@ fn flagged_items(doc: &Document, layout: &DocLayout, pi: usize) -> Vec<(Item, bo
     for o in hid.objects.values_mut() {
         o.hidden = true;
     }
-    let base = page_display(&hid, layout, pi).items.len();
+    let base = page_display(&hid, layout, fonts, pi).items.len();
     let mut out: Vec<(Item, bool)> = full.items.iter().take(base).map(|i| (i.clone(), false)).collect();
     for id in top {
         let Some(top_obj) = doc.objects.get(&id) else { continue };
@@ -211,7 +211,7 @@ fn flagged_items(doc: &Document, layout: &DocLayout, pi: usize) -> Vec<(Item, bo
                 h.hidden = orig.hidden;
             }
         }
-        let items = page_display(&hid, layout, pi).items;
+        let items = page_display(&hid, layout, fonts, pi).items;
         out.extend(items.into_iter().skip(base).map(|i| (i, top_obj.overprint)));
         for k in &family {
             if let Some(h) = hid.objects.get_mut(k) {
@@ -264,7 +264,7 @@ pub fn export_separations(
     let mut ctx = Ctx { doc, fonts, kfonts: HashMap::new(), images: HashMap::new(), svgs: HashMap::new() };
     let mut mapper = Mapper { plate: String::new(), plate_ix: 0, images: HashMap::new(), next_fake: 0 };
     for &pi in indices {
-        let items = flagged_items(doc, layout, pi);
+        let items = flagged_items(doc, layout, fonts, pi);
         for (ix, name) in names.iter().enumerate() {
             let settings = PageSettings::from_wh(w as f32, h as f32).ok_or(PdfError::Empty)?;
             let mut page = kd.start_page_with(settings);

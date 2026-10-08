@@ -123,3 +123,24 @@ The dashboard parses this file:
   - engine actions and queries, and the picture-decoding hook.
 - Done by the lead (journeys pass locally): MM-05 catalog merge, MM-06 Excel data source (calamine, MIT), BB-05 business information sets.
 - Batch 4 dispatched on base f5fa56d (103/115 passing): TABLEPASTE (Haiku), FINDFMT, IMAGES, OBJECTS, PRODUCTS, TEXTART, FREEFORM, SEPARATIONS (Sonnet), PACKGO (Haiku), EXPORT (Sonnet).
+
+### 2026-10-08 23:45 — Batch 4 (P3) merged; IM-11 done by the lead
+- All 10 tasks were approved by Sonnet review on the first attempt:
+  - TABLEPASTE (TB-05) and PACKGO (PR-09), on Haiku;
+  - FINDFMT (FR-03), IMAGES (IM-09), OBJECTS (IM-10, LY-04), PRODUCTS (PG-11), TEXTART (TY-18, TY-19), FREEFORM (SH-08), SEPARATIONS (PR-08) and EXPORT (EX-06: EPUB and XPS), on Sonnet.
+- IM-11 (lead): a new `newpub-io-metafile` crate converts EMF and WMF to SVG from the published record layouts, and `decode_picture` stores the result as an SVG picture.
+  - It covers shapes, polygons, polylines, Béziers, paths, pens and brushes, text, mapping modes and world transforms.
+  - Bitmaps, clipping and gradients inside metafiles are not converted.
+  - The fixtures come from `tools/fixtures/make_metafiles.py`, and PIL parses both as valid metafiles.
+- Lead fixes at merge:
+  - the Object query reports `hidden` and `overprint` (LY-04);
+  - `io-native::open` resolves relative picture links against the file's folder (Pack and Go);
+  - the runner treats a missing path as null for `is_null`;
+  - J-PG-008's `page_size` now uses the `{w, h}` form (my format error);
+  - the display list receives the `FontStore`, so WordArt uses the publication's fonts and not just the bundled ones (TEXTART's LEAD-NEEDED);
+  - conflicts resolved: render raster (SVG scaling plus TEXTART's refactor), io-pdf Cargo.toml and `Ctx.svgs`, and the workspace members (io-metafile and io-xps).
+- Accepted agent notes:
+  - IMAGES re-encodes GIF/BMP/TIFF as PNG with a "Source" text chunk recording the original format.
+  - The XPS output has not been opened in a real XPS viewer, only checked as well-formed XML.
+  - SEPARATIONS ignores overprint on group children.
+- Local result: 116/116 journeys pass, and clippy and fmt are clean.

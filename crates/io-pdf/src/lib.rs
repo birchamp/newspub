@@ -512,7 +512,7 @@ pub fn export_pdf(
         let mut s = page.surface();
         for slot in &sheet.slots {
             let Some(pi) = slot.page else { continue };
-            let disp = page_display(doc, layout, pi);
+            let disp = page_display(doc, layout, fonts, pi);
             let (ox, oy) = (pad + slot.x, pad + slot.y);
             // Clip to the page's trim, plus bleed on the sheet's outer edges.
             let eps = 0.01;

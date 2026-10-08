@@ -575,9 +575,11 @@ fn visible(doc: &Document, o: &Object) -> bool {
 }
 
 /// Pushes an object's items; pictures and described shapes become Figure structure elements.
+#[allow(clippy::too_many_arguments)]
 fn push_object(
     doc: &Document,
     layout: &DocLayout,
+    fonts: &FontStore,
     page: usize,
     id: Id,
     parent: Affine,
@@ -590,7 +592,7 @@ fn push_object(
         _ => None,
     });
     let start = items.len();
-    push_object_inner(doc, layout, page, id, parent, screen, items);
+    push_object_inner(doc, layout, fonts, page, id, parent, screen, items);
     if let Some(alt) = figure
         && items.len() > start
     {
@@ -619,9 +621,11 @@ fn push_object(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_object_inner(
     doc: &Document,
     layout: &DocLayout,
+    fonts: &FontStore,
     page: usize,
     id: Id,
     parent: Affine,
@@ -842,7 +846,7 @@ fn push_object_inner(
             }
         }
         ObjectKind::WordArt(wa) => {
-            let path = wordart_path(art_fonts(), wa, w, h);
+            let path = wordart_path(fonts, wa, w, h);
             if path.is_empty() {
                 return;
             }
@@ -864,7 +868,7 @@ fn push_object_inner(
         ObjectKind::Group { children } => {
             // Children are stored in page coordinates; the group's own transform is not applied.
             for c in children {
-                push_object(doc, layout, page, *c, parent, screen, items);
+                push_object(doc, layout, fonts, page, *c, parent, screen, items);
             }
         }
     }
@@ -872,12 +876,18 @@ fn push_object_inner(
 
 /// Builds the print display list for page `index` (master objects first, then page objects).
 /// Screen-only aids such as picture placeholders are left out.
-pub fn page_display(doc: &Document, layout: &DocLayout, index: usize) -> PageDisplay {
-    page_display_for(doc, layout, index, false)
+pub fn page_display(doc: &Document, layout: &DocLayout, fonts: &FontStore, index: usize) -> PageDisplay {
+    page_display_for(doc, layout, fonts, index, false)
 }
 
 /// Like [`page_display`]; with `screen` set, includes on-screen-only items (empty picture placeholders).
-pub fn page_display_for(doc: &Document, layout: &DocLayout, index: usize, screen: bool) -> PageDisplay {
+pub fn page_display_for(
+    doc: &Document,
+    layout: &DocLayout,
+    fonts: &FontStore,
+    index: usize,
+    screen: bool,
+) -> PageDisplay {
     let mut items = vec![];
     let (w, h) = (doc.setup.width.0, doc.setup.height.0);
     if let Some(page) = doc.pages.get(index) {
@@ -894,20 +904,14 @@ pub fn page_display_for(doc: &Document, layout: &DocLayout, index: usize, screen
         }
         if let Some(m) = master {
             for id in &m.objects {
-                push_object(doc, layout, index, *id, Affine::IDENTITY, screen, &mut items);
+                push_object(doc, layout, fonts, index, *id, Affine::IDENTITY, screen, &mut items);
             }
         }
         for id in doc.draw_order(index) {
-            push_object(doc, layout, index, id, Affine::IDENTITY, screen, &mut items);
+            push_object(doc, layout, fonts, index, id, Affine::IDENTITY, screen, &mut items);
         }
     }
     PageDisplay { width: w, height: h, items }
-}
-
-/// Bundled fonts used to lay out WordArt in display lists (which carry no font store).
-fn art_fonts() -> &'static FontStore {
-    static FONTS: std::sync::OnceLock<FontStore> = std::sync::OnceLock::new();
-    FONTS.get_or_init(FontStore::bundled)
 }
 
 struct OutlinePath {

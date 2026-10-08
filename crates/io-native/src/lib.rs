@@ -112,8 +112,19 @@ pub fn save(doc: &Document, path: &std::path::Path) -> Result<(), NativeError> {
     Ok(())
 }
 
+/// Opens a file. Linked pictures with relative paths are found relative to the file's folder.
 pub fn open(path: &std::path::Path) -> Result<Document, NativeError> {
-    read(std::io::BufReader::new(std::fs::File::open(path)?))
+    let mut doc = read(std::io::BufReader::new(std::fs::File::open(path)?))?;
+    let folder = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    for a in doc.assets.values_mut() {
+        if let Some(link) = &a.link
+            && std::path::Path::new(link).is_relative()
+            && let Ok(b) = std::fs::read(folder.join(link))
+        {
+            a.bytes = std::sync::Arc::from(b);
+        }
+    }
+    Ok(doc)
 }
 
 /// Names of all entries inside a saved `.npub` file, in archive order.
