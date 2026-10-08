@@ -1,7 +1,7 @@
 //! Raster back end (tiny-skia).
 
-use crate::display::{Item, PageDisplay, PathEl, StrokeStyle};
-use newpub_core::{Affine, Color, Document, Id, LineCap, LineJoin};
+use crate::display::{GradientPaint, Item, PageDisplay, PathEl, StrokeStyle};
+use newpub_core::{Affine, Color, Document, Id, ImageAdjust, LineCap, LineJoin};
 use newpub_layout::{FaceId, FontStore, GlyphRun};
 use std::collections::HashMap;
 use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Transform};
@@ -55,15 +55,54 @@ impl ttf_parser::OutlineBuilder for Outline {
 /// Caches decoded images and glyph outlines across renders.
 #[derive(Default)]
 pub struct Rasterizer {
-    images: HashMap<Id, Option<Pixmap>>,
+    images: HashMap<(Id, String), Option<Pixmap>>,
     glyphs: HashMap<(FaceId, u16), Option<tiny_skia::Path>>,
+}
+
+/// Decodes image bytes and applies `adjust` (greyscale, brightness, contrast, recolour, in that order).
+/// Returns width, height and straight (non-premultiplied) RGBA bytes.
+pub fn adjust_rgba(bytes: &[u8], adjust: &ImageAdjust) -> Option<(u32, u32, Vec<u8>)> {
+    let img = image::load_from_memory(bytes).ok()?.to_rgba8();
+    let (w, h) = img.dimensions();
+    let mut data = img.into_raw();
+    if adjust.is_identity() {
+        return Some((w, h, data));
+    }
+    let tint = adjust.recolor.as_ref().map(|c| c.to_rgba8());
+    let b = adjust.brightness.clamp(-1.0, 1.0);
+    let k = adjust.contrast.clamp(-1.0, 1.0);
+    let lum = |c: [f64; 3]| 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+    for px in data.chunks_exact_mut(4) {
+        let mut c = [px[0] as f64, px[1] as f64, px[2] as f64];
+        if adjust.greyscale {
+            c = [lum(c); 3];
+        }
+        for v in &mut c {
+            if b > 0.0 {
+                *v += (255.0 - *v) * b;
+            } else if b < 0.0 {
+                *v *= 1.0 + b;
+            }
+            *v = (128.0 + (*v - 128.0) * (1.0 + k)).clamp(0.0, 255.0);
+        }
+        if let Some(t) = tint {
+            let l = lum(c) / 255.0;
+            c = [t[0] as f64 * l, t[1] as f64 * l, t[2] as f64 * l];
+        }
+        for (d, v) in px[..3].iter_mut().zip(c) {
+            *d = v.round().clamp(0.0, 255.0) as u8;
+        }
+    }
+    Some((w, h, data))
 }
 
 /// Decodes image bytes into a premultiplied pixmap.
 pub fn decode_image(bytes: &[u8]) -> Option<Pixmap> {
-    let img = image::load_from_memory(bytes).ok()?.to_rgba8();
-    let (w, h) = img.dimensions();
-    let mut data = img.into_raw();
+    decode_adjusted(bytes, &ImageAdjust::default())
+}
+
+fn decode_adjusted(bytes: &[u8], adjust: &ImageAdjust) -> Option<Pixmap> {
+    let (w, h, mut data) = adjust_rgba(bytes, adjust)?;
     for px in data.chunks_exact_mut(4) {
         let a = px[3] as u16;
         for c in &mut px[..3] {
@@ -137,6 +176,37 @@ impl Rasterizer {
         pm.stroke_path(path, &paint_for(&s.color), &st, t, None);
     }
 
+    fn gradient_shader(g: &GradientPaint) -> Option<tiny_skia::Shader<'static>> {
+        let stops: Vec<tiny_skia::GradientStop> = g
+            .stops
+            .iter()
+            .map(|(at, c)| {
+                let [r, gr, b, a] = c.to_rgba8();
+                tiny_skia::GradientStop::new(*at as f32, tiny_skia::Color::from_rgba8(r, gr, b, a))
+            })
+            .collect();
+        let pt = |p: (f64, f64)| tiny_skia::Point::from_xy(p.0 as f32, p.1 as f32);
+        if g.radial {
+            tiny_skia::RadialGradient::new(
+                pt(g.from),
+                0.0,
+                pt(g.from),
+                g.radius as f32,
+                stops,
+                tiny_skia::SpreadMode::Pad,
+                Transform::identity(),
+            )
+        } else {
+            tiny_skia::LinearGradient::new(
+                pt(g.from),
+                pt(g.to),
+                stops,
+                tiny_skia::SpreadMode::Pad,
+                Transform::identity(),
+            )
+        }
+    }
+
     /// Paints a display list. `base` maps page points to pixels.
     pub fn paint(&mut self, pm: &mut Pixmap, doc: &Document, fonts: &FontStore, page: &PageDisplay, base: Affine) {
         for item in &page.items {
@@ -155,11 +225,16 @@ impl Rasterizer {
                     let t = ts(&base.compose(*transform));
                     self.draw_run(pm, fonts, run, t);
                 }
-                Item::Image { asset, local, clip, transform } => {
+                Item::GradPath { path, paint, transform } => {
+                    let (Some(p), Some(shader)) = (build_path(path), Self::gradient_shader(paint)) else { continue };
+                    let paint = Paint { anti_alias: true, shader, ..Default::default() };
+                    pm.fill_path(&p, &paint, FillRule::Winding, ts(&base.compose(*transform)), None);
+                }
+                Item::Image { asset, local, clip, mask, opacity, adjust, transform } => {
                     let img = self
                         .images
-                        .entry(*asset)
-                        .or_insert_with(|| doc.assets.get(asset).and_then(|a| decode_image(&a.bytes)));
+                        .entry((*asset, format!("{adjust:?}")))
+                        .or_insert_with(|| doc.assets.get(asset).and_then(|a| decode_adjusted(&a.bytes, adjust)));
                     let Some(img) = img.as_ref() else { continue };
                     let Some(rect) =
                         tiny_skia::Rect::from_xywh(clip.x as f32, clip.y as f32, clip.w as f32, clip.h as f32)
@@ -173,12 +248,22 @@ impl Rasterizer {
                             img.as_ref(),
                             tiny_skia::SpreadMode::Pad,
                             tiny_skia::FilterQuality::Bicubic,
-                            1.0,
+                            *opacity as f32,
                             ts(local),
                         ),
                         ..Default::default()
                     };
-                    pm.fill_path(&p, &paint, FillRule::Winding, ts(&base.compose(*transform)), None);
+                    let t = ts(&base.compose(*transform));
+                    let clip_mask = mask.as_ref().and_then(|m| {
+                        let mp = build_path(m)?;
+                        let mut cm = tiny_skia::Mask::new(pm.width(), pm.height())?;
+                        cm.fill_path(&mp, FillRule::Winding, true, t);
+                        Some(cm)
+                    });
+                    if mask.is_some() && clip_mask.is_none() {
+                        continue;
+                    }
+                    pm.fill_path(&p, &paint, FillRule::Winding, t, clip_mask.as_ref());
                 }
             }
         }

@@ -58,6 +58,7 @@ impl B {
         Ok(self.d.apply(&c)?.created)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn style(
         &mut self,
         name: &str,

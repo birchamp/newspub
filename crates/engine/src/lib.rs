@@ -368,7 +368,7 @@ impl Session {
         }
         let layout = self.layout();
         let doc = self.view.as_deref().unwrap_or(&self.doc);
-        let disp = newpub_render::page_display(doc, &layout, page);
+        let disp = newpub_render::page_display_for(doc, &layout, page, true);
         newpub_render::render_page(&mut self.raster, doc, &self.fonts, &disp, dpi)
             .ok_or_else(|| EngineError::Other("render failed".into()))
     }
@@ -538,7 +538,14 @@ impl Session {
                 let p = self.doc.pages.get(*page).ok_or(CoreError::NoSuchPage(*page))?;
                 to(p)
             }
-            Object { id } => to(self.doc.object(*id)?),
+            Object { id } => {
+                let mut v = to(self.doc.object(*id)?);
+                // Optional fields the file format omits are reported as null.
+                if let Some(m) = v.as_object_mut() {
+                    m.entry("layer").or_insert(Value::Null);
+                }
+                v
+            }
             ObjectCount { page } => json!(self.doc.pages.get(*page).ok_or(CoreError::NoSuchPage(*page))?.objects.len()),
             PageObjects { page } => to(&self.doc.pages.get(*page).ok_or(CoreError::NoSuchPage(*page))?.objects),
             StoryText { target } => {

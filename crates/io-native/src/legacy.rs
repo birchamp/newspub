@@ -138,7 +138,7 @@ fn build_story(id: Id, thread: Option<&Value>, frames: Vec<Id>) -> Story {
     if para_start {
         paras.push(ParaAttrs::default());
     }
-    let mut story = Story { id, text, chars, paras, frames };
+    let mut story = Story { id, text, chars, paras, frames, typing_attrs: None };
     story.normalize();
     story
 }

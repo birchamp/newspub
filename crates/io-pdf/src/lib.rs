@@ -7,9 +7,9 @@ use krilla::num::NormalizedF32;
 use krilla::page::PageSettings;
 use krilla::paint::{Fill, FillRule, LineCap as KLineCap, LineJoin as KLineJoin, Stroke, StrokeDash};
 use krilla::text::{Font, GlyphId, KrillaGlyph};
-use newpub_core::{Affine, Color, Document};
+use newpub_core::{Affine, Color, Document, ImageAdjust};
 use newpub_layout::{DocLayout, FaceId, FontStore};
-use newpub_render::{Item, PageDisplay, PathEl, StrokeStyle, page_display};
+use newpub_render::{GradientPaint, Item, PageDisplay, PathEl, StrokeStyle, adjust_rgba, page_display};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -135,11 +135,58 @@ fn kstroke(s: &StrokeStyle) -> Stroke {
     }
 }
 
+fn kgradient(g: &GradientPaint) -> Option<krilla::paint::Paint> {
+    use krilla::paint::{LinearGradient, RadialGradient, SpreadMethod, Stop};
+    let stops: Vec<Stop> = g
+        .stops
+        .iter()
+        .map(|(at, c)| {
+            let [r, gr, b, a] = c.to_rgba8();
+            Stop {
+                offset: NormalizedF32::new(*at as f32).unwrap_or(NormalizedF32::ZERO),
+                color: rgb::Color::new(r, gr, b).into(),
+                opacity: NormalizedF32::new(a as f32 / 255.0).unwrap_or(NormalizedF32::ONE),
+            }
+        })
+        .collect();
+    if stops.len() == 1 {
+        let [r, gr, b, _] = g.stops.first()?.1.to_rgba8();
+        return Some(rgb::Color::new(r, gr, b).into());
+    }
+    Some(if g.radial {
+        RadialGradient {
+            fx: g.from.0 as f32,
+            fy: g.from.1 as f32,
+            fr: 0.0,
+            cx: g.from.0 as f32,
+            cy: g.from.1 as f32,
+            cr: g.radius as f32,
+            transform: Transform::identity(),
+            spread_method: SpreadMethod::Pad,
+            stops,
+            anti_alias: true,
+        }
+        .into()
+    } else {
+        LinearGradient {
+            x1: g.from.0 as f32,
+            y1: g.from.1 as f32,
+            x2: g.to.0 as f32,
+            y2: g.to.1 as f32,
+            transform: Transform::identity(),
+            spread_method: SpreadMethod::Pad,
+            stops,
+            anti_alias: true,
+        }
+        .into()
+    })
+}
+
 struct Ctx<'a> {
     doc: &'a Document,
     fonts: &'a FontStore,
     kfonts: HashMap<FaceId, Option<Font>>,
-    images: HashMap<newpub_core::Id, Option<krilla::image::Image>>,
+    images: HashMap<(newpub_core::Id, String), Option<krilla::image::Image>>,
 }
 
 impl Ctx<'_> {
@@ -154,12 +201,17 @@ impl Ctx<'_> {
             .clone()
     }
 
-    fn image(&mut self, id: newpub_core::Id) -> Option<krilla::image::Image> {
+    fn image(&mut self, id: newpub_core::Id, adjust: &ImageAdjust) -> Option<krilla::image::Image> {
         let doc = self.doc;
         self.images
-            .entry(id)
+            .entry((id, format!("{adjust:?}")))
             .or_insert_with(|| {
                 let a = doc.assets.get(&id)?;
+                if !adjust.is_identity() {
+                    // Bake the adjustments into the embedded pixels.
+                    let (w, h, rgba) = adjust_rgba(&a.bytes, adjust)?;
+                    return Some(krilla::image::Image::from_rgba8(rgba, w, h));
+                }
                 let data: Vec<u8> = a.bytes.to_vec();
                 let img = if a.mime == "image/jpeg" {
                     krilla::image::Image::from_jpeg(data.into(), true)
@@ -192,8 +244,16 @@ impl Ctx<'_> {
                     s.draw_path(&p);
                     s.pop();
                 }
-                Item::Image { asset, local, clip, transform } => {
-                    let Some(img) = self.image(*asset) else { continue };
+                Item::GradPath { path, paint, transform } => {
+                    let (Some(p), Some(kp)) = (kpath(path), kgradient(paint)) else { continue };
+                    s.push_transform(&kt(transform));
+                    s.set_fill(Some(Fill { paint: kp, opacity: NormalizedF32::ONE, rule: FillRule::NonZero }));
+                    s.set_stroke(None);
+                    s.draw_path(&p);
+                    s.pop();
+                }
+                Item::Image { asset, local, clip, mask, opacity, adjust, transform } => {
+                    let Some(img) = self.image(*asset, adjust) else { continue };
                     let (pw, ph) = img.size();
                     let Some(size) = Size::from_wh(pw as f32, ph as f32) else { continue };
                     let Some(cr) = KRect::from_xywh(clip.x as f32, clip.y as f32, clip.w as f32, clip.h as f32) else {
@@ -202,11 +262,31 @@ impl Ctx<'_> {
                     let mut pb = PathBuilder::new();
                     pb.push_rect(cr);
                     let Some(cp) = pb.finish() else { continue };
+                    let mp = match mask {
+                        Some(m) => match kpath(m) {
+                            Some(mp) => Some(mp),
+                            None => continue,
+                        },
+                        None => None,
+                    };
+                    let faded = *opacity < 0.999;
                     s.push_transform(&kt(transform));
                     s.push_clip_path(&cp, &FillRule::NonZero);
+                    if let Some(mp) = &mp {
+                        s.push_clip_path(mp, &FillRule::NonZero);
+                    }
+                    if faded {
+                        s.push_opacity(NormalizedF32::new(*opacity as f32).unwrap_or(NormalizedF32::ONE));
+                    }
                     s.push_transform(&kt(local));
                     s.draw_image(img, size);
                     s.pop();
+                    if faded {
+                        s.pop();
+                    }
+                    if mp.is_some() {
+                        s.pop();
+                    }
                     s.pop();
                     s.pop();
                 }

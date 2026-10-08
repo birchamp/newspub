@@ -9,7 +9,7 @@ steps:
   - expect_png: {page: 0, pixels: [{at: [73, 150], rgb: [255, 0, 0], tol: 30}]}
   # crop to an ellipse: the frame corners become empty
   - set_image: {id: $p, patch: {mask: ellipse}}
-  - expect_png: {page: 0, pixels: [{at: [80, 80], rgb: [255, 255, 255], tol: 20}, {at: [216, 180], rgb: [30, 90, 160], tol: 30}]}
+  - expect_png: {page: 0, pixels: [{at: [80, 80], rgb: [255, 255, 255], tol: 20}, {at: [288, 144], rgb: [30, 90, 160], tol: 30}]}
   - export_pdf: {path: masked.pdf}
   - expect_pdf: {file: masked.pdf, ink: [{page: 1, rect: [73, 73, 8, 8], max: 0.05}]}
   - set_image: {id: $p, patch: {mask: rect}}

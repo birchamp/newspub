@@ -189,6 +189,36 @@ impl Ctx<'_> {
                 o.push_str("</div>\n");
             }
             ObjectKind::Image(im) => self.image_html(o, ob, im, &label),
+            ObjectKind::Table(tb) => {
+                // Cell text is laid out relative to the table's top-left corner.
+                let st = object_style(ob);
+                let _ = writeln!(o, "<div class=\"obj table\"{label} style=\"{st}\">");
+                for r in 0..tb.rows() {
+                    for c in 0..tb.cols() {
+                        let (Some(cell), Some(cr)) = (tb.cell(r, c), tb.cell_rect(r, c)) else { continue };
+                        if cell.covered {
+                            continue;
+                        }
+                        let mut cs = format!(
+                            "position:absolute;left:{}px;top:{}px;width:{}px;height:{}px",
+                            px(cr.x),
+                            px(cr.y),
+                            px(cr.w),
+                            px(cr.h)
+                        );
+                        if let Some(f) = &cell.fill {
+                            let _ = write!(cs, ";background:{}", css_color(f));
+                        }
+                        let _ = writeln!(o, "<div class=\"cell\" style=\"{cs}\"></div>");
+                    }
+                }
+                for cell in &tb.cells {
+                    if let Some(fl) = self.layout.frames.get(&cell.story) {
+                        self.frame_html(o, fl);
+                    }
+                }
+                o.push_str("</div>\n");
+            }
             ObjectKind::Shape(sh) => {
                 let st = object_style(ob);
                 let _ = writeln!(o, "<div class=\"obj shape\"{label} style=\"{st}\">");

@@ -158,6 +158,15 @@ pub enum Command {
     DuplicatePage {
         page: usize,
     },
+    /// Deep-copies page objects (groups, stories, table cells included), offset by (dx, dy).
+    /// Text frames in a linked chain get one shared copy of the story. Created ids follow `ids`.
+    DuplicateObjects {
+        ids: Vec<Id>,
+        #[serde(default)]
+        dx: Length,
+        #[serde(default)]
+        dy: Length,
+    },
     SetPageBackground {
         page: usize,
         #[serde(default)]
@@ -833,6 +842,24 @@ impl Document {
     }
 
     /// Deep-copies an object (and group children / text stories) onto a page.
+    /// Moves an object and (for groups) its children, which are stored in page coordinates.
+    fn offset_tree(&mut self, id: Id, dx: f64, dy: f64) {
+        let kids = match self.objects.get_mut(&id) {
+            Some(o) => {
+                o.rect.x += dx;
+                o.rect.y += dy;
+                match &o.kind {
+                    ObjectKind::Group { children } => children.clone(),
+                    _ => vec![],
+                }
+            }
+            None => return,
+        };
+        for k in kids {
+            self.offset_tree(k, dx, dy);
+        }
+    }
+
     pub(crate) fn duplicate_object(
         &mut self,
         id: Id,
@@ -971,6 +998,19 @@ impl Document {
                 let mut created = vec![id];
                 for o in &src.objects {
                     created.push(self.duplicate_object(*o, page + 1, &mut map)?);
+                }
+                Ok(Applied::ids(created))
+            }
+            DuplicateObjects { ids, dx, dy } => {
+                let mut map = std::collections::HashMap::new();
+                let mut created = vec![];
+                for id in ids {
+                    let Some(Owner::Page(page)) = self.owner_of(*id) else {
+                        return Err(CoreError::Invalid(format!("object {} is not on a page", id.0)));
+                    };
+                    let nid = self.duplicate_object(*id, page, &mut map)?;
+                    self.offset_tree(nid, dx.0, dy.0);
+                    created.push(nid);
                 }
                 Ok(Applied::ids(created))
             }

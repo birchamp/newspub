@@ -69,6 +69,17 @@ impl Session {
                         note(&mut out, &st.color);
                     }
                 }
+                ObjectKind::Table(tb) => {
+                    for cell in &tb.cells {
+                        if let Some(c) = &cell.fill {
+                            note(&mut out, c);
+                        }
+                        let b = &cell.borders;
+                        for st in [&b.top, &b.bottom, &b.left, &b.right].into_iter().flatten() {
+                            note(&mut out, &st.color);
+                        }
+                    }
+                }
                 ObjectKind::Group { .. } => {}
             }
         }
