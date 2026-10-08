@@ -3,13 +3,15 @@
 use crate::para::{self, G, Para, RunStyle, Seg};
 use crate::{Decoration, DecorationKind, FontStore, FrameLayout, GlyphRun, Line, PGlyph, StoryLayout};
 use newpub_core::{
-    Align, Document, Id, LineSpacing, Object, ObjectKind, Rect, ResolvedPara, ShapeKind, Story, TabAlign, TextFrame,
-    VAlign, WrapMode,
+    Align, Document, Id, LineSpacing, ListStyle, Object, ObjectKind, Rect, ResolvedPara, ShapeKind, Story, TabAlign,
+    TextFrame, VAlign, WrapMode,
 };
 
 /// Narrowest line piece worth filling when text wraps around objects.
 const MIN_PIECE: f64 = 18.0;
 const EPS: f64 = 1e-6;
+/// Space between a drop cap and the text beside it, points.
+const DROP_GAP: f64 = 2.0;
 
 #[derive(Clone, Copy, Debug)]
 enum ExKind {
@@ -244,7 +246,7 @@ fn fill_line(p: &mut Para, story: &Story, width: f64, indent: f64, rp: &Resolved
     let mut hard = false;
     while let Some(mut seg) = p.segs.pop_front() {
         if seg.tab {
-            let (stop, align, _) = next_tab(indent + x, rp);
+            let (stop, align, leader) = next_tab(indent + x, rp);
             let mut w = (stop - indent - x).max(0.0);
             if align != TabAlign::Left {
                 // Width of the text up to the next tab or line end.
@@ -283,6 +285,7 @@ fn fill_line(p: &mut Para, story: &Story, width: f64, indent: f64, rp: &Resolved
             }
             if let Some(g) = seg.glyphs.first_mut() {
                 g.adv = w;
+                g.leader = leader;
             }
             x += w;
             let hb = seg.hard_break;
@@ -411,6 +414,8 @@ pub fn layout_story(doc: &Document, fonts: &FontStore, story: &Story) -> (StoryL
     let top = frames[0].top;
     let mut flow = Flow { frames, fi: 0, ci: 0, y: top, col_empty: true };
     let ranges = story.para_ranges();
+    // Number of the previous paragraph when it was numbered.
+    let mut prev_number: Option<u32> = None;
     'paras: for (pi, range) in ranges.iter().enumerate() {
         let rp = doc.resolve_para(&story.paras[pi]);
         let mut p = para::build(doc, fonts, story, pi, range.clone(), scale);
@@ -418,6 +423,43 @@ pub fn layout_story(doc: &Document, fonts: &FontStore, story: &Story) -> (StoryL
             flow.y += rp.space_before;
         }
         let mut first_line = true;
+        // Generated list marker.
+        let marker_text = match &rp.list {
+            ListStyle::None => {
+                prev_number = None;
+                None
+            }
+            ListStyle::Bullet { bullet, .. } => {
+                prev_number = None;
+                Some(bullet.to_string())
+            }
+            ListStyle::Numbered { format, start, suffix, .. } => {
+                let n = prev_number.map(|n| n + 1).unwrap_or(*start);
+                prev_number = Some(n);
+                Some(format!("{}{}", para::format_number(*format, n), suffix))
+            }
+        };
+        let list_indent = match &rp.list {
+            ListStyle::None => None,
+            ListStyle::Bullet { indent, .. } | ListStyle::Numbered { indent, .. } => Some(indent.0.max(0.0)),
+        };
+        let marker = marker_text.and_then(|t| para::shape_marker(&mut p, doc, fonts, story, pi, scale, &t));
+        // Drop cap: sized from the body line pitch and cap height.
+        let drop = match &rp.drop_cap {
+            Some(dc) if dc.lines > 0 && dc.chars > 0 && range.end > range.start => {
+                let body = match p.segs.front() {
+                    Some(sg) if !sg.glyphs.is_empty() => &p.styles[sg.glyphs[0].style],
+                    _ => &p.styles[p.mark],
+                };
+                let (pitch, _) = line_metrics(&[body], rp.line_spacing);
+                let body_cap = body.face.cap_height * body.size;
+                let body_cap = if body_cap > 0.1 { body_cap } else { body.size * 0.7 };
+                para::drop_cap(&mut p, doc, fonts, story, pi, scale, dc, pitch, body_cap)
+            }
+            _ => None,
+        };
+        let drop_lines = rp.drop_cap.as_ref().map(|d| d.lines as usize).unwrap_or(0);
+        let mut emitted = 0usize;
         loop {
             // Estimate the line height from the next segment's style (or the paragraph mark).
             let est_styles: Vec<&RunStyle> = match p.segs.front() {
@@ -439,8 +481,17 @@ pub fn layout_story(doc: &Document, fonts: &FontStore, story: &Story) -> (StoryL
                     if p.segs.is_empty() && !lines.is_empty() {
                         break;
                     }
-                    let lead =
-                        if first_line && lines.is_empty() { rp.indent_left + rp.indent_first } else { rp.indent_left };
+                    let line_no = emitted + lines.len();
+                    let mut lead = match list_indent {
+                        Some(ind) => rp.indent_left + ind,
+                        None if first_line && lines.is_empty() => rp.indent_left + rp.indent_first,
+                        None => rp.indent_left,
+                    };
+                    if let Some(d) = &drop
+                        && line_no < drop_lines
+                    {
+                        lead += d.width + DROP_GAP;
+                    }
                     let li = if k == 0 { lead } else { 0.0 };
                     let ri = if k + 1 == npieces { rp.indent_right } else { 0.0 };
                     let w = (b - a - li - ri).max(0.0);
@@ -507,7 +558,27 @@ pub fn layout_story(doc: &Document, fonts: &FontStore, story: &Story) -> (StoryL
                     justify,
                     &mut out.decorations,
                 );
+                let mut line = line;
+                if emitted == 0 && first_line {
+                    // Generated material belongs to the paragraph's first line only.
+                    let mut lead_runs: Vec<GlyphRun> = vec![];
+                    if let Some(m) = &marker {
+                        let mx = x - (rp.indent_left + list_indent.unwrap_or(0.0)) + rp.indent_left + rp.indent_first;
+                        lead_runs.push(marker_run(&p, m, range.start, mx, line.baseline));
+                    }
+                    if let Some(d) = &drop {
+                        let dx = x - d.width - DROP_GAP;
+                        let by = line.baseline + (drop_lines as f64 - 1.0) * lh;
+                        lead_runs.push(drop_run(story, &p, d, dx, by));
+                        line.char_range.start = range.start;
+                    }
+                    if !lead_runs.is_empty() {
+                        lead_runs.append(&mut line.runs);
+                        line.runs = lead_runs;
+                    }
+                }
                 out.lines.push(line);
+                emitted += 1;
             }
             flow.y = slot.y + lh;
             flow.col_empty = false;
@@ -617,6 +688,7 @@ fn emit_line(
                 gx: f64,
                 gy: f64,
                 adv: f64,
+                ghost: bool,
                 cur: &mut Option<(usize, GlyphRun, usize)>,
                 runs: &mut Vec<GlyphRun>| {
         if cur.as_ref().map(|c| c.0 != style).unwrap_or(true) {
@@ -638,13 +710,23 @@ fn emit_line(
             ));
         }
         let (_, run, first) = cur.as_mut().expect("run started");
-        let full = story.slice(*first..chars.end.max(*first));
+        // Ghost glyphs (tab leaders) map to no source text.
+        let end = if ghost { chars.start } else { chars.end };
+        let full = story.slice(*first..end.max(*first));
         if full.len() > run.text.len() {
             run.text = full.to_string();
         }
         let b0 = story.slice(*first..chars.start).len();
-        let b1 = story.slice(*first..chars.end).len();
-        run.glyphs.push(PGlyph { id: gid, x: gx, y: gy, advance: adv, text_range: b0..b1, char_index: chars.start });
+        let b1 = story.slice(*first..end).len();
+        run.glyphs.push(PGlyph {
+            id: gid,
+            x: gx,
+            y: gy,
+            advance: adv,
+            text_range: b0..b1,
+            char_index: chars.start,
+            generated: false,
+        });
     };
     let mut deco_spans: Vec<(DecorationKind, usize, f64, f64)> = vec![];
     for (i, g) in glyphs.iter().enumerate() {
@@ -652,7 +734,21 @@ fn emit_line(
         let gx = pen + g.dx;
         let gy = baseline - st.shift - g.dy;
         if !(g.tab || g.adv == 0.0 && g.chars.len() == 1 && story.slice(g.chars.clone()) == "\u{2028}") {
-            push(g.style, g.glyph, g.chars.clone(), gx, gy, g.adv, &mut cur, &mut runs);
+            push(g.style, g.glyph, g.chars.clone(), gx, gy, g.adv, false, &mut cur, &mut runs);
+        }
+        if g.tab
+            && g.adv > 0.0
+            && let Some(lc) = g.leader
+            && let Some((lid, la)) = st.glyph_for(lc)
+            && la > 0.01
+        {
+            // Leaders sit on a grid of their own advance and keep half an advance clear of the next text.
+            let end = pen + g.adv;
+            let mut k = (pen / la - 1e-6).ceil();
+            while (k + 1.0) * la <= end - la / 2.0 + 1e-6 {
+                push(g.style, lid, g.chars.start..g.chars.start, k * la, gy, la, true, &mut cur, &mut runs);
+                k += 1.0;
+            }
         }
         let adv = g.adv + if stretch[i] { per_space } else { 0.0 };
         let in_trail = i >= glyphs.len() - ntrail;
@@ -698,6 +794,7 @@ fn emit_line(
                 advance: adv,
                 text_range: n..n + 1,
                 char_index: last,
+                generated: false,
             });
         }
     }
@@ -736,4 +833,64 @@ fn emit_line(
         runs,
         hyphenated: fill.hyphen,
     }
+}
+
+fn glyph_run(p: &Para, style: usize, text: String, glyphs: Vec<PGlyph>) -> GlyphRun {
+    let st = &p.styles[style];
+    GlyphRun {
+        face: st.face.id,
+        size: st.size,
+        color: st.color.clone(),
+        x_scale: st.x_scale,
+        synthetic_bold: st.synthetic_bold,
+        synthetic_italic: st.synthetic_italic,
+        text,
+        glyphs,
+    }
+}
+
+/// Byte offset of char index `ci` in `text`.
+fn byte_of(text: &str, ci: usize) -> usize {
+    text.char_indices().nth(ci).map(|(b, _)| b).unwrap_or(text.len())
+}
+
+/// Run for a generated list marker. Its glyphs carry the paragraph start as char index but are `generated`.
+fn marker_run(p: &Para, m: &para::Marker, para_start: usize, x: f64, baseline: f64) -> GlyphRun {
+    let st = &p.styles[m.style];
+    let mut pen = x;
+    let mut glyphs = vec![];
+    for g in &m.glyphs {
+        glyphs.push(PGlyph {
+            id: g.glyph,
+            x: pen + g.dx,
+            y: baseline - st.shift - g.dy,
+            advance: g.adv,
+            text_range: byte_of(&m.text, g.chars.start)..byte_of(&m.text, g.chars.end),
+            char_index: para_start,
+            generated: true,
+        });
+        pen += g.adv;
+    }
+    glyph_run(p, m.style, m.text.clone(), glyphs)
+}
+
+/// Run for the dropped capital(s); glyphs keep their story char indices.
+fn drop_run(story: &Story, p: &Para, d: &para::DropGlyphs, x: f64, baseline: f64) -> GlyphRun {
+    let text = story.slice(d.chars.clone()).to_string();
+    let style = d.glyphs.first().map(|g| g.style).unwrap_or(0);
+    let mut pen = x;
+    let mut glyphs = vec![];
+    for g in &d.glyphs {
+        glyphs.push(PGlyph {
+            id: g.glyph,
+            x: pen + g.dx,
+            y: baseline - g.dy,
+            advance: g.adv,
+            text_range: byte_of(&text, g.chars.start - d.chars.start)..byte_of(&text, g.chars.end - d.chars.start),
+            char_index: g.chars.start,
+            generated: false,
+        });
+        pen += g.adv;
+    }
+    glyph_run(p, style, text, glyphs)
 }

@@ -83,6 +83,8 @@ pub struct PGlyph {
     pub advance: f64,
     pub text_range: Range<usize>,
     pub char_index: usize,
+    /// Generated text (list markers): not part of the story, ignored by character queries.
+    pub generated: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
