@@ -173,6 +173,9 @@ images) → PI-04 (formatting). Stop and ask a human if the approach needs code 
 | Date | Change | Reason |
 |------|--------|--------|
 | 2026-10-08 | Initial `Command`/`Action`/`Query` sets defined (see crates/core/src/command.rs, crates/engine/src/action.rs) | Phase 0 |
+| 2026-10-08 | Batch 2 lead additions: fields/sections, tables (`ObjectKind::Table`), baseline grid, special chars, shape text, guides/links/layers/words module hooks, per-task engine modules | Batch 2 dispatch and lead layout work |
+| 2026-10-08 | Mail merge: `Document.merge: Option<MergeData>`, `InsertMergeField`, `SetPictureField`, `core::merge` (`Document::merged`, `merge_publication`); engine merge actions and `DataSource` query; Session keeps a preview `view` document used by layout, rendering and PDF export | MM-01..MM-04 |
+| 2026-10-08 | `Story::insert` with inherited attrs never extends a field run | Typing after a field duplicated it |
 
 ## 12. Predecessor survey (NewsPub, Electron + React + TS) and what we adopt
 

@@ -44,3 +44,13 @@ The dashboard parses this file:
 - Known gap (TY-17): the PDF text layer of right-to-left runs is in visual order, so copy/paste reverses Hebrew/Arabic. Fix: emit /ActualText spans (krilla marked content) — follow-up item.
 - Journey corrections (lead's own arithmetic, not behaviour changes): TF-007/TF-008 story lengths now queried; TF-009 frame too short for 24 pt; TY-013 frame b moved so its first baseline can reach the grid; SH-006 shape text wraps; TY-016 char positions compared relatively.
 - Decision: widow/orphan control is on by default (Publisher default); every earlier journey still passes.
+
+### 2026-10-08 20:20 — Mail merge (lead)
+- Done by the lead: MM-01..MM-04.
+  - Engine: CSV data source (`attach_data_source`), merge fields shown as «name» or as preview values, recipient filter and sort, skip-blank-lines, picture fields resolved relative to the CSV's folder.
+  - Output: `merge_to_pdf` writes one copy of the publication per record, with images deduplicated. `merge_to_publication` repeats pages per record and detaches the data source.
+- Interface changes (ARCHITECTURE §11):
+  - core: `merge` module (`substitute_story`, `Document::merged`, `Document::merge_publication`), `MergeData`.
+  - engine: Session `view` doc (the preview substitution feeds layout, render and PDF).
+- Bug fixed: text typed after a field no longer inherits the field marker (`Story::insert`).
+- Local suite: 62/97.
