@@ -134,6 +134,11 @@ impl FrameLayout {
     }
 }
 
+/// Lays out one story (no per-page master layouts). Used by the engine's autofit fixups.
+pub fn layout_one(doc: &Document, fonts: &FontStore, story: Id) -> Option<(StoryLayout, Vec<FrameLayout>)> {
+    doc.stories.get(&story).map(|s| story::layout_story(doc, fonts, s, None))
+}
+
 /// Lays out every story in the document.
 pub fn layout_document(doc: &Document, fonts: &FontStore) -> DocLayout {
     let mut out = DocLayout::default();

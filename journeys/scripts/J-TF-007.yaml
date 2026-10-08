@@ -15,7 +15,8 @@ steps:
   - expect: {query: {q: object, id: $f}, path: /kind/fit_scale, lt: 1.0}
   - expect: {query: {q: frame_lines, frame: $f}, path: /0/height, lt: 17}
   # shrink never enlarges short text
-  - delete_text: {target: $f, start: 40, end: 528}
+  - let: {n: {q: story_length, target: $f}}
+  - delete_text: {target: $f, start: 40, end: $n}
   - expect: {query: {q: object, id: $f}, path: /kind/fit_scale, equals: 1.0}
   # best fit enlarges short text to fill the frame without overflowing
   - set_text_frame: {id: $f, patch: {autofit: best_fit}}

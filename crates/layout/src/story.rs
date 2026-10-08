@@ -660,7 +660,14 @@ impl NoticeStyle {
 
     fn run(&self, fonts: &FontStore, text: &str, x: f64, baseline: f64, char_index: usize) -> (GlyphRun, f64) {
         let face = fonts.face(self.face);
-        let opts = crate::shape::ShapeOpts { kerning: true, ligatures: true, dlig: false, small_caps: false, extra: &[], rtl: false };
+        let opts = crate::shape::ShapeOpts {
+            kerning: true,
+            ligatures: true,
+            dlig: false,
+            small_caps: false,
+            extra: &[],
+            rtl: false,
+        };
         let shaped = crate::shape::shape(&face, text, &opts);
         let mut pen = x;
         let mut glyphs = vec![];

@@ -4,6 +4,7 @@
 
 pub mod action;
 mod autosave;
+mod fixups;
 mod guides;
 mod html;
 mod layersq;
@@ -145,7 +146,8 @@ impl Session {
     }
 
     /// Replaces the document wholesale as one undoable step.
-    fn commit(&mut self, new: Document, coalesce: Option<String>) {
+    fn commit(&mut self, mut new: Document, coalesce: Option<String>) {
+        fixups::run(&mut new, &self.fonts);
         let old = std::mem::replace(&mut self.doc, new);
         if self.group.is_none() {
             self.history.record(old, coalesce);
