@@ -1,0 +1,45 @@
+id: UI-SH-008
+title: Freeform tool and on-canvas point editing
+covers: [SH-08]
+ui: true
+steps:
+  # click points with the Freeform tool; Enter finishes an open shape
+  - click: {label: "Freeform"}
+  - click_at: [1in, 1in]
+  - click_at: [3in, 1in]
+  - click_at: [3in, 3in]
+  - key: {key: "Enter"}
+  - expect: {query: {q: page_objects, page: 0}, len: 1}
+  - expect: {query: {q: document}, path: /pages/0/objects/0, gt: 0, as: p}
+  - expect: {query: {q: path_nodes, id: $p}, len: 3}
+  - expect: {query: {q: path_nodes, id: $p}, path: /1/x, approx: [216, 1]}
+  - expect: {query: {q: view}, path: /selection, equals: [$p]}
+  # clicking back on the first point closes the shape
+  - click: {label: "Freeform"}
+  - click_at: [1in, 5in]
+  - click_at: [2in, 6in]
+  - click_at: [3in, 5in]
+  - click_at: [1in, 5in]
+  - expect: {query: {q: page_objects, page: 0}, len: 2}
+  - expect: {query: {q: document}, path: /pages/0/objects/1, gt: 0, as: c}
+  - expect: {query: {q: object, id: $c}, path: /kind/kind/closed, equals: true}
+  # point editing: each point is a handle with an accessible name; dragging one moves it
+  - click_at: [2in, 1in]
+  - expect: {query: {q: view}, path: /selection, equals: [$p]}
+  - click: {label: "Edit Points"}
+  - expect_ui: {label: "Point 3"}
+  - drag: {from: [3in, 3in], to: [4in, 4in]}
+  - expect: {query: {q: path_nodes, id: $p}, path: /2/x, approx: [288, 1]}
+  - expect: {query: {q: path_nodes, id: $p}, path: /2/y, approx: [288, 1]}
+  # select a point, make it smooth, then delete another
+  - click: {label: "Point 2"}
+  - click: {label: "Smooth Point"}
+  - expect: {query: {q: path_nodes, id: $p}, path: /1/smooth, equals: true}
+  - click: {label: "Point 3"}
+  - click: {label: "Delete Point"}
+  - expect: {query: {q: path_nodes, id: $p}, len: 2}
+  # each edit is one undo step
+  - key: {key: "Z", command: true}
+  - expect: {query: {q: path_nodes, id: $p}, len: 3}
+  - key: {key: "Escape"}
+  - expect_ui: {label: "Point 3", exists: false}

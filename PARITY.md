@@ -85,7 +85,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | SH-05 | P2 | AutoShapes library (rounded rectangle, star, arrow, callout, polygon, triangle) | J-SH-005 | [x] |
 | SH-06 | P2 | Text inside shapes | J-SH-006 | [x] |
 | SH-07 | P2 | Gradient, pattern, and transparency fills; shape shadow | J-SH-007 | [x] |
-| SH-08 | P3 | Freeform / Bézier drawing and point editing | J-SH-008 | [x] |
+| SH-08 | P3 | Freeform / Bézier drawing and point editing (canvas tool and point handles) | J-SH-008, UI-SH-008 | [ ] |
 
 ## TB: Tables
 
