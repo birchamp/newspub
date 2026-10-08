@@ -577,7 +577,34 @@ impl Session {
                     .unwrap_or_default();
                 Value::Array(v)
             }
-            PageMargins { .. } | Spreads | FontsUsed | MissingFonts | Assets | Find { .. } | AccessibilityCheck => {
+            PageMargins { page } => {
+                if *page >= self.doc.pages.len() {
+                    return Err(CoreError::NoSuchPage(*page).into());
+                }
+                let (top, bottom, left, right) = self.doc.page_margins(*page);
+                json!({"top": top, "bottom": bottom, "left": left, "right": right})
+            }
+            Spreads => {
+                let n = self.doc.pages.len();
+                let mut groups: Vec<Vec<usize>> = Vec::new();
+                if self.doc.setup.facing {
+                    // Page 0 is a right-hand page on its own; following pages pair up as left/right.
+                    let mut i = 0;
+                    while i < n {
+                        if i == 0 || i + 1 >= n {
+                            groups.push(vec![i]);
+                            i += 1;
+                        } else {
+                            groups.push(vec![i, i + 1]);
+                            i += 2;
+                        }
+                    }
+                } else {
+                    groups.extend((0..n).map(|i| vec![i]));
+                }
+                serde_json::to_value(groups).map_err(|e| EngineError::Other(e.to_string()))?
+            }
+            FontsUsed | MissingFonts | Assets | Find { .. } | AccessibilityCheck => {
                 return Err(EngineError::Other(format!("query {q:?} is not implemented yet")));
             }
             TextBounds { frame } => {
