@@ -121,10 +121,10 @@ pub fn check_file(ctx: &mut Ctx, spec: &Value) -> Result<()> {
     }
     let img = image::load_from_memory(&bytes).map_err(|e| anyhow!("{file}: {e}"))?.to_rgba8();
     for (k, v) in [("width", img.width()), ("height", img.height())] {
-        if let Some(want) = spec.get(k).and_then(|x| x.as_u64()) {
-            if want != v as u64 {
-                bail!("{file} {k} is {v}, expected {want}");
-            }
+        if let Some(want) = spec.get(k).and_then(|x| x.as_u64())
+            && want != v as u64
+        {
+            bail!("{file} {k} is {v}, expected {want}");
         }
     }
     if let Some(Value::Array(list)) = spec.get("pixels") {
