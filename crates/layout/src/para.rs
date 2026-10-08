@@ -98,6 +98,8 @@ pub struct G {
     pub decimal: bool,
     /// Leader character to fill this tab glyph's gap with (set when the tab is placed).
     pub leader: Option<char>,
+    /// Displayed text of a field glyph (the story holds one FIELD_CHAR).
+    pub field: Option<std::sync::Arc<str>>,
 }
 
 /// Text between two break opportunities.
@@ -135,7 +137,16 @@ pub struct Para {
     pub range: Range<usize>,
 }
 
-pub fn build(doc: &Document, fonts: &FontStore, story: &Story, pi: usize, range: Range<usize>, scale: f64) -> Para {
+/// Builds a paragraph. `page` is the page the text is being laid out on (for page-number fields).
+pub fn build(
+    doc: &Document,
+    fonts: &FontStore,
+    story: &Story,
+    pi: usize,
+    range: Range<usize>,
+    scale: f64,
+    page: Option<usize>,
+) -> Para {
     let pattrs: &ParaAttrs = &story.paras[pi];
     let mut styles: Vec<RunStyle> = vec![];
     let mut glyphs: Vec<G> = vec![];
@@ -153,6 +164,22 @@ pub fn build(doc: &Document, fonts: &FontStore, story: &Story, pi: usize, range:
             continue;
         }
         let rc = doc.resolve_char(pattrs, attrs);
+        if let Some(field) = &attrs.field {
+            // Each field char shows computed text; all its glyphs map to that one story char.
+            let shown: std::sync::Arc<str> = doc.field_text(field, page).into();
+            let si = styles.len();
+            styles.push(RunStyle::new(fonts, &rc, scale, None));
+            for ci in s..e {
+                let start = glyphs.len();
+                let orig: Vec<char> = shown.chars().collect();
+                shape_chunk(&mut glyphs, &styles[si], si, &shown, ci, &rc, false, &orig);
+                for g in &mut glyphs[start..] {
+                    g.chars = ci..ci + 1;
+                    g.field = Some(shown.clone());
+                }
+            }
+            continue;
+        }
         let text: Vec<char> = story.slice(s..e).chars().collect();
         // Caps transform, 1:1 per char so indices stay aligned.
         let disp: Vec<char> = text
@@ -267,6 +294,7 @@ fn shape_chunk(
             tab: is_tab,
             decimal: ch == '.',
             leader: None,
+            field: None,
         });
     }
 }

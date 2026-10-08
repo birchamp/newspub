@@ -18,6 +18,15 @@ use std::ops::Range;
 pub struct DocLayout {
     pub frames: HashMap<Id, FrameLayout>,
     pub stories: HashMap<Id, StoryLayout>,
+    /// Per-page layouts of master text frames whose stories contain fields: (frame, page index).
+    pub page_frames: HashMap<(Id, usize), FrameLayout>,
+}
+
+impl DocLayout {
+    /// Layout of `frame` as shown on page `page` (master frames with fields differ per page).
+    pub fn frame_on(&self, frame: Id, page: Option<usize>) -> Option<&FrameLayout> {
+        page.and_then(|p| self.page_frames.get(&(frame, p))).or_else(|| self.frames.get(&frame))
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -129,11 +138,28 @@ impl FrameLayout {
 pub fn layout_document(doc: &Document, fonts: &FontStore) -> DocLayout {
     let mut out = DocLayout::default();
     for story in doc.stories.values() {
-        let (sl, frames) = story::layout_story(doc, fonts, story);
+        let (sl, frames) = story::layout_story(doc, fonts, story, None);
         for f in frames {
             out.frames.insert(f.frame, f);
         }
         out.stories.insert(story.id, sl);
+        // Master stories with fields are laid out once per page that shows them.
+        let on_master =
+            story.frames.first().is_some_and(|f| matches!(doc.owner_of(*f), Some(newpub_core::Owner::Master(_))));
+        if on_master && doc.story_has_fields(story.id) {
+            let master = story.frames.first().and_then(|f| match doc.owner_of(*f) {
+                Some(newpub_core::Owner::Master(mi)) => doc.masters.get(mi).map(|m| m.id),
+                _ => None,
+            });
+            for pi in 0..doc.pages.len() {
+                if doc.master_for_page(pi).map(|m| Some(m.id) == master).unwrap_or(false) {
+                    let (_, frames) = story::layout_story(doc, fonts, story, Some(pi));
+                    for f in frames {
+                        out.page_frames.insert((f.frame, pi), f);
+                    }
+                }
+            }
+        }
     }
     // Text frames without a story layout (should not happen) still get an entry.
     for o in doc.objects.values() {

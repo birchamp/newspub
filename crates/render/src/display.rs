@@ -263,7 +263,7 @@ fn visible(doc: &Document, o: &Object) -> bool {
     }
 }
 
-fn push_object(doc: &Document, layout: &DocLayout, id: Id, parent: Affine, items: &mut Vec<Item>) {
+fn push_object(doc: &Document, layout: &DocLayout, page: usize, id: Id, parent: Affine, items: &mut Vec<Item>) {
     let Some(o) = doc.objects.get(&id) else { return };
     if !visible(doc, o) {
         return;
@@ -313,7 +313,7 @@ fn push_object(doc: &Document, layout: &DocLayout, id: Id, parent: Affine, items
                     transform: t,
                 });
             }
-            if let Some(fl) = layout.frames.get(&id) {
+            if let Some(fl) = layout.frame_on(id, Some(page)) {
                 for d in &fl.decorations {
                     items.push(Item::Path {
                         path: rect_path(d.x0, d.y - d.thickness / 2.0, d.x1 - d.x0, d.thickness),
@@ -370,7 +370,7 @@ fn push_object(doc: &Document, layout: &DocLayout, id: Id, parent: Affine, items
         ObjectKind::Group { children } => {
             // Children are stored in page coordinates; the group's own transform is not applied.
             for c in children {
-                push_object(doc, layout, *c, parent, items);
+                push_object(doc, layout, page, *c, parent, items);
             }
         }
     }
@@ -394,11 +394,11 @@ pub fn page_display(doc: &Document, layout: &DocLayout, index: usize) -> PageDis
         }
         if let Some(m) = master {
             for id in &m.objects {
-                push_object(doc, layout, *id, Affine::IDENTITY, &mut items);
+                push_object(doc, layout, index, *id, Affine::IDENTITY, &mut items);
             }
         }
         for id in doc.draw_order(index) {
-            push_object(doc, layout, id, Affine::IDENTITY, &mut items);
+            push_object(doc, layout, index, id, Affine::IDENTITY, &mut items);
         }
     }
     PageDisplay { width: w, height: h, items }

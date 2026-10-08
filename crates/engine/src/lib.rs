@@ -731,7 +731,13 @@ impl Session {
                 "units": self.guides.units,
             }),
             AllStoryText => json!(self.doc.stories.values().map(|s| s.text.clone()).collect::<Vec<_>>().join("\n")),
-            GlyphCount { .. } | MissingGlyphs { .. } | PageLabel { .. } | PageBaselines { .. } | ShapeKinds => {
+            PageLabel { page } => {
+                if *page >= self.doc.pages.len() {
+                    return Err(CoreError::NoSuchPage(*page).into());
+                }
+                json!(self.doc.page_label(*page))
+            }
+            GlyphCount { .. } | MissingGlyphs { .. } | PageBaselines { .. } | ShapeKinds => {
                 return Err(EngineError::Other(format!("query {q:?} is not implemented yet")));
             }
             Guides { .. } | Snap { .. } | ObjectGeometry { .. } => self.guides_query(q)?,

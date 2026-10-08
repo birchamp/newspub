@@ -402,7 +402,13 @@ fn split_hyphen(p: &Para, story: &Story, seg: &Seg, room: f64, rp: &ResolvedPara
 }
 
 /// Lays out one story through its frame chain.
-pub fn layout_story(doc: &Document, fonts: &FontStore, story: &Story) -> (StoryLayout, Vec<FrameLayout>) {
+/// Lays out one story. `page_override` sets the page for frames on a master (per-page master layout).
+pub fn layout_story(
+    doc: &Document,
+    fonts: &FontStore,
+    story: &Story,
+    page_override: Option<usize>,
+) -> (StoryLayout, Vec<FrameLayout>) {
     let frames: Vec<FrameGeom> = story.frames.iter().filter_map(|f| frame_geom(doc, *f)).collect();
     let scale = frames.first().map(|f| f.tf.fit_scale).unwrap_or(1.0).clamp(0.01, 100.0);
     let mut outs: Vec<FrameLayout> = frames.iter().map(|f| FrameLayout { frame: f.id, ..Default::default() }).collect();
@@ -418,7 +424,8 @@ pub fn layout_story(doc: &Document, fonts: &FontStore, story: &Story) -> (StoryL
     let mut prev_number: Option<u32> = None;
     'paras: for (pi, range) in ranges.iter().enumerate() {
         let rp = doc.resolve_para(&story.paras[pi]);
-        let mut p = para::build(doc, fonts, story, pi, range.clone(), scale);
+        let cur_page = page_override.or_else(|| flow.frames.get(flow.fi).and_then(|f| doc.page_of(f.id)));
+        let mut p = para::build(doc, fonts, story, pi, range.clone(), scale, cur_page);
         if !flow.col_empty || pi > 0 {
             flow.y += rp.space_before;
         }
@@ -689,6 +696,7 @@ fn emit_line(
                 gy: f64,
                 adv: f64,
                 ghost: bool,
+                field: Option<&str>,
                 cur: &mut Option<(usize, GlyphRun, usize)>,
                 runs: &mut Vec<GlyphRun>| {
         if cur.as_ref().map(|c| c.0 != style).unwrap_or(true) {
@@ -709,21 +717,33 @@ fn emit_line(
                 chars.start,
             ));
         }
-        let (_, run, first) = cur.as_mut().expect("run started");
-        // Ghost glyphs (tab leaders) map to no source text.
-        let end = if ghost { chars.start } else { chars.end };
-        let full = story.slice(*first..end.max(*first));
-        if full.len() > run.text.len() {
-            run.text = full.to_string();
-        }
-        let b0 = story.slice(*first..chars.start).len();
-        let b1 = story.slice(*first..end).len();
+        let (_, run, last) = cur.as_mut().expect("run started");
+        // Run text is appended per cluster: glyphs of one cluster share its text range; ghost glyphs
+        // (tab leaders) map to no text; field glyphs map to the field's displayed text.
+        let range = if ghost {
+            run.text.len()..run.text.len()
+        } else if let Some(prev) = run
+            .glyphs
+            .last()
+            .filter(|g| g.char_index == chars.start && *last == chars.start && !g.text_range.is_empty())
+        {
+            prev.text_range.clone()
+        } else {
+            let t = match field {
+                Some(f) => f.to_string(),
+                None => story.slice(chars.clone()).to_string(),
+            };
+            let b0 = run.text.len();
+            run.text.push_str(&t);
+            b0..run.text.len()
+        };
+        *last = chars.start;
         run.glyphs.push(PGlyph {
             id: gid,
             x: gx,
             y: gy,
             advance: adv,
-            text_range: b0..b1,
+            text_range: range,
             char_index: chars.start,
             generated: false,
         });
@@ -734,7 +754,7 @@ fn emit_line(
         let gx = pen + g.dx;
         let gy = baseline - st.shift - g.dy;
         if !(g.tab || g.adv == 0.0 && g.chars.len() == 1 && story.slice(g.chars.clone()) == "\u{2028}") {
-            push(g.style, g.glyph, g.chars.clone(), gx, gy, g.adv, false, &mut cur, &mut runs);
+            push(g.style, g.glyph, g.chars.clone(), gx, gy, g.adv, false, g.field.as_deref(), &mut cur, &mut runs);
         }
         if g.tab
             && g.adv > 0.0
@@ -746,7 +766,7 @@ fn emit_line(
             let end = pen + g.adv;
             let mut k = (pen / la - 1e-6).ceil();
             while (k + 1.0) * la <= end - la / 2.0 + 1e-6 {
-                push(g.style, lid, g.chars.start..g.chars.start, k * la, gy, la, true, &mut cur, &mut runs);
+                push(g.style, lid, g.chars.start..g.chars.start, k * la, gy, la, true, None, &mut cur, &mut runs);
                 k += 1.0;
             }
         }

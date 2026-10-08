@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-08T18:40:00Z",
+  "updated": "2026-10-08T19:00:00Z",
   "tasks": [
     {
       "item": "LY-03",
@@ -111,6 +111,342 @@
       "tier": "sonnet",
       "state": "merged",
       "batch": "B1",
+      "note": ""
+    },
+    {
+      "item": "GD-01",
+      "agent": "GUIDES",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "GD-02",
+      "agent": "GUIDES",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "GD-03",
+      "agent": "GUIDES",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "GD-04",
+      "agent": "GUIDES",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "GD-05",
+      "agent": "GUIDES",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "BB-01",
+      "agent": "TEMPLATES",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "BB-02",
+      "agent": "TEMPLATES",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "SP-01",
+      "agent": "SPELL",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "SP-02",
+      "agent": "SPELL",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "SP-03",
+      "agent": "SPELL",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "LY-02",
+      "agent": "LAYERS",
+      "tier": "haiku",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "IM-08",
+      "agent": "PICTURES",
+      "tier": "haiku",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "PG-10",
+      "agent": "PICTURES",
+      "tier": "haiku",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "SH-05",
+      "agent": "EFFECTS",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "SH-07",
+      "agent": "EFFECTS",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "IM-04",
+      "agent": "EFFECTS",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "IM-06",
+      "agent": "EFFECTS",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "IM-07",
+      "agent": "EFFECTS",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "PR-04",
+      "agent": "PDF",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "PR-05",
+      "agent": "PDF",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "PR-06",
+      "agent": "PDF",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "EX-03",
+      "agent": "PDF",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "EX-05",
+      "agent": "PDF",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "EX-04",
+      "agent": "HTML",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "PI-01",
+      "agent": "PUB",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "PI-02",
+      "agent": "PUB",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "PI-03",
+      "agent": "PUB",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "PI-04",
+      "agent": "PUB",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "TF-11",
+      "agent": "MISC",
+      "tier": "haiku",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "FI-03",
+      "agent": "MISC",
+      "tier": "haiku",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "FI-05",
+      "agent": "LEGACY",
+      "tier": "haiku",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "UI-03",
+      "agent": "UI",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "UI-04",
+      "agent": "UI",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "UI-05",
+      "agent": "UI",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "UI-07",
+      "agent": "UI",
+      "tier": "sonnet",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "PG-06",
+      "agent": "lead:fields",
+      "tier": "lead",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "PG-09",
+      "agent": "lead:fields",
+      "tier": "lead",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "TF-08",
+      "agent": "lead:autofit",
+      "tier": "lead",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "TF-09",
+      "agent": "lead:continued",
+      "tier": "lead",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "TB-01",
+      "agent": "lead:tables",
+      "tier": "lead",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "TB-02",
+      "agent": "lead:tables",
+      "tier": "lead",
+      "state": "in_progress",
+      "batch": "B2",
+      "note": ""
+    },
+    {
+      "item": "TB-03",
+      "agent": "lead:tables",
+      "tier": "lead",
+      "state": "in_progress",
+      "batch": "B2",
       "note": ""
     }
   ]
