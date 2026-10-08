@@ -1,0 +1,33 @@
+id: J-MM-001
+title: Mail merge from CSV — field codes, preview record N, merge to PDF and to a new publication
+covers: [MM-01, MM-02]
+steps:
+  - new_document: {width: 6in, height: 4in}
+  - attach_data_source: {path: fixtures/members.csv}
+  - expect: {query: {q: data_source}, path: /fields, equals: ["first", "last", "street", "city", "photo", "amount"]}
+  - expect: {query: {q: data_source}, path: /records, equals: 4}
+  - add_text_frame: {page: 0, rect: [0.5in, 0.5in, 5in, 2in]}
+    as: f
+  - insert_text: {target: $f, text: "Dear , thank you. "}
+  - insert_merge_field: {target: $f, at: 5, field: first}
+  - insert_merge_field: {target: $f, at: 6, field: last}
+  - insert_text: {target: $f, at: 6, text: " "}
+  # without preview, fields show their names in angle brackets
+  - expect: {query: {q: frame_text, frame: $f}, equals: "Dear «first» «last», thank you. "}
+  - set_merge_preview: {record: 2}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "Dear Alan Turing, thank you. "}
+  - set_merge_preview: {record: null}
+  # merge to PDF: one copy of the publication per record
+  - merge_to_pdf: {path: letters.pdf}
+  - expect_pdf:
+      file: letters.pdf
+      pages: 4
+      page_text:
+        - {page: 1, contains: "Dear Ada Lovelace,"}
+        - {page: 4, contains: "Dear Katherine Johnson,"}
+  # merge to a new publication: pages repeated per record, fields replaced by text
+  - merge_to_publication: {}
+  - expect: {query: {q: page_count}, equals: 4}
+  - expect: {query: {q: data_source}, is_null: true}
+  - export_pdf: {path: merged.pdf}
+  - expect_pdf: {file: merged.pdf, page_text: [{page: 2, contains: "Dear Grace Hopper,"}]}

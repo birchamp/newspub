@@ -1,0 +1,23 @@
+id: J-PR-003
+title: Multiple pages per sheet (n-up) and duplex-ready output
+covers: [PR-04]
+steps:
+  - new_document: {width: 3.5in, height: 2in, pages: 2}
+  - add_text_frame: {page: 0, rect: [0.2in, 0.2in, 3in, 0.5in]}
+    as: f
+  - insert_text: {target: $f, text: "Business card front"}
+  - add_text_frame: {page: 1, rect: [0.2in, 0.2in, 3in, 0.5in]}
+    as: b
+  - insert_text: {target: $b, text: "Card back"}
+  # 10-up business cards on Letter with 0.25in gaps; every page repeated across the sheet
+  - export_pdf: {path: cards.pdf, options: {imposition: {n_up: {sheet_width: 8.5in, sheet_height: 11in, gap: 0.25in, repeat: true}}}}
+  - expect_pdf:
+      file: cards.pdf
+      pages: 2
+      page_size: {w: 612, h: 792}
+      page_text: [{page: 1, contains: "Business card front"}, {page: 2, contains: "Card back"}]
+  - expect: {query: {q: n_up_layout, sheet_width: 8.5in, sheet_height: 11in, gap: 0.25in}, equals: {columns: 2, rows: 5, per_sheet: 10}}
+  # without repeat: different pages fill the slots in order
+  - insert_pages: {count: 6}
+  - export_pdf: {path: pages.pdf, options: {imposition: {n_up: {sheet_width: 8.5in, sheet_height: 11in, gap: 0.25in, repeat: false}}}}
+  - expect_pdf: {file: pages.pdf, pages: 1, page_text: [{page: 1, contains: ["Business card front", "Card back"]}]}

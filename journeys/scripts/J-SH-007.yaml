@@ -1,0 +1,20 @@
+id: J-SH-007
+title: Gradient and pattern fills, transparency, shape shadows
+covers: [SH-07]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_shape: {page: 0, rect: [1in, 1in, 4in, 1in], kind: rect}
+    as: g
+  - set_shape: {id: $g, patch: {gradient: {kind: linear, angle: 0, stops: [{at: 0, color: "#ff0000"}, {at: 1, color: "#0000ff"}]}}}
+  - expect_png: {page: 0, pixels: [{at: [75, 108], rgb: [250, 0, 5], tol: 20}, {at: [357, 108], rgb: [5, 0, 250], tol: 20}, {at: [216, 108], rgb: [128, 0, 128], tol: 25}]}
+  # 50% transparent black over white is mid grey
+  - add_shape: {page: 0, rect: [1in, 3in, 1in, 1in], kind: rect, fill: "#00000080"}
+  - expect_png: {page: 0, pixels: [{at: [108, 252], rgb: [128, 128, 128], tol: 6}]}
+  # shadow offset down-right
+  - add_shape: {page: 0, rect: [3in, 3in, 1in, 1in], kind: rect, fill: "#ffffff", stroke: {color: "#000000", width: 1}}
+    as: s
+  - set_object: {id: $s, patch: {shadow: {dx: 6, dy: 6, blur: 0, color: "#000000"}}}
+  - expect_png: {page: 0, pixels: [{at: [290, 290], rgb: [0, 0, 0], tol: 30}, {at: [250, 250], rgb: [255, 255, 255], tol: 10}]}
+  - export_pdf: {path: fills.pdf}
+  - expect_pdf: {file: fills.pdf, ink: [{page: 1, rect: [80, 80, 270, 50], min: 0.9}]}
+  - expect_roundtrip: {}

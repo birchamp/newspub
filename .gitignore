@@ -2,3 +2,4 @@ target/
 *.npub.tmp
 /dashboard/
 __pycache__/
+.claude/

@@ -1,0 +1,10 @@
+id: J-FI-004
+title: File format versioning and forward migration
+covers: [FI-04]
+steps:
+  # a version-1 file written by an earlier build opens and is upgraded
+  - open: {path: fixtures/v1-sample.npub}
+  - expect: {query: {q: document}, path: /version, equals: 1}
+  - expect: {query: {q: page_count}, gte: 1}
+  # a file from a newer version is refused with a clear message
+  - expect_error: {open: {path: fixtures/future.npub}, message: "newer newpub"}

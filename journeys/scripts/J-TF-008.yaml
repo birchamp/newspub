@@ -1,0 +1,30 @@
+id: J-TF-008
+title: Continued-on and continued-from notices between linked frames
+covers: [TF-09]
+steps:
+  - new_document: {width: 8.5in, height: 11in, pages: 3}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 4in, 2in]}
+    as: f1
+  - add_text_frame: {page: 2, rect: [1in, 1in, 4in, 6in]}
+    as: f2
+  - link_frames: {from: $f1, to: $f2}
+  - insert_text: {target: $f1, text: "@file:fixtures/short.txt"}
+  - insert_text: {target: $f1, text: "@repeat:20: The story continues on another page."}
+  - set_text_frame: {id: $f1, patch: {continued_on: true}}
+  - set_text_frame: {id: $f2, patch: {continued_from: true}}
+  - expect: {query: {q: frame_text, frame: $f1}, ends_with: "(Continued on page 3)"}
+  - expect: {query: {q: frame_text, frame: $f2}, starts_with: "(Continued from page 1)"}
+  # notices are generated, not story text
+  - expect: {query: {q: story_text, target: $f1}, not_contains: "Continued"}
+  - export_pdf: {path: continued.pdf}
+  - expect_pdf:
+      file: continued.pdf
+      page_text:
+        - {page: 1, contains: "(Continued on page 3)"}
+        - {page: 3, contains: "(Continued from page 1)"}
+  # moving the second frame's page updates the notice
+  - move_page: {from: 2, to: 1}
+  - expect: {query: {q: frame_text, frame: $f1}, ends_with: "(Continued on page 2)"}
+  # no notice when the story fits in the first frame
+  - delete_text: {target: $f1, start: 30, end: 900}
+  - expect: {query: {q: frame_text, frame: $f1}, not_contains: "Continued"}

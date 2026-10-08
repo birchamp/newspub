@@ -1,0 +1,22 @@
+id: J-IM-005
+title: Picture adjustments — recolour, brightness, contrast, greyscale
+covers: [IM-06]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - insert_picture: {path: fixtures/photo.png, page: 0, x: 1in, y: 1in, width: 4in}
+    as: p
+  # background blue (30, 90, 160) at a known spot
+  - expect_png: {page: 0, pixels: [{at: [80, 80], rgb: [30, 90, 160], tol: 15}]}
+  - set_image: {id: $p, patch: {adjust: {greyscale: true}}}
+  - expect_png: {page: 0, pixels: [{at: [80, 80], rgb: [79, 79, 79], tol: 15}]}
+  - set_image: {id: $p, patch: {adjust: {greyscale: false, brightness: 0.5}}}
+  - expect_png: {page: 0, pixels: [{at: [80, 80], rgb: [143, 173, 208], tol: 20}]}
+  - set_image: {id: $p, patch: {adjust: {brightness: 0, contrast: -1}}}
+  - expect_png: {page: 0, pixels: [{at: [80, 80], rgb: [128, 128, 128], tol: 6}]}
+  - set_image: {id: $p, patch: {adjust: {contrast: 0, recolor: "#cc6600"}}}
+  # recolour maps luminance onto the tint: dark → black, light → the colour; never blue
+  - expect_png: {page: 0, pixels: [{at: [80, 80], rgb: [62, 31, 0], tol: 25}]}
+  # adjustments apply in PDF too (baked into the exported image)
+  - export_pdf: {path: adjusted.pdf}
+  - expect_pdf: {file: adjusted.pdf, images: 1, ink: [{page: 1, rect: [74, 74, 10, 10], min: 0.99}]}
+  - expect_roundtrip: {}

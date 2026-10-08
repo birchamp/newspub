@@ -198,6 +198,112 @@ pub fn check(ctx: &mut Ctx, spec: &Value) -> Result<()> {
             bail!("expected {n} images in PDF, found {count}");
         }
     }
+    if let Some(cs) = spec.get("color_spaces") {
+        let (spaces, spots) = color_spaces(&pdf);
+        for want in strs(cs.get("contains")) {
+            if !spaces.contains(&want) {
+                bail!("PDF colour spaces {spaces:?} do not include {want}");
+            }
+        }
+        for bad in strs(cs.get("not_contains")) {
+            if spaces.contains(&bad) {
+                bail!("PDF colour spaces {spaces:?} unexpectedly include {bad}");
+            }
+        }
+        for want in strs(cs.get("spot_names")) {
+            if !spots.contains(&want) {
+                bail!("PDF spot colours {spots:?} do not include {want:?}");
+            }
+        }
+    }
+    if let Some(x) = spec.get("pdfx") {
+        let catalog = pdf.catalog().map_err(|e| anyhow!("no catalog: {e}"))?;
+        if x.get("output_intent").and_then(|v| v.as_bool()) == Some(true) {
+            let intents = catalog
+                .get(b"OutputIntents")
+                .ok()
+                .and_then(|o| resolve(&pdf, o).as_array().ok().cloned())
+                .unwrap_or_default();
+            let ok = intents.iter().any(|i| {
+                resolve(&pdf, i).as_dict().ok().and_then(|d| d.get(b"S").ok()).and_then(|s| s.as_name().ok())
+                    == Some(b"GTS_PDFX")
+            });
+            if !ok {
+                bail!("PDF has no GTS_PDFX OutputIntent");
+            }
+        }
+        if let Some(v) = x.get("version").and_then(|v| v.as_str()) {
+            let raw = String::from_utf8_lossy(&bytes);
+            let in_info = raw.contains(&format!("/GTS_PDFXVersion ({v})"));
+            let in_xmp =
+                raw.contains(&format!("GTS_PDFXVersion>{v}<")) || raw.contains(&format!("GTS_PDFXVersion=\"{v}\""));
+            if !in_info && !in_xmp {
+                bail!("PDF does not declare GTS_PDFXVersion {v}");
+            }
+        }
+    }
+    if let Some(Value::Array(list)) = spec.get("links") {
+        let found = links(&pdf);
+        for want in list {
+            let page = want.get("page").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
+            let ok = found.iter().any(|(p, uri, dest)| {
+                *p == page
+                    && want.get("uri").and_then(|u| u.as_str()).map(|u| uri.as_deref() == Some(u)).unwrap_or(true)
+                    && want.get("dest_page").and_then(|d| d.as_u64()).map(|d| *dest == Some(d as u32)).unwrap_or(true)
+            });
+            if !ok {
+                bail!("PDF link {want} not found; links: {found:?}");
+            }
+        }
+    }
+    if let Some(want) = spec.get("bookmarks") {
+        let got = bookmarks(&pdf);
+        let want = strs(Some(want));
+        if got != want {
+            bail!("PDF bookmarks {got:?}, expected {want:?}");
+        }
+    }
+    if let Some(t) = spec.get("tagged") {
+        let cat = pdf.catalog().map_err(|e| anyhow!("no catalog: {e}"))?;
+        let root = cat.get(b"StructTreeRoot").map_err(|_| anyhow!("PDF is not tagged (no StructTreeRoot)"))?;
+        let mut types = vec![];
+        let mut alts = vec![];
+        struct_walk(&pdf, resolve(&pdf, root), &mut types, &mut alts, 0);
+        for want in strs(t.get("structure")) {
+            if !types.contains(&want) {
+                bail!("structure tree types {types:?} do not include {want}");
+            }
+        }
+        for want in strs(t.get("figure_alt")) {
+            if !alts.contains(&want) {
+                bail!("figure alt texts {alts:?} do not include {want:?}");
+            }
+        }
+        if let Some(lang) = t.get("lang").and_then(|l| l.as_str()) {
+            let got =
+                cat.get(b"Lang").ok().and_then(|l| l.as_str().ok()).map(|b| String::from_utf8_lossy(b).to_string());
+            if got.as_deref() != Some(lang) {
+                bail!("catalog /Lang is {got:?}, expected {lang:?}");
+            }
+        }
+        if let Some(title) = t.get("title").and_then(|l| l.as_str()) {
+            let info_title = pdf
+                .trailer
+                .get(b"Info")
+                .ok()
+                .map(|i| resolve(&pdf, i))
+                .and_then(|i| i.as_dict().ok())
+                .and_then(|d| d.get(b"Title").ok())
+                .and_then(|t| match t {
+                    Object::String(b, _) => Some(decode_pdf_string(b)),
+                    _ => None,
+                });
+            let in_xmp = String::from_utf8_lossy(&bytes).contains(title);
+            if info_title.as_deref() != Some(title) && !in_xmp {
+                bail!("document title {title:?} not found (Info title {info_title:?})");
+            }
+        }
+    }
     if let Some(Value::Array(list)) = spec.get("ink") {
         let rendered = render(&bytes)?;
         for probe in list {
@@ -260,4 +366,181 @@ pub fn ink_fraction(w: u32, h: u32, px: &[u8], r: &[f64], scale: f32) -> f64 {
         }
     }
     if total == 0 { 0.0 } else { ink as f64 / total as f64 }
+}
+
+fn resolve<'a>(pdf: &'a Pdf, o: &'a Object) -> &'a Object {
+    match o {
+        Object::Reference(r) => pdf.get_object(*r).unwrap_or(o),
+        o => o,
+    }
+}
+
+/// Colour space families used by content streams and resources, plus spot colour names.
+fn color_spaces(pdf: &Pdf) -> (BTreeSet<String>, BTreeSet<String>) {
+    let mut spaces = BTreeSet::new();
+    let mut spots = BTreeSet::new();
+    let note_array = |arr: &[Object], spaces: &mut BTreeSet<String>, spots: &mut BTreeSet<String>| {
+        if let Some(Ok(fam)) = arr.first().map(|f| f.as_name()) {
+            let fam = String::from_utf8_lossy(fam).to_string();
+            if (fam == "Separation" || fam == "DeviceN")
+                && let Some(Ok(n)) = arr.get(1).map(|n| n.as_name())
+            {
+                spots.insert(String::from_utf8_lossy(n).to_string());
+            }
+            if fam == "ICCBased" {
+                let n = arr
+                    .get(1)
+                    .and_then(|r| r.as_reference().ok())
+                    .and_then(|r| pdf.get_object(r).ok())
+                    .and_then(|o| o.as_stream().ok())
+                    .and_then(|s| s.dict.get(b"N").ok())
+                    .and_then(|n| n.as_i64().ok());
+                spaces.insert(match n {
+                    Some(4) => "DeviceCMYK".into(),
+                    Some(1) => "DeviceGray".into(),
+                    _ => "DeviceRGB".into(),
+                });
+            } else {
+                spaces.insert(fam);
+            }
+        }
+    };
+    for obj in pdf.objects.values() {
+        if let Ok(arr) = obj.as_array() {
+            note_array(arr, &mut spaces, &mut spots);
+        }
+        let Ok(st) = obj.as_stream() else { continue };
+        let sub = st.dict.get(b"Subtype").ok().and_then(|t| t.as_name().ok());
+        if sub == Some(b"Image") {
+            if let Ok(cs) = st.dict.get(b"ColorSpace") {
+                match resolve(pdf, cs) {
+                    Object::Name(n) => {
+                        spaces.insert(String::from_utf8_lossy(n).to_string());
+                    }
+                    Object::Array(a) => note_array(a, &mut spaces, &mut spots),
+                    _ => {}
+                }
+            }
+            continue;
+        }
+        if st.dict.has(b"Length1") || st.dict.has(b"N") {
+            continue; // font program or ICC profile
+        }
+        let data = st.decompressed_content().unwrap_or_else(|_| st.content.clone());
+        let Ok(content) = lopdf::content::Content::decode(&data) else { continue };
+        for op in content.operations {
+            match op.operator.as_str() {
+                "k" | "K" => {
+                    spaces.insert("DeviceCMYK".into());
+                }
+                "rg" | "RG" => {
+                    spaces.insert("DeviceRGB".into());
+                }
+                "g" | "G" => {
+                    spaces.insert("DeviceGray".into());
+                }
+                _ => {}
+            }
+        }
+    }
+    (spaces, spots)
+}
+
+/// (1-based page, uri, destination page) for each Link annotation.
+fn links(pdf: &Pdf) -> Vec<(u32, Option<String>, Option<u32>)> {
+    let pages = pdf.get_pages();
+    let page_no = |r: lopdf::ObjectId| pages.iter().find(|(_, id)| **id == r).map(|(n, _)| *n);
+    let mut out = vec![];
+    for (n, pid) in &pages {
+        let Ok(page) = pdf.get_dictionary(*pid) else { continue };
+        let Ok(annots) = page.get(b"Annots").map(|a| resolve(pdf, a)) else { continue };
+        let Ok(annots) = annots.as_array() else { continue };
+        for a in annots {
+            let Ok(d) = resolve(pdf, a).as_dict() else { continue };
+            if d.get(b"Subtype").ok().and_then(|s| s.as_name().ok()) != Some(b"Link") {
+                continue;
+            }
+            let mut uri = None;
+            let mut dest = None;
+            if let Ok(act) = d.get(b"A").map(|x| resolve(pdf, x)).and_then(|x| x.as_dict()) {
+                if let Ok(u) = act.get(b"URI").and_then(|u| u.as_str()) {
+                    uri = Some(String::from_utf8_lossy(u).to_string());
+                }
+                if let Ok(Object::Array(arr)) = act.get(b"D").map(|x| resolve(pdf, x)) {
+                    dest = arr.first().and_then(|r| r.as_reference().ok()).and_then(page_no);
+                }
+            }
+            if let Ok(Object::Array(arr)) = d.get(b"Dest").map(|x| resolve(pdf, x)) {
+                dest = arr.first().and_then(|r| r.as_reference().ok()).and_then(page_no);
+            }
+            out.push((*n, uri, dest));
+        }
+    }
+    out
+}
+
+/// Titles of the outline (bookmarks), depth-first.
+fn bookmarks(pdf: &Pdf) -> Vec<String> {
+    let mut out = vec![];
+    let Ok(cat) = pdf.catalog() else { return out };
+    let Ok(outlines) = cat.get(b"Outlines").map(|o| resolve(pdf, o)).and_then(|o| o.as_dict()) else { return out };
+    fn walk(pdf: &Pdf, first: Option<&Object>, out: &mut Vec<String>, depth: usize) {
+        let mut cur = first.map(|f| resolve(pdf, f)).and_then(|o| o.as_dict().ok());
+        let mut guard = 0;
+        while let Some(d) = cur {
+            guard += 1;
+            if guard > 10_000 || depth > 32 {
+                return;
+            }
+            if let Ok(t) = d.get(b"Title") {
+                let title = match t {
+                    Object::String(b, _) => decode_pdf_string(b),
+                    _ => String::new(),
+                };
+                out.push(title);
+            }
+            walk(pdf, d.get(b"First").ok(), out, depth + 1);
+            cur = d.get(b"Next").ok().map(|n| resolve(pdf, n)).and_then(|o| o.as_dict().ok());
+        }
+    }
+    walk(pdf, outlines.get(b"First").ok(), &mut out, 0);
+    out
+}
+
+fn decode_pdf_string(b: &[u8]) -> String {
+    if b.starts_with(&[0xFE, 0xFF]) {
+        let u: Vec<u16> = b[2..].chunks(2).map(|c| u16::from_be_bytes([c[0], *c.get(1).unwrap_or(&0)])).collect();
+        String::from_utf16_lossy(&u)
+    } else {
+        String::from_utf8_lossy(b).to_string()
+    }
+}
+
+/// Collects structure element types (/S) and Figure /Alt texts.
+fn struct_walk(pdf: &Pdf, node: &Object, types: &mut Vec<String>, alts: &mut Vec<String>, depth: usize) {
+    if depth > 64 {
+        return;
+    }
+    match node {
+        Object::Array(a) => {
+            for k in a {
+                struct_walk(pdf, resolve(pdf, k), types, alts, depth + 1);
+            }
+        }
+        Object::Dictionary(d) => {
+            if let Ok(s) = d.get(b"S").and_then(|s| s.as_name()) {
+                let s = String::from_utf8_lossy(s).to_string();
+                if s == "Figure"
+                    && let Ok(Object::String(b, _)) = d.get(b"Alt")
+                {
+                    alts.push(decode_pdf_string(b));
+                }
+                types.push(s);
+            }
+            if let Ok(k) = d.get(b"K") {
+                struct_walk(pdf, resolve(pdf, k), types, alts, depth + 1);
+            }
+        }
+        _ => {}
+    }
 }

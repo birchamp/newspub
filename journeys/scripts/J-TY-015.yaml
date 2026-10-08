@@ -1,0 +1,28 @@
+id: J-TY-015
+title: Special characters — non-breaking space, em/en dash, optional hyphen, line break
+covers: [TY-16]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 1.3in, 3in]}
+    as: f
+  # a non-breaking space keeps "10 am" on one line
+  - insert_text: {target: $f, text: "Service starts at 10 am sharp"}
+  - dump: {query: {q: frame_lines, frame: $f}, file: nbsp.json}
+  - expect: {query: {q: char_frame, target: $f, at: 18}, equals: $f}
+  - expect: {query: {q: char_box, target: $f, at: 18}, path: /line, gt: 0, as: l10}
+  - expect: {query: {q: char_box, target: $f, at: 21}, path: /line, equals: $l10}
+  # a line break (Shift+Enter) breaks the line without starting a new paragraph
+  - delete_text: {target: $f, start: 0, end: 29}
+  - insert_text: {target: $f, text: "First Second"}
+  - expect: {query: {q: frame_lines, frame: $f}, len: 2}
+  - expect: {query: {q: para_attrs, target: $f, at: 8}, path: /align, equals: left}
+  - expect: {query: {q: story_text, target: $f}, equals: "First Second"}
+  # em and en dashes render with real glyphs (no missing-glyph boxes) and break after them
+  - delete_text: {target: $f, start: 0, end: 12}
+  - insert_text: {target: $f, text: "pages 10–12 — see notes"}
+  - expect: {query: {q: missing_glyphs, frame: $f}, equals: 0}
+  - export_pdf: {path: special.pdf}
+  - expect_pdf: {file: special.pdf, text_contains: ["10–12", "—"]}
+  # insert_special_char inserts by name
+  - insert_special_char: {target: $f, at: 0, char: em_space}
+  - expect: {query: {q: story_text, target: $f}, starts_with: " "}

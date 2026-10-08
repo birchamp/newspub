@@ -240,6 +240,18 @@ pub fn run_step(s: &mut Session, ctx: &mut Ctx, step: &Value) -> Result<()> {
             let r = ctx.rel(&p);
             ctx.artifacts.push(r);
         }
+        "copy_file" | "delete_file" => {
+            // Test setup on files in the journey's output directory (sources may be fixtures/…).
+            let path_of = |k: &str| -> Result<PathBuf> {
+                let p = PathBuf::from(args.get(k).and_then(|v| v.as_str()).ok_or_else(|| anyhow!("{name} needs {k}"))?);
+                Ok(if p.is_absolute() { p } else { ctx.out.join(p) })
+            };
+            if name == "copy_file" {
+                std::fs::copy(path_of("from")?, path_of("to")?)?;
+            } else {
+                std::fs::remove_file(path_of("path")?)?;
+            }
+        }
         "let" => {
             // let: {name: value-or-query}
             let spec = args.as_object().ok_or_else(|| anyhow!("let needs a map"))?;
@@ -270,6 +282,7 @@ pub fn run_step(s: &mut Session, ctx: &mut Ctx, step: &Value) -> Result<()> {
         "expect_pdf" => crate::pdfcheck::check(ctx, &args)?,
         "expect_png" => crate::pngcheck::check(s, ctx, &args)?,
         "expect_image" => crate::pngcheck::check_file(ctx, &args)?,
+        "expect_html" => crate::htmlcheck::check(ctx, &args)?,
         "expect_roundtrip" => roundtrip(s, ctx)?,
         "snapshot" => {
             let page = args.get("page").and_then(|p| p.as_u64()).unwrap_or(0) as usize;

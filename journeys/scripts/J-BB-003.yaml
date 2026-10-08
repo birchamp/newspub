@@ -1,0 +1,27 @@
+id: J-BB-003
+title: Building blocks — save a selection, insert it again; built-in blocks
+covers: [BB-03]
+steps:
+  - new_document: {width: 8.5in, height: 11in, pages: 2}
+  - add_shape: {page: 0, rect: [1in, 1in, 3in, 1in], kind: rect, fill: "#1f4e79"}
+    as: bar
+  - add_text_frame: {page: 0, rect: [1.1in, 1.1in, 2.8in, 0.8in]}
+    as: title
+  - insert_text: {target: $title, text: "Section heading"}
+  - save_building_block: {ids: [$bar, $title], name: "Blue heading", category: "Headings"}
+  - expect: {query: {q: building_blocks}, contains: {name: "Blue heading", category: "Headings", user: true}}
+  # insert on page 2 at a new position: objects are copied with their text, offsets kept
+  - insert_building_block: {name: "Blue heading", page: 1, x: 2in, y: 5in}
+  - expect: {query: {q: object_count, page: 1}, equals: 2}
+  - export_pdf: {path: blocks.pdf}
+  - expect_pdf: {file: blocks.pdf, page_text: [{page: 2, contains: "Section heading"}], ink: [{page: 2, rect: [150, 365, 200, 10], min: 0.5}]}
+  # editing the copy does not change the original
+  - expect: {query: {q: page_objects, page: 1}, path: /1, gt: 0, as: copy_title}
+  - insert_text: {target: $copy_title, text: " (copy)"}
+  - expect: {query: {q: story_text, target: $title}, equals: "Section heading"}
+  # built-in blocks (original designs) exist in several categories
+  - expect: {query: {q: building_blocks}, len: {gte: 6}}
+  - insert_building_block: {name: "Pull quote", page: 0, x: 1in, y: 6in}
+  - expect: {query: {q: object_count, page: 0}, gte: 3}
+  # user blocks persist across sessions (stored in the user library file, given here)
+  - expect: {query: {q: building_block_library}, path: /user_count, equals: 1}

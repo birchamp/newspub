@@ -3,9 +3,11 @@
 pub mod attrs;
 pub mod color;
 pub mod command;
+pub mod field;
 pub mod history;
 pub mod model;
 pub mod story;
+pub mod table;
 pub mod units;
 
 pub use attrs::*;

@@ -1,0 +1,26 @@
+id: J-EX-004
+title: Export HTML — one page per publication page, positioned text and images
+covers: [EX-04]
+steps:
+  - new_document: {width: 8.5in, height: 11in, pages: 2}
+  - set_meta: {title: "Parish news"}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 6in, 1in]}
+    as: h
+  - insert_text: {target: $h, text: "Harvest & Thanksgiving <2026>"}
+  - format_chars: {target: $h, attrs: {bold: true, size: 24}}
+  - insert_picture: {path: fixtures/photo.png, page: 0, x: 1in, y: 3in, width: 3in}
+    as: p
+  - set_object: {id: $p, patch: {alt_text: "Harvest table"}}
+  - add_text_frame: {page: 1, rect: [1in, 1in, 6in, 1in]}
+    as: b
+  - insert_text: {target: $b, text: "Second page"}
+  - export_html: {path: site}
+  - expect_html:
+      dir: site
+      files: ["index.html", "page-2.html"]
+      page: index.html
+      title: "Parish news"
+      text_contains: ["Harvest &amp; Thanksgiving &lt;2026&gt;"]
+      images_with_alt: ["Harvest table"]
+      links_to: ["page-2.html"]
+  - expect_html: {dir: site, page: page-2.html, text_contains: ["Second page"], links_to: ["index.html"]}

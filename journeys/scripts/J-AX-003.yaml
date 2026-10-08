@@ -1,0 +1,25 @@
+id: J-AX-003
+title: Tagged PDF (PDF/UA) with reading order and alt text
+covers: [AX-03]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - set_meta: {title: "Accessible newsletter", lang: "en-US"}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 6in, 1in]}
+    as: h
+  - insert_text: {target: $h, text: "Newsletter"}
+  - define_para_style: {name: "Heading 1", chars: {size: 24, bold: true}}
+  - apply_para_style: {target: $h, style: "Heading 1"}
+  - add_text_frame: {page: 0, rect: [1in, 2.5in, 6in, 2in]}
+    as: b
+  - insert_text: {target: $b, text: "Body text follows the heading."}
+  - insert_picture: {path: fixtures/photo.png, page: 0, x: 1in, y: 5in, width: 3in}
+    as: p
+  - set_object: {id: $p, patch: {alt_text: "Blue picture with shapes"}}
+  - add_shape: {page: 0, rect: [0.5in, 0.5in, 7.5in, 0.1in], kind: rect, fill: "#888888"}
+    as: rule
+  - set_object: {id: $rule, patch: {decorative: true}}
+  - set_reading_order: {page: 0, ids: [$h, $b, $p]}
+  - export_pdf: {path: tagged.pdf, options: {standard: pdf_ua1}}
+  - expect_pdf:
+      file: tagged.pdf
+      tagged: {structure: ["H1", "P", "Figure"], figure_alt: ["Blue picture with shapes"], lang: "en-US", title: "Accessible newsletter"}

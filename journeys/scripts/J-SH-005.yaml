@@ -1,0 +1,21 @@
+id: J-SH-005
+title: AutoShapes — rounded rectangle, star, arrow, callout, polygon, triangle
+covers: [SH-05]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_shape: {page: 0, rect: [1in, 1in, 2in, 1in], kind: {round_rect: {radius: 0.25in}}, fill: "#000000"}
+  # rounded corner: the very corner is empty, the edge midpoint is filled
+  - expect_png: {page: 0, pixels: [{at: [73, 73], rgb: [255, 255, 255], tol: 40}, {at: [144, 73], rgb: [0, 0, 0], tol: 40}]}
+  - add_shape: {page: 0, rect: [4in, 1in, 2in, 2in], kind: {star: {points: 5, inner: 0.4}}, fill: "#000000"}
+  # star: centre filled; between two points near the top edge is empty
+  - expect_png: {page: 0, pixels: [{at: [360, 144], rgb: [0, 0, 0], tol: 40}, {at: [320, 80], rgb: [255, 255, 255], tol: 40}]}
+  - add_shape: {page: 0, rect: [1in, 4in, 2in, 1in], kind: {polygon: {sides: 6}}, fill: "#000000"}
+  - add_shape: {page: 0, rect: [4in, 4in, 2in, 1in], kind: arrow, fill: "#000000"}
+  - add_shape: {page: 0, rect: [1in, 6in, 2in, 1in], kind: triangle, fill: "#000000"}
+  - add_shape: {page: 0, rect: [4in, 6in, 2in, 1in], kind: {callout: {tail: [0.2, 1.6]}}, fill: "#ffffcc", stroke: {color: "#000000", width: 1}}
+    as: callout
+  # the callout tail reaches below its box toward the tail point (rect-relative)
+  - expect_png: {page: 0, pixels: [{at: [317, 515], rgb: [255, 255, 204], tol: 40}]}
+  # shapes can hold text (see SH-06); every kind round-trips
+  - expect_roundtrip: {}
+  - expect: {query: {q: shape_kinds}, len: {gte: 9}}

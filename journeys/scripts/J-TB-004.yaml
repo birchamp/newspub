@@ -1,0 +1,20 @@
+id: J-TB-004
+title: Table formats (preset styles) and header row
+covers: [TB-04]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_table: {page: 0, rect: [1in, 1in, 6in, 2in], rows: 4, cols: 3}
+    as: t
+  - expect: {query: {q: table_formats}, len: {gte: 4}}
+  - apply_table_format: {table: $t, format: "Banded rows"}
+  # header row: bold text on a dark fill; banded body rows alternate
+  - expect: {query: {q: table_cell, table: $t, row: 0, col: 0}, path: /story, gt: 0, as: h}
+  - insert_text: {target: $h, text: "Name"}
+  - expect: {query: {q: char_attrs, target: $h, at: 0}, path: /bold, equals: true}
+  - expect_png: {page: 0, pixels: [{at: [150, 75], rgb: [31, 56, 100], tol: 40}]}
+  - expect: {query: {q: table, id: $t}, path: /header_rows, equals: 1}
+  # body rows 1 and 3 share a fill, row 2 differs
+  - expect: {query: {q: table_cell, table: $t, row: 1, col: 0}, path: /fill, not_equals: null, as: band}
+  - expect: {query: {q: table_cell, table: $t, row: 3, col: 0}, path: /fill, equals: $band}
+  - expect: {query: {q: table_cell, table: $t, row: 2, col: 0}, path: /fill, not_equals: $band}
+  - expect_roundtrip: {}

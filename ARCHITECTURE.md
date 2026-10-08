@@ -54,6 +54,8 @@ one dispatch path (rationale: "every user action is a command" can only be check
 - **Images: image 0.25** (PNG/JPEG decode for raster rendering; krilla embeds the original bytes).
 - **Native format: zip + serde_json.** Human-diffable JSON, media kept as separate entries.
 - **.pub import: cfb 0.15** (OLE compound files); see §9.
+- **Spell check: spellbook 0.4** (pure-Rust Hunspell-compatible, MPL-2.0 used as an unmodified dependency) with the bundled SCOWL en_US dictionary (`assets/dict`, permissive SCOWL licence).
+- **Toolchain pinned** to Rust 1.97.0 (`rust-toolchain.toml`), so clippy lints are identical locally and in CI.
 
 ## 3. Document model (`newpub-core`)
 

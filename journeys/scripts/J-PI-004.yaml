@@ -1,0 +1,7 @@
+id: J-PI-004
+title: Import .pub character and paragraph formatting
+covers: [PI-04]
+steps:
+  - import_pub: {path: fixtures/tika-sample.pub}
+  - expect: {query: {q: import_report}, path: /fonts, contains: "Times New Roman"}
+  - expect: {query: {q: fonts_used}, len: {gte: 1}}

@@ -1,0 +1,19 @@
+id: J-EX-005
+title: PDF hyperlinks and bookmarks
+covers: [EX-05]
+steps:
+  - new_document: {width: 8.5in, height: 11in, pages: 3}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 6in, 1in]}
+    as: f
+  - insert_text: {target: $f, text: "Visit our website or read page three."}
+  # "our website" = chars 6..17, "page three" = 26..36
+  - set_hyperlink: {target: $f, start: 6, end: 17, url: "https://example.org/parish"}
+  - set_hyperlink: {target: $f, start: 26, end: 36, page: 2}
+  - expect: {query: {q: hyperlinks}, len: 2}
+  - add_bookmark: {title: "Welcome", page: 0}
+  - add_bookmark: {title: "Events", page: 2}
+  - export_pdf: {path: links.pdf}
+  - expect_pdf:
+      file: links.pdf
+      links: [{page: 1, uri: "https://example.org/parish"}, {page: 1, dest_page: 3}]
+      bookmarks: ["Welcome", "Events"]

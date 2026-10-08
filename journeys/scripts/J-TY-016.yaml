@@ -1,0 +1,21 @@
+id: J-TY-016
+title: Right-to-left and complex-script shaping
+covers: [TY-17]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 4in, 2in]}
+    as: f
+  - set_text_frame: {id: $f, patch: {insets: {top: 0, bottom: 0, left: 0, right: 0}}}
+  # Hebrew in DejaVu Sans: first logical char is drawn rightmost in an RTL paragraph
+  - insert_text: {target: $f, text: "שלום עולם"}
+  - format_paras: {target: $f, attrs: {rtl: true, align: right}}
+  - format_chars: {target: $f, attrs: {font: "DejaVu Sans"}}
+  - expect: {query: {q: missing_glyphs, frame: $f}, equals: 0}
+  - expect: {query: {q: char_box, target: $f, at: 0}, path: /x, gt: 200}
+  - expect: {query: {q: char_box, target: $f, at: 8}, path: /x, lt: 200}
+  # mixed: an English word inside Hebrew keeps its own left-to-right order
+  - insert_text: {target: $f, at: 4, text: " ABC"}
+  - expect: {query: {q: char_box, target: $f, at: 6}, path: /x, gt: 0, as: x6}
+  - expect: {query: {q: char_box, target: $f, at: 5}, path: /x, lt: $x6}
+  - export_pdf: {path: rtl.pdf}
+  - expect_pdf: {file: rtl.pdf, text_contains: ["שלום"]}

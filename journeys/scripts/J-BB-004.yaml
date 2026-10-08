@@ -1,0 +1,26 @@
+id: J-BB-004
+title: Colour schemes and font schemes applied publication-wide
+covers: [BB-04]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - expect: {query: {q: color_schemes}, len: {gte: 5}}
+  - apply_color_scheme: {name: "Harvest"}
+  - add_shape: {page: 0, rect: [1in, 1in, 1in, 1in], kind: rect, fill: {scheme: accent1}}
+    as: r
+  - expect: {query: {q: color_scheme}, path: /name, equals: "Harvest"}
+  - expect: {query: {q: color_scheme}, path: /accent1, not_equals: null, as: harvest_accent}
+  - expect: {query: {q: resolved_fill, id: $r}, equals: $harvest_accent}
+  # changing the scheme recolours every object that uses scheme colours
+  - apply_color_scheme: {name: "Ocean"}
+  - expect: {query: {q: color_scheme}, path: /name, equals: "Ocean"}
+  - expect: {query: {q: resolved_fill, id: $r}, not_equals: $harvest_accent}
+  # font schemes: major (headings) and minor (body)
+  - apply_font_scheme: {name: "Classic"}
+  - add_text_frame: {page: 0, rect: [1in, 3in, 5in, 1in]}
+    as: f
+  - insert_text: {target: $f, text: "Body text"}
+  - format_chars: {target: $f, attrs: {font: "+minor"}}
+  - expect: {query: {q: char_attrs, target: $f, at: 0}, path: /font, equals: "Liberation Serif"}
+  - apply_font_scheme: {name: "Modern"}
+  - expect: {query: {q: char_attrs, target: $f, at: 0}, path: /font, equals: "Liberation Sans"}
+  - expect_roundtrip: {}

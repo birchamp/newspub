@@ -168,7 +168,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 |----|---|---------|----------|------|
 | EX-01 | P0 | Export PDF: vector text with embedded subset fonts, images, shapes | J-EX-001 | [ ] |
 | EX-02 | P1 | Export page as PNG/JPEG at chosen DPI | J-EX-002 | [ ] |
-| EX-03 | P2 | Export PDF/X (X-1a/X-4 profiles validated by krilla) | J-EX-003 | [ ] |
+| EX-03 | P2 | Export PDF/X-4 (OutputIntent, boxes, no transparency issues). Risk: krilla 0.8 has no PDF/X validator, so this needs our own post-processing | J-EX-003 | [ ] |
 | EX-04 | P2 | Export HTML (one page per page, positioned) | J-EX-004 | [ ] |
 | EX-05 | P2 | PDF hyperlinks and bookmarks | J-EX-005 | [ ] |
 | EX-06 | P3 | Export to XPS / EPUB | J-EX-006 | [ ] |

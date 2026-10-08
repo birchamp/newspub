@@ -1,0 +1,14 @@
+id: J-PG-007
+title: Change the page size of an existing publication; off-page objects are reported
+covers: [PG-10]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_shape: {page: 0, rect: [6in, 9in, 2in, 1in], kind: rect, fill: "#ff0000"}
+    as: r
+  - add_shape: {page: 0, rect: [1in, 1in, 1in, 1in], kind: rect, fill: "#00ff00"}
+  - set_page_setup: {width: 5.5in, height: 8.5in}
+  # objects keep their positions; the one now beyond the page is reported
+  - expect: {query: {q: object, id: $r}, path: /rect/x, equals: 432}
+  - expect: {query: {q: off_page_objects}, equals: [{id: $r, page: 0}]}
+  - set_page_setup: {width: 8.5in, height: 11in}
+  - expect: {query: {q: off_page_objects}, len: 0}

@@ -1,0 +1,25 @@
+id: J-MM-002
+title: Mail merge — filter and sort the recipient list; skip lines with blank fields
+covers: [MM-03]
+steps:
+  - new_document: {width: 6in, height: 4in}
+  - attach_data_source: {path: fixtures/members.csv}
+  - add_text_frame: {page: 0, rect: [0.5in, 0.5in, 5in, 2in]}
+    as: f
+  - insert_merge_field: {target: $f, field: first}
+  - insert_text: {target: $f, text: "\nGift: "}
+  - insert_merge_field: {target: $f, field: amount}
+  - set_merge_filter: {field: city, op: equals, value: "Riverton"}
+  - expect: {query: {q: data_source}, path: /records, equals: 2}
+  - set_merge_sort: {field: first, descending: true}
+  - merge_to_pdf: {path: riverton.pdf}
+  - expect_pdf: {file: riverton.pdf, pages: 2, page_text: [{page: 1, contains: "Alan"}, {page: 2, contains: "Ada"}]}
+  - set_merge_filter: null
+  - expect: {query: {q: data_source}, path: /records, equals: 4}
+  # Grace has no amount: with skip_blank_lines the "Gift:" line disappears for her
+  - set_merge_options: {skip_blank_lines: true}
+  - set_merge_sort: null
+  - set_merge_preview: {record: 1}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "Grace"}
+  - set_merge_preview: {record: 0}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "Ada\nGift: 25"}

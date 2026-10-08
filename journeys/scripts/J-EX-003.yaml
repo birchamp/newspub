@@ -1,0 +1,17 @@
+id: J-EX-003
+title: Export PDF/X-4 for commercial printing
+covers: [EX-03]
+steps:
+  - new_document: {width: 5.5in, height: 8.5in, bleed: 0.125in}
+  - set_meta: {title: "Print job"}
+  - add_text_frame: {page: 0, rect: [0.5in, 0.5in, 4.5in, 2in]}
+    as: t
+  - insert_text: {target: $t, text: "Ready for the printer"}
+  - insert_picture: {path: fixtures/photo.png, page: 0, x: 0.5in, y: 3in, width: 3in}
+  - export_pdf: {path: x4.pdf, options: {standard: pdf_x4, bleed: true, crop_marks: true}}
+  - expect_pdf:
+      file: x4.pdf
+      pdfx: {version: "PDF/X-4", output_intent: true}
+      fonts: {embedded: true}
+      boxes: [{page: 1, trim: [35, 35, 431, 647]}]
+      text_contains: ["Ready for the printer"]

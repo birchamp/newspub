@@ -1,0 +1,11 @@
+id: J-PI-001
+title: Open a .pub container, report its streams; reject non-Publisher files gracefully
+covers: [PI-01]
+steps:
+  - expect: {query: {q: pub_report, path: fixtures/tika-sample.pub}, path: /is_publisher, equals: true}
+  - expect: {query: {q: pub_report, path: fixtures/tika-sample.pub}, path: /streams, contains: "Quill/QuillSub/CONTENTS"}
+  - expect: {query: {q: pub_report, path: fixtures/tika-sample.pub}, path: /streams, contains: "Contents"}
+  - expect: {query: {q: pub_report, path: fixtures/tika-sample.pub}, path: /streams, contains: "EscherStm"}
+  - expect: {query: {q: pub_report, path: fixtures/tika-sample.pub}, path: /version, starts_with: "Publisher"}
+  - expect_error: {import_pub: {path: fixtures/photo.png}, message: "not a Publisher file"}
+  - expect_error: {import_pub: {path: fixtures/letter.docx}, message: "not a Publisher file"}

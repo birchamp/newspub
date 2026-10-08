@@ -1,0 +1,20 @@
+id: J-FI-003
+title: Autosave and crash recovery
+covers: [FI-03]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - set_autosave: {dir: autosave, every_actions: 3}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 4in, 2in]}
+    as: f
+  - insert_text: {target: $f, text: "Unsaved work"}
+  - format_chars: {target: $f, attrs: {bold: true}}
+  # after 3 actions an autosave exists
+  - expect: {query: {q: autosaves, dir: autosave}, len: 1}
+  # simulate a crash: start a fresh session and recover
+  - new_document: {width: 8.5in, height: 11in}
+  - recover_autosave: {dir: autosave}
+  - expect: {query: {q: story_text, target: $f}, equals: "Unsaved work"}
+  - expect: {query: {q: session}, path: /dirty, equals: true}
+  # a clean save removes the autosave
+  - save: {path: done.npub}
+  - expect: {query: {q: autosaves, dir: autosave}, len: 0}

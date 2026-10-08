@@ -1,0 +1,25 @@
+id: UI-SH-004
+title: Format panels — font, size, paragraph, and object properties wired to commands
+covers: [UI-04]
+ui: true
+steps:
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 1in], to: [5in, 3in]}
+  - type: {text: "Formatted through the panel"}
+  - expect: {query: {q: document}, path: /pages/0/objects/0, gt: 0, as: f}
+  - click: {label: "Italic"}
+  - expect: {query: {q: char_attrs, target: $f, at: 0}, path: /italic, equals: true}
+  - fill: {label: "Font size", text: "18"}
+  - expect: {query: {q: char_attrs, target: $f, at: 0}, path: /size, equals: 18}
+  - click: {label: "Center"}
+  - expect: {query: {q: para_attrs, target: $f, at: 0}, path: /align, equals: center}
+  - click: {label: "Font"}
+  - click: {label: "Liberation Serif"}
+  - expect: {query: {q: char_attrs, target: $f, at: 0}, path: /font, equals: "Liberation Serif"}
+  # object panel: exact position and size
+  - fill: {label: "X position", text: "2in"}
+  - fill: {label: "Width", text: "3in"}
+  - expect: {query: {q: object, id: $f}, path: /rect/x, equals: 144}
+  - expect: {query: {q: object, id: $f}, path: /rect/w, equals: 216}
+  - fill: {label: "Columns", text: "2"}
+  - expect: {query: {q: object, id: $f}, path: /kind/columns, equals: 2}

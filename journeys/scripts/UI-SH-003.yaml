@@ -1,0 +1,30 @@
+id: UI-SH-003
+title: Select, move, and resize objects with the mouse; nudge with arrow keys
+covers: [UI-03]
+ui: true
+steps:
+  - click: {label: "Rectangle"}
+  - drag: {from: [1in, 1in], to: [3in, 2in]}
+  - expect: {query: {q: document}, path: /pages/0/objects/0, gt: 0, as: r}
+  - click: {label: "Select"}
+  # drag the body to move it by 1in right, 0.5in down
+  - drag: {from: [2in, 1.5in], to: [3in, 2in]}
+  - expect: {query: {q: object, id: $r}, path: /rect/x, approx: [144, 1.5]}
+  - expect: {query: {q: object, id: $r}, path: /rect/y, approx: [108, 1.5]}
+  # drag the bottom-right handle to resize
+  - drag: {from: [4in, 2.5in], to: [5in, 3in]}
+  - expect: {query: {q: object, id: $r}, path: /rect/w, approx: [216, 1.5]}
+  - expect: {query: {q: object, id: $r}, path: /rect/h, approx: [108, 1.5]}
+  # arrow keys nudge by 1pt (shift: 10pt) and each nudge is undoable
+  - key: {key: "ArrowRight"}
+  - expect: {query: {q: object, id: $r}, path: /rect/x, approx: [145, 1.5]}
+  - key: {key: "ArrowDown", shift: true}
+  - expect: {query: {q: object, id: $r}, path: /rect/y, approx: [118, 1.5]}
+  - key: {key: "Z", command: true}
+  - expect: {query: {q: object, id: $r}, path: /rect/y, approx: [108, 1.5]}
+  # clicking empty canvas clears the selection; Delete removes the selected object
+  - click_at: [7in, 9in]
+  - expect_ui: {label: "Delete Object", exists: false}
+  - click_at: [3.5in, 2in]
+  - key: {key: "Delete"}
+  - expect: {query: {q: object_count, page: 0}, equals: 0}

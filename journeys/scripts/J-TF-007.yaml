@@ -1,0 +1,37 @@
+id: J-TF-007
+title: Text autofit — shrink on overflow, best fit, grow frame to fit
+covers: [TF-08]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 3in, 1.5in]}
+    as: f
+  - insert_text: {target: $f, text: "@repeat:12:The parish fete raised money for the roof. "}
+  - format_chars: {target: $f, attrs: {size: 14}}
+  - expect: {query: {q: overflow, target: $f}, equals: true}
+  # shrink: text gets smaller until it fits; the stored size is unchanged
+  - set_text_frame: {id: $f, patch: {autofit: shrink_on_overflow}}
+  - expect: {query: {q: overflow, target: $f}, equals: false}
+  - expect: {query: {q: char_attrs, target: $f, at: 0}, path: /size, equals: 14}
+  - expect: {query: {q: object, id: $f}, path: /kind/fit_scale, lt: 1.0}
+  - expect: {query: {q: frame_lines, frame: $f}, path: /0/height, lt: 17}
+  # shrink never enlarges short text
+  - delete_text: {target: $f, start: 40, end: 528}
+  - expect: {query: {q: object, id: $f}, path: /kind/fit_scale, equals: 1.0}
+  # best fit enlarges short text to fill the frame without overflowing
+  - set_text_frame: {id: $f, patch: {autofit: best_fit}}
+  - expect: {query: {q: object, id: $f}, path: /kind/fit_scale, gt: 1.5}
+  - expect: {query: {q: overflow, target: $f}, equals: false}
+  # grow frame: the frame's height grows to fit all the text, the width stays
+  - insert_text: {target: $f, text: "@repeat:12: More news from the parish council."}
+  - set_text_frame: {id: $f, patch: {autofit: grow_frame}}
+  - expect: {query: {q: object, id: $f}, path: /kind/fit_scale, equals: 1.0}
+  - expect: {query: {q: overflow, target: $f}, equals: false}
+  - expect: {query: {q: object, id: $f}, path: /rect/h, gt: 108}
+  - expect: {query: {q: object, id: $f}, path: /rect/w, equals: 216}
+  # deleting text shrinks the grown frame again, and undo restores the previous height in one step
+  - delete_text: {target: $f, start: 0, end: 300}
+  - expect: {query: {q: object, id: $f}, path: /rect/h, lt: 108}
+  - undo: {}
+  - expect: {query: {q: object, id: $f}, path: /rect/h, gt: 108}
+  - set_text_frame: {id: $f, patch: {autofit: none}}
+  - expect: {query: {q: object, id: $f}, path: /kind/fit_scale, equals: 1.0}

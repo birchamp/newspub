@@ -1,0 +1,10 @@
+id: J-PI-003
+title: Import .pub page size, frame geometry, and pictures
+covers: [PI-03]
+steps:
+  - import_pub: {path: fixtures/tika-sample.pub}
+  - expect: {query: {q: document}, path: /setup/width, gt: 100}
+  - expect: {query: {q: object_count, page: 0}, gte: 1}
+  # the text frame holding the sample text lies inside the page
+  - expect: {query: {q: import_report}, path: /frames_placed, gte: 1}
+  - expect: {query: {q: off_page_objects}, len: 0}

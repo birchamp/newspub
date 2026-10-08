@@ -1,0 +1,28 @@
+id: J-TB-003
+title: Cell borders and fill; merge and split cells
+covers: [TB-03]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_table: {page: 0, rect: [1in, 1in, 6in, 3in], rows: 3, cols: 3}
+    as: t
+  - set_table_cells: {table: $t, row: 0, col: 0, rows: 1, cols: 3, fill: "#1f4e79"}
+  - expect_png: {page: 0, pixels: [{at: [200, 90], rgb: [31, 78, 121]}, {at: [200, 150], rgb: [255, 255, 255]}]}
+  # no borders on the body, a thick red outer border
+  - set_table_cells: {table: $t, row: 1, col: 0, rows: 2, cols: 3, borders: {inner: none}}
+  - set_table_cells: {table: $t, row: 0, col: 0, rows: 3, cols: 3, borders: {outer: {color: "#cc0000", width: 3}}}
+  - expect_png: {page: 0, pixels: [{at: [216, 216], rgb: [255, 255, 255]}, {at: [72, 216], rgb: [204, 0, 0], tol: 60}]}
+  # merge the middle row's first two cells: one cell spanning 2 columns, its text keeps flowing across the width
+  - expect: {query: {q: table_cell, table: $t, row: 1, col: 0}, path: /story, gt: 0, as: a}
+  - expect: {query: {q: table_cell, table: $t, row: 1, col: 1}, path: /story, gt: 0, as: b}
+  - insert_text: {target: $a, text: "Left"}
+  - insert_text: {target: $b, text: "Right"}
+  - merge_table_cells: {table: $t, row: 1, col: 0, rows: 1, cols: 2}
+  - expect: {query: {q: table_cell, table: $t, row: 1, col: 1}, path: /story, equals: $a}
+  - expect: {query: {q: table_cell, table: $t, row: 1, col: 0}, path: /colspan, equals: 2}
+  # merged text is joined with a paragraph break
+  - expect: {query: {q: story_text, target: $a}, equals: "Left\nRight"}
+  - split_table_cell: {table: $t, row: 1, col: 0}
+  - expect: {query: {q: table_cell, table: $t, row: 1, col: 0}, path: /colspan, equals: 1}
+  - expect: {query: {q: table_cell, table: $t, row: 1, col: 1}, path: /story, not_equals: $a}
+  - expect_error: {merge_table_cells: {table: $t, row: 2, col: 2, rows: 2, cols: 1}}
+  - expect_roundtrip: {}

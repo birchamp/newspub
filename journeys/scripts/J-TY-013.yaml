@@ -1,0 +1,23 @@
+id: J-TY-013
+title: Baseline guides — align text to a baseline grid
+covers: [TY-14]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - set_baseline_grid: {spacing: 14, offset: 0.5in}
+  # two frames side by side with different sizes; aligned paragraphs sit on the shared grid
+  - add_text_frame: {page: 0, rect: [1in, 1in, 3in, 4in]}
+    as: a
+  - add_text_frame: {page: 0, rect: [4.5in, 1.1in, 3in, 4in]}
+    as: b
+  - insert_text: {target: $a, text: "@repeat:6:Grid aligned text. "}
+  - insert_text: {target: $b, text: "@repeat:6:Other column text here. "}
+  - format_paras: {target: $a, attrs: {align_to_baseline: true}}
+  - format_paras: {target: $b, attrs: {align_to_baseline: true}}
+  - format_chars: {target: $b, attrs: {size: 9}}
+  # page baselines: frame top + line baseline is offset + n × spacing
+  - expect: {query: {q: page_baselines, frame: $a}, path: /0, approx: [92, 0.01]}
+  - expect: {query: {q: page_baselines, frame: $a}, path: /1, approx: [106, 0.01]}
+  - expect: {query: {q: page_baselines, frame: $b}, path: /0, approx: [92, 0.01]}
+  - expect: {query: {q: page_baselines, frame: $b}, path: /1, approx: [106, 0.01]}
+  - format_paras: {target: $b, attrs: {align_to_baseline: false}}
+  - expect: {query: {q: page_baselines, frame: $b}, path: /1, not_equals: 106}

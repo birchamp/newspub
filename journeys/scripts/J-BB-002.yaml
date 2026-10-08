@@ -1,0 +1,28 @@
+id: J-BB-002
+title: Built-in starter templates (original designs)
+covers: [BB-02]
+steps:
+  - expect: {query: {q: builtin_templates}, len: {gte: 4}}
+  - expect: {query: {q: builtin_templates}, contains: {id: newsletter, name: "Newsletter", pages: 4}}
+  - expect: {query: {q: builtin_templates}, contains: {id: flyer, name: "Flyer", pages: 1}}
+  - expect: {query: {q: builtin_templates}, contains: {id: bulletin, name: "Church bulletin", pages: 4}}
+  - expect: {query: {q: builtin_templates}, contains: {id: booklet, name: "Folded booklet", pages: 8}}
+  - new_from_builtin: {id: newsletter}
+  - expect: {query: {q: page_count}, equals: 4}
+  - expect: {query: {q: masters}, len: {gte: 1}}
+  - expect: {query: {q: styles}, path: /para, len: {gte: 3}}
+  # every template's text fits (no overflow) and passes the accessibility checker
+  - expect: {query: {q: accessibility_check}, len: 0}
+  - export_pdf: {path: newsletter.pdf}
+  - expect_pdf: {file: newsletter.pdf, pages: 4, fonts: {embedded: true}}
+  - new_from_builtin: {id: flyer}
+  - expect: {query: {q: accessibility_check}, len: 0}
+  - export_pdf: {path: flyer.pdf}
+  - new_from_builtin: {id: bulletin}
+  - expect: {query: {q: accessibility_check}, len: 0}
+  - export_pdf: {path: bulletin.pdf, options: {imposition: booklet}}
+  - expect_pdf: {file: bulletin.pdf, pages: 2}
+  - new_from_builtin: {id: booklet}
+  - expect: {query: {q: document}, path: /setup/facing, equals: true}
+  - expect: {query: {q: accessibility_check}, len: 0}
+  - expect_error: {new_from_builtin: {id: no-such-template}}

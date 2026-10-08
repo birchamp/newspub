@@ -1,0 +1,22 @@
+id: J-PR-004
+title: CMYK and spot colours in the model and in PDF output
+covers: [PR-05, PR-06]
+steps:
+  - new_document: {width: 5in, height: 5in}
+  - add_shape: {page: 0, rect: [0.5in, 0.5in, 1in, 1in], kind: rect, fill: "cmyk(100,0,0,0)"}
+    as: c
+  - add_shape: {page: 0, rect: [2in, 0.5in, 1in, 1in], kind: rect, fill: {space: spot, name: "PANTONE 186 C", c: 0, m: 1, y: 0.8, k: 0.05, tint: 1}}
+    as: s
+  - add_text_frame: {page: 0, rect: [0.5in, 2in, 4in, 1in]}
+    as: t
+  - insert_text: {target: $t, text: "Rich black text"}
+  - format_chars: {target: $t, attrs: {color: "cmyk(60,40,40,100)"}}
+  - expect: {query: {q: object, id: $c}, path: /kind/fill/space, equals: cmyk}
+  - export_pdf: {path: cmyk.pdf}
+  - expect_pdf:
+      file: cmyk.pdf
+      color_spaces: {contains: ["DeviceCMYK", "Separation"], spot_names: ["PANTONE 186 C"], not_contains: ["DeviceRGB"]}
+  # screen preview converts CMYK to RGB
+  - expect_png: {page: 0, pixels: [{at: [72, 72], rgb: [0, 255, 255], tol: 10}]}
+  # swatches: the document lists the colours in use
+  - expect: {query: {q: colors_used}, contains: {space: spot, name: "PANTONE 186 C"}}

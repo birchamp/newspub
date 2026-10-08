@@ -1,0 +1,21 @@
+id: J-SH-006
+title: Text inside shapes
+covers: [SH-06]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_shape: {page: 0, rect: [1in, 1in, 3in, 2in], kind: ellipse, fill: "#ddeeff"}
+    as: e
+  - add_shape_text: {id: $e}
+    as: s
+  - insert_text: {target: $s, text: "Bake sale today in the church hall"}
+  - format_paras: {target: $s, attrs: {align: center}}
+  # text is laid out inside the shape's text area (for an ellipse, the inscribed rectangle) and centred vertically
+  - expect: {query: {q: frame_text, frame: $e}, equals: "Bake sale today in the church hall"}
+  - expect: {query: {q: text_bounds, frame: $e}, path: /x, gt: 100}
+  - expect: {query: {q: text_bounds, frame: $e}, path: /y, gt: 110}
+  - export_pdf: {path: shape-text.pdf}
+  - expect_pdf: {file: shape-text.pdf, text_contains: ["Bake sale today"]}
+  # moving the shape moves its text
+  - move_objects: {ids: [$e], dx: 1in, dy: 0}
+  - expect: {query: {q: text_bounds, frame: $e}, path: /x, gt: 172}
+  - expect_roundtrip: {}

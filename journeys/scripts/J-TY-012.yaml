@@ -1,0 +1,21 @@
+id: J-TY-012
+title: OpenType ligatures, discretionary ligatures, stylistic features
+covers: [TY-13]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 6in, 1in]}
+    as: f
+  - insert_text: {target: $f, text: "office fluffy"}
+  - format_chars: {target: $f, attrs: {font: "Carlito", size: 24}}
+  # standard ligatures (on by default): "ffi" and "ffl" become single glyphs, so fewer glyphs than chars
+  - expect: {query: {q: glyph_count, frame: $f}, lt: 13}
+  - format_chars: {target: $f, attrs: {ligatures: false}}
+  - expect: {query: {q: glyph_count, frame: $f}, equals: 13}
+  # text extraction is unaffected by ligatures
+  - format_chars: {target: $f, attrs: {ligatures: true}}
+  - export_pdf: {path: liga.pdf}
+  - expect_pdf: {file: liga.pdf, text_contains: ["office fluffy"]}
+  # an unsupported feature tag is ignored without error
+  - format_chars: {target: $f, attrs: {features: ["ss01", "onum"]}}
+  - expect: {query: {q: char_attrs, target: $f, at: 0}, path: /features, equals: ["ss01", "onum"]}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "office fluffy"}

@@ -1,0 +1,35 @@
+id: J-SP-001
+title: Spell check with suggestions; replace, ignore, add to dictionary
+covers: [SP-01, SP-02]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 5in, 2in]}
+    as: [f, s]
+  - insert_text: {target: $f, text: "The comittee will recieve the newpub donations on Saturday. Don't panic."}
+  # misspellings in story order: comittee (4..12), recieve (18..25), newpub (30..36)
+  - expect: {query: {q: spelling}, len: 3}
+  - expect: {query: {q: spelling}, path: /0/word, equals: "comittee"}
+  - expect: {query: {q: spelling}, path: /0/story, equals: $s}
+  - expect: {query: {q: spelling}, path: /0/start, equals: 4}
+  - expect: {query: {q: spelling}, path: /0/end, equals: 12}
+  - expect: {query: {q: spelling}, path: /0/suggestions, contains: "committee"}
+  - expect: {query: {q: spelling}, path: /1/suggestions, contains: "receive"}
+  # replace with a suggestion (a normal text command)
+  - replace_text: {target: $f, start: 4, end: 12, text: "committee"}
+  - expect: {query: {q: spelling}, len: 2}
+  # ignore all (this session) and add to the user dictionary (persists in the document's custom words)
+  - ignore_word: {word: "recieve"}
+  - expect: {query: {q: spelling}, len: 1}
+  - add_to_dictionary: {word: "newpub"}
+  - expect: {query: {q: spelling}, len: 0}
+  - expect: {query: {q: document}, path: /custom_words, equals: ["newpub"]}
+  - undo: {}
+  - expect: {query: {q: spelling}, len: 1}
+  - redo: {}
+  # capitalised words at sentence start and contractions are fine; text in other frames is checked too
+  - add_text_frame: {page: 0, rect: [1in, 4in, 5in, 1in]}
+    as: g
+  - insert_text: {target: $g, text: "Wellcome everyone"}
+  - expect: {query: {q: spelling}, len: 1}
+  - expect: {query: {q: spelling}, path: /0/word, equals: "Wellcome"}
+  - expect: {query: {q: spelling}, path: /0/suggestions, contains: "Welcome"}

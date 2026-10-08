@@ -1,0 +1,22 @@
+id: J-BB-001
+title: Save a publication as a template; new publication from the template
+covers: [BB-01]
+steps:
+  - new_document: {width: 5.5in, height: 8.5in, pages: 2}
+  - define_para_style: {name: "Headline", chars: {size: 28, bold: true}}
+  - add_text_frame: {page: 0, rect: [0.5in, 0.5in, 4.5in, 1in]}
+    as: h
+  - insert_text: {target: $h, text: "Bulletin title"}
+  - apply_para_style: {target: $h, style: "Headline"}
+  - save_template: {path: bulletin.npubt, name: "Weekly bulletin"}
+  - new_document: {width: 8.5in, height: 11in}
+  - new_from_template: {path: bulletin.npubt}
+  # a copy of the template's content, as an untitled publication with fresh history
+  - expect: {query: {q: page_count}, equals: 2}
+  - expect: {query: {q: styles}, path: /para, contains: "Headline"}
+  - expect: {query: {q: page_objects, page: 0}, len: 1}
+  - expect: {query: {q: session}, path: /path, is_null: true}
+  - expect: {query: {q: history}, equals: {undo: 0, redo: 0}}
+  - expect: {query: {q: document}, path: /meta/title, equals: ""}
+  - save: {path: from-template.npub}
+  - expect_error: {new_from_template: {path: from-template-missing.npubt}}

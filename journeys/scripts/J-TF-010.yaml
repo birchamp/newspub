@@ -1,0 +1,16 @@
+id: J-TF-010
+title: Import a text file or a Word document's text into a story
+covers: [TF-11]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 6in, 8in]}
+    as: f
+  - import_text: {target: $f, path: fixtures/short.txt}
+  - expect: {query: {q: story_text, target: $f}, equals: "Welcome to the spring newsletter.\nThis issue covers the garden project, the bake sale, and next month's concert."}
+  - delete_text: {target: $f, start: 0, end: 113}
+  - import_text: {target: $f, path: fixtures/letter.docx}
+  - expect: {query: {q: story_text, target: $f}, starts_with: "Dear friends,\nThe autumn fair"}
+  # bold and italic runs from the document are kept
+  - expect: {query: {q: char_attrs, target: $f, at: 19}, path: /bold, equals: true}
+  - expect: {query: {q: char_attrs, target: $f, at: 15}, path: /bold, equals: false}
+  - expect_error: {import_text: {target: $f, path: fixtures/photo.png}}

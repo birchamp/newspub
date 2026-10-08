@@ -1,0 +1,9 @@
+id: J-PI-002
+title: Import .pub text stories as plain text with paragraphs
+covers: [PI-02]
+steps:
+  - import_pub: {path: fixtures/tika-sample.pub}
+  - expect: {query: {q: page_count}, gte: 1}
+  - expect: {query: {q: all_story_text}, contains: "0123456789abcdef"}
+  - export_pdf: {path: imported.pdf}
+  - expect_pdf: {file: imported.pdf, text_contains: ["0123456789"]}

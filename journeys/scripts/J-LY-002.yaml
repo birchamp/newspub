@@ -1,0 +1,38 @@
+id: J-LY-002
+title: Layers — create, rename, reorder, hide, lock; move objects between layers
+covers: [LY-02]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_layer: {name: "Background"}
+    as: bg
+  - add_layer: {name: "Text"}
+    as: tx
+  - expect: {query: {q: layers}, equals: [{id: $bg, name: "Background", visible: true, locked: false}, {id: $tx, name: "Text", visible: true, locked: false}]}
+  - add_shape: {page: 0, rect: [1in, 1in, 2in, 2in], kind: rect, fill: "#ff0000"}
+    as: red
+  - add_shape: {page: 0, rect: [1.5in, 1.5in, 2in, 2in], kind: rect, fill: "#0000ff"}
+    as: blue
+  # layers order drawing: objects on a later layer draw over objects on an earlier one, whatever their page z-order
+  - set_object: {id: $red, patch: {layer: $tx}}
+  - set_object: {id: $blue, patch: {layer: $bg}}
+  - expect_png: {page: 0, pixels: [{at: [162, 162], rgb: [255, 0, 0]}]}
+  - move_layer: {layer: $tx, to: 0}
+  - expect: {query: {q: layers}, path: /0/name, equals: "Text"}
+  - expect_png: {page: 0, pixels: [{at: [162, 162], rgb: [0, 0, 255]}]}
+  - set_layer: {layer: $tx, name: "Words"}
+  - expect: {query: {q: layers}, path: /0/name, equals: "Words"}
+  # hidden layers are not shown or printed
+  - set_layer: {layer: $bg, visible: false}
+  - expect_png: {page: 0, pixels: [{at: [230, 230], rgb: [255, 255, 255]}, {at: [100, 100], rgb: [255, 0, 0]}]}
+  - export_pdf: {path: layers.pdf}
+  - expect_pdf: {file: layers.pdf, ink: [{page: 1, rect: [220, 220, 30, 30], max: 0.0}]}
+  # locked layers: their objects cannot be moved or deleted
+  - set_layer: {layer: $bg, visible: true, locked: true}
+  - expect_error: {move_objects: {ids: [$blue], dx: 10, dy: 0}}
+  - expect_error: {delete_objects: {ids: [$blue]}}
+  # deleting a layer moves its objects to no layer
+  - set_layer: {layer: $bg, locked: false}
+  - delete_layer: {layer: $bg}
+  - expect: {query: {q: layers}, len: 1}
+  - expect: {query: {q: object, id: $blue}, path: /layer, is_null: true}
+  - expect_roundtrip: {}

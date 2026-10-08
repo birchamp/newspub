@@ -1,0 +1,25 @@
+id: J-IM-007
+title: Linked versus embedded pictures; relink a missing picture
+covers: [IM-08]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - copy_file: {from: fixtures/photo.png, to: linked.png}
+  - insert_picture: {path: linked.png, page: 0, link: true}
+    as: [p, p_asset]
+  - expect: {query: {q: assets}, path: /0/link, ends_with: "linked.png"}
+  # a linked picture is not stored inside the .npub
+  - save: {path: linked.npub}
+  - expect: {query: {q: npub_entries, path: linked.npub}, not_contains: "media/"}
+  # when the file is missing on open, the picture is reported missing and shows a placeholder
+  - delete_file: {path: linked.png}
+  - open: {path: linked.npub}
+  - expect: {query: {q: missing_links}, len: 1}
+  - expect_png: {page: 0, pixels: [{at: [306, 150], rgb: [235, 235, 235], tol: 20}]}
+  # relink to another file
+  - relink_picture: {asset: $p_asset, path: fixtures/stripes.jpg}
+  - expect: {query: {q: missing_links}, len: 0}
+  # embedding converts a link into stored bytes
+  - embed_picture: {asset: $p_asset}
+  - save: {path: embedded.npub}
+  - expect: {query: {q: assets}, path: /0/link, is_null: true}
+  - expect: {query: {q: npub_entries, path: embedded.npub}, len: 3}

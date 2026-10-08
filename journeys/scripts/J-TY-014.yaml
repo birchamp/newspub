@@ -1,0 +1,39 @@
+id: J-TY-014
+title: Keep with next, keep lines together, widow and orphan control
+covers: [TY-15]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  # frame a holds exactly 5 lines at 11pt Carlito (5 × 13.43 = 67.14 + 2 × 5.76 insets = 78.66)
+  - add_text_frame: {page: 0, rect: [1in, 1in, 3in, 78.7]}
+    as: a
+  - add_text_frame: {page: 0, rect: [4.5in, 1in, 3in, 3in]}
+    as: b
+  - link_frames: {from: $a, to: $b}
+  - insert_text: {target: $a, text: "Line one.\nLine two.\nLine three.\nLine four.\nHeading\nThe heading's paragraph which follows here is long enough to wrap onto at least three lines in this narrow frame."}
+  - expect: {query: {q: frame_lines, frame: $a}, len: 5}
+  - expect: {query: {q: frame_lines, frame: $a}, path: /4/text, equals: "Heading"}
+  # keep with next: the heading moves to the next frame with its paragraph
+  - format_paras: {target: $a, start: 44, end: 44, attrs: {keep_with_next: true}}
+  - expect: {query: {q: frame_lines, frame: $a}, len: 4}
+  - expect: {query: {q: frame_lines, frame: $b}, path: /0/text, equals: "Heading"}
+  # keep lines together: a 3+-line paragraph that would be split across frames moves whole
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 3in, 78.7]}
+    as: c
+  - add_text_frame: {page: 0, rect: [4.5in, 1in, 3in, 3in]}
+    as: d
+  - link_frames: {from: $c, to: $d}
+  - insert_text: {target: $c, text: "One.\nTwo.\nA paragraph long enough to need four lines in this narrow frame so that it must split between the two frames unless kept together."}
+  - format_paras: {target: $c, attrs: {widow_control: false}}
+  - expect: {query: {q: frame_lines, frame: $c}, len: 5}
+  - format_paras: {target: $c, start: 12, end: 12, attrs: {keep_together: true}}
+  - expect: {query: {q: frame_lines, frame: $c}, len: 2}
+  - expect: {query: {q: char_frame, target: $c, at: 10}, equals: $d}
+  # widow/orphan control: no single line of a paragraph alone at the bottom or top of a frame
+  - format_paras: {target: $c, attrs: {keep_together: false, widow_control: false}}
+  - insert_text: {target: $c, at: 0, text: "Zero.\nHalf.\n"}
+  # now 4 single lines + the first line of the long paragraph fill frame c: an orphan
+  - expect: {query: {q: frame_lines, frame: $c}, len: 5}
+  - format_paras: {target: $c, attrs: {widow_control: true}}
+  - expect: {query: {q: frame_lines, frame: $c}, len: 4}
+  - expect: {query: {q: frame_lines, frame: $d}, len: {gte: 2}}

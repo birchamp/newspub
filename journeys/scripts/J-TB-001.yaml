@@ -1,0 +1,30 @@
+id: J-TB-001
+title: Insert a table, type in cells, text wraps and rows grow to fit
+covers: [TB-01]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_table: {page: 0, rect: [1in, 1in, 6in, 1.5in], rows: 3, cols: 3}
+    as: t
+  - expect: {query: {q: table, id: $t}, path: /rows, equals: 3}
+  - expect: {query: {q: table, id: $t}, path: /cols, equals: 3}
+  # columns share the width equally, rows the height
+  - expect: {query: {q: table, id: $t}, path: /col_widths, equals: [144, 144, 144]}
+  - expect: {query: {q: table, id: $t}, path: /row_heights, equals: [36, 36, 36]}
+  - expect: {query: {q: table_cell, table: $t, row: 0, col: 0}, path: /story, gt: 0, as: c00}
+  - expect: {query: {q: table_cell, table: $t, row: 1, col: 2}, path: /story, gt: 0, as: c12}
+  - insert_text: {target: $c00, text: "Event"}
+  - insert_text: {target: $c12, text: "Saturday afternoon in the church hall, with tea and cakes served from three o'clock"}
+  # long text wraps inside its cell and the row grows; the others keep their height
+  - expect: {query: {q: table, id: $t}, path: /row_heights/0, equals: 36}
+  - expect: {query: {q: table, id: $t}, path: /row_heights/1, gt: 36}
+  - expect: {query: {q: object, id: $t}, path: /rect/h, gt: 108}
+  - expect: {query: {q: overflow, target: $c12}, equals: false}
+  - export_pdf: {path: table.pdf}
+  - expect_pdf:
+      file: table.pdf
+      text_contains: ["Event", "Saturday afternoon in the church hall"]
+      # default cell borders: a 1pt black grid; the top border of the table is drawn
+      ink: [{page: 1, rect: [80, 71, 400, 2], min: 0.5}]
+  - expect_roundtrip: {}
+  - undo: {}
+  - expect: {query: {q: story_text, target: $c12}, equals: ""}

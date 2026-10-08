@@ -1,0 +1,21 @@
+id: J-IM-006
+title: Picture borders, crop to shape, shadow, soft edges
+covers: [IM-07]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - insert_picture: {path: fixtures/photo.png, page: 0, x: 1in, y: 1in, width: 4in}
+    as: p
+  - set_image: {id: $p, patch: {stroke: {color: "#ff0000", width: 6}}}
+  - expect_png: {page: 0, pixels: [{at: [73, 150], rgb: [255, 0, 0], tol: 30}]}
+  # crop to an ellipse: the frame corners become empty
+  - set_image: {id: $p, patch: {mask: ellipse}}
+  - expect_png: {page: 0, pixels: [{at: [80, 80], rgb: [255, 255, 255], tol: 20}, {at: [216, 180], rgb: [30, 90, 160], tol: 30}]}
+  - export_pdf: {path: masked.pdf}
+  - expect_pdf: {file: masked.pdf, ink: [{page: 1, rect: [73, 73, 8, 8], max: 0.05}]}
+  - set_image: {id: $p, patch: {mask: rect}}
+  - set_object: {id: $p, patch: {shadow: {dx: 8, dy: 8, blur: 0, color: "#000000"}}}
+  - expect_png: {page: 0, pixels: [{at: [362, 290], rgb: [0, 0, 0], tol: 40}]}
+  - set_image: {id: $p, patch: {soft_edges: 12}}
+  # soft edges fade the picture towards its border
+  - expect_png: {page: 0, pixels: [{at: [74, 180], rgb: [230, 235, 240], tol: 30}]}
+  - expect_roundtrip: {}

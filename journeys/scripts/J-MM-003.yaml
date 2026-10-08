@@ -1,0 +1,17 @@
+id: J-MM-003
+title: Picture fields in mail merge
+covers: [MM-04]
+steps:
+  - new_document: {width: 6in, height: 4in}
+  - attach_data_source: {path: fixtures/members.csv}
+  - add_image: {page: 0, rect: [0.5in, 0.5in, 2in, 1.5in]}
+    as: pic
+  - set_picture_field: {id: $pic, field: photo}
+  - set_merge_preview: {record: 0}
+  # record 0's photo is the blue picture with a yellow box
+  - expect_png: {page: 0, pixels: [{at: [44, 44], rgb: [30, 90, 160], tol: 30}]}
+  - set_merge_preview: {record: 1}
+  - expect_png: {page: 0, pixels: [{at: [38, 44], rgb: [240, 240, 240], tol: 40}]}
+  - merge_to_pdf: {path: photos.pdf}
+  # record 3 has no picture: the frame stays empty (no image)
+  - expect_pdf: {file: photos.pdf, pages: 4, images: 2}

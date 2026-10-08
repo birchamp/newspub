@@ -1,0 +1,49 @@
+id: J-PG-005
+title: Page number and page count fields on masters; sections restart numbering with a format
+covers: [PG-06, PG-09]
+steps:
+  - new_document: {width: 5.5in, height: 8.5in, pages: 5}
+  - add_master: {name: "Main"}
+    as: m
+  - add_text_frame: {master: $m, rect: [0.5in, 7.8in, 4.5in, 0.4in]}
+    as: footer
+  - insert_text: {target: $footer, text: "Page  of "}
+  # fields are single characters in the story whose displayed text depends on the page showing them
+  - insert_field: {target: $footer, at: 5, field: page_number}
+  - insert_field: {target: $footer, at: 10, field: page_count}
+  - expect: {query: {q: story_length, target: $footer}, equals: 11}
+  - apply_master: {master: $m}
+  - export_pdf: {path: numbers.pdf}
+  - expect_pdf:
+      file: numbers.pdf
+      pages: 5
+      page_text:
+        - {page: 1, contains: "Page 1 of 5"}
+        - {page: 3, contains: "Page 3 of 5"}
+        - {page: 5, contains: "Page 5 of 5"}
+  # the field updates when pages are added
+  - insert_pages: {count: 1}
+  - export_pdf: {path: numbers6.pdf}
+  - expect_pdf: {file: numbers6.pdf, page_text: [{page: 6, contains: "Page 6 of 6"}]}
+  # a page field in a page's own text frame shows that page's number
+  - add_text_frame: {page: 3, rect: [1in, 1in, 3in, 0.5in]}
+    as: f
+  - insert_text: {target: $f, text: "This is page "}
+  - insert_field: {target: $f, field: page_number}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "This is page 4"}
+  # sections: front matter numbered i, ii; body restarts at 1 from page 3
+  - set_section: {page: 0, start_at: 1, format: lower_roman}
+  - set_section: {page: 2, start_at: 1, format: decimal}
+  - expect: {query: {q: page_label, page: 1}, equals: "ii"}
+  - expect: {query: {q: page_label, page: 2}, equals: "1"}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "This is page 2"}
+  - export_pdf: {path: sections.pdf}
+  - expect_pdf:
+      file: sections.pdf
+      page_text:
+        - {page: 2, contains: "Page ii of 6"}
+        - {page: 3, contains: "Page 1 of 6"}
+        - {page: 6, contains: "Page 4 of 6"}
+  - remove_section: {page: 2}
+  - expect: {query: {q: page_label, page: 2}, equals: "iii"}
+  - expect_roundtrip: {}

@@ -1,0 +1,21 @@
+id: UI-SH-005
+title: Open and save dialogs; recent files
+covers: [UI-05]
+ui: true
+steps:
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 1in], to: [4in, 2in]}
+  - type: {text: "Saved from the UI"}
+  - click: {label: "Save"}
+  - fill: {label: "File name", text: "ui-saved.npub"}
+  - click: {label: "Save File"}
+  - expect: {query: {q: session}, path: /dirty, equals: false}
+  - click: {label: "New"}
+  - click: {label: "Create"}
+  - expect: {query: {q: object_count, page: 0}, equals: 0}
+  # the saved file appears under recent files and opens from there
+  - click: {label: "Open"}
+  - expect_ui: {label: "Recent: ui-saved.npub"}
+  - click: {label: "Recent: ui-saved.npub"}
+  - expect: {query: {q: object_count, page: 0}, equals: 1}
+  # unsaved changes prompt before New discards them

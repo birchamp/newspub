@@ -1,0 +1,27 @@
+id: J-GD-001
+title: Margin, grid, and ruler guides
+covers: [GD-01, GD-02]
+steps:
+  - new_document: {width: 8.5in, height: 11in, margins: {top: 1in, bottom: 1in, left: 0.75in, right: 0.75in}}
+  # column/row grid guides inside the margins: 3 columns, 2 rows, 0.25in gutter
+  - set_grid_guides: {columns: 3, rows: 2, gutter: 0.25in}
+  - expect: {query: {q: guides, page: 0}, path: /vertical, equals: [54, 210, 228, 384, 402, 558]}
+  - expect: {query: {q: guides, page: 0}, path: /horizontal, equals: [72, 387, 405, 720]}
+  # ruler guides: add, move, delete; they are per page unless on a master
+  - add_guide: {page: 0, orientation: vertical, pos: 3in}
+    as: g
+  - expect: {query: {q: guides, page: 0}, path: /vertical, contains: 216}
+  - move_guide: {guide: $g, pos: 3.5in}
+  - expect: {query: {q: guides, page: 0}, path: /vertical, contains: 252}
+  - expect: {query: {q: guides, page: 0}, path: /vertical, not_contains: 216}
+  - delete_guide: {guide: $g}
+  - expect: {query: {q: guides, page: 0}, path: /vertical, not_contains: 252}
+  - add_master: {name: "Main"}
+    as: m
+  - add_guide: {master: $m, orientation: horizontal, pos: 1.5in}
+  - apply_master: {master: $m}
+  - expect: {query: {q: guides, page: 0}, path: /horizontal, contains: 108}
+  # guides never print
+  - export_pdf: {path: guides.pdf}
+  - expect_pdf: {file: guides.pdf, ink: [{page: 1, rect: [0, 0, 612, 792], max: 0.0}]}
+  - expect_roundtrip: {}

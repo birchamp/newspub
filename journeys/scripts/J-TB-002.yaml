@@ -1,0 +1,31 @@
+id: J-TB-002
+title: Insert and delete rows and columns; resize rows and columns
+covers: [TB-02]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_table: {page: 0, rect: [1in, 1in, 6in, 2in], rows: 2, cols: 3}
+    as: t
+  - expect: {query: {q: table_cell, table: $t, row: 1, col: 1}, path: /story, gt: 0, as: b}
+  - insert_text: {target: $b, text: "middle"}
+  - insert_table_rows: {table: $t, at: 0, count: 2}
+  - expect: {query: {q: table, id: $t}, path: /rows, equals: 4}
+  # the cell that held "middle" moved down two rows
+  - expect: {query: {q: table_cell, table: $t, row: 3, col: 1}, path: /story, equals: $b}
+  - insert_table_cols: {table: $t, at: 3, count: 1}
+  - expect: {query: {q: table, id: $t}, path: /cols, equals: 4}
+  # new column takes the width of its neighbour; the table grows wider
+  - expect: {query: {q: table, id: $t}, path: /col_widths/3, equals: 144}
+  - expect: {query: {q: object, id: $t}, path: /rect/w, equals: 576}
+  - delete_table_cols: {table: $t, at: 0, count: 1}
+  - expect: {query: {q: table_cell, table: $t, row: 3, col: 0}, path: /story, equals: $b}
+  - delete_table_rows: {table: $t, at: 0, count: 3}
+  - expect: {query: {q: table, id: $t}, path: /rows, equals: 1}
+  - expect: {query: {q: table_cell, table: $t, row: 0, col: 0}, path: /story, equals: $b}
+  - set_table_col_width: {table: $t, col: 0, width: 2in}
+  - expect: {query: {q: table, id: $t}, path: /col_widths/0, equals: 144}
+  - set_table_col_width: {table: $t, col: 1, width: 1in}
+  - expect: {query: {q: object, id: $t}, path: /rect/w, equals: 360}
+  - set_table_row_height: {table: $t, row: 0, height: 1in}
+  - expect: {query: {q: table, id: $t}, path: /row_heights/0, equals: 72}
+  - expect_error: {delete_table_rows: {table: $t, at: 0, count: 1}}
+  - expect_error: {insert_table_rows: {table: $t, at: 5, count: 1}}

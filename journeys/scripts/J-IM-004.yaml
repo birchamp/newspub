@@ -1,0 +1,27 @@
+id: J-IM-004
+title: Picture placeholders; swapping a picture keeps the frame
+covers: [IM-04]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_image: {page: 0, rect: [1in, 1in, 3in, 3in]}
+    as: ph
+  # an empty placeholder shows a light grey box with a picture icon on screen, but prints nothing
+  - expect_png: {page: 0, pixels: [{at: [80, 80], rgb: [235, 235, 235], tol: 20}]}
+  - export_pdf: {path: empty.pdf}
+  - expect_pdf: {file: empty.pdf, images: 0, ink: [{page: 1, rect: [72, 72, 216, 216], max: 0.0}]}
+  - expect: {query: {q: accessibility_check}, len: 1}
+  # filling the placeholder keeps its position and size, the picture fills it (cropped to fit)
+  - insert_picture: {path: fixtures/photo.png, into: $ph}
+  - expect: {query: {q: object, id: $ph}, path: /rect, equals: {x: 72, y: 72, w: 216, h: 216}}
+  - expect: {query: {q: object, id: $ph}, path: /kind/fit, equals: fill}
+  - expect_png: {page: 0, ink: [{rect: [72, 72, 216, 216], min: 0.99}]}
+  # change picture: swap in another file, the frame stays
+  - set_object: {id: $ph, patch: {alt_text: "Picture"}}
+  - insert_picture: {path: fixtures/stripes.jpg, into: $ph}
+  - expect: {query: {q: object, id: $ph}, path: /rect, equals: {x: 72, y: 72, w: 216, h: 216}}
+  - expect: {query: {q: object, id: $ph}, path: /alt_text, equals: "Picture"}
+  - expect_png: {page: 0, pixels: [{at: [180, 180], rgb: [240, 240, 240], tol: 40}]}
+  # unused assets are dropped on save
+  - save: {path: swap.npub}
+  - open: {path: swap.npub}
+  - expect: {query: {q: assets}, len: 1}

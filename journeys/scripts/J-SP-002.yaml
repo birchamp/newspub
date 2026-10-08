@@ -1,0 +1,18 @@
+id: J-SP-002
+title: Per-run language tagging; other languages checked when a dictionary is installed
+covers: [SP-03]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [1in, 1in, 5in, 2in]}
+    as: f
+  - insert_text: {target: $f, text: "Our motto: carpe diem et semper fidelis."}
+  # Latin words flagged in English
+  - expect: {query: {q: spelling}, len: {gte: 3}}
+  # marking the run as "no proofing" (lang zxx) skips it
+  - format_chars: {target: $f, start: 11, end: 39, attrs: {lang: "zxx"}}
+  - expect: {query: {q: spelling}, len: 0}
+  # a language without an installed dictionary is reported, not treated as wrong
+  - format_chars: {target: $f, start: 11, end: 39, attrs: {lang: "la"}}
+  - expect: {query: {q: spelling}, len: 0}
+  - expect: {query: {q: spelling_languages}, path: /missing, equals: ["la"]}
+  - expect: {query: {q: spelling_languages}, path: /installed, contains: "en-US"}
