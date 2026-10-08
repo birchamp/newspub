@@ -1,0 +1,35 @@
+id: UI-AX-001
+title: Keyboard-only operation and screen-reader names for the canvas and its objects
+covers: [AX-04]
+ui: true
+steps:
+  # landmarks have accessible names
+  - expect_ui: {label: "Page canvas"}
+  - expect_ui: {label: "Pages"}
+  - expect_ui: {label: "Format"}
+  # choose the text-box tool with the keyboard, then insert a frame from the focused canvas with Enter
+  - focus: {label: "Text Box"}
+  - key: {key: "Enter"}
+  - expect: {query: {q: view}, path: /tool, equals: "Text"}
+  - focus: {label: "Page canvas"}
+  - key: {key: "Enter"}
+  - expect: {query: {q: view}, path: /selection, len: 1}
+  - expect: {query: {q: view}, path: /selection/0, gt: 0, as: f}
+  - expect: {query: {q: page_objects, page: 0}, len: 1}
+  # the new frame is in text-edit mode: typing goes into it
+  - type: {text: "Hello"}
+  - expect: {query: {q: all_story_text}, equals: "Hello"}
+  # Escape leaves text editing with the frame still selected; arrows nudge it by 1 pt
+  - key: {key: "Escape"}
+  - expect: {query: {q: view}, path: /editing, equals: false}
+  - expect: {query: {q: view}, path: /selection, len: 1}
+  - expect: {query: {q: object, id: $f}, path: /rect/x, gt: 0, as: x0}
+  - key: {key: "ArrowRight"}
+  - expect: {query: {q: object, id: $f}, path: /rect/x, equals: $x0+1}
+  # each object on the page is exposed to assistive technology with a name
+  - expect_ui: {label: "Text box: Hello"}
+  # Delete removes the selected object; Ctrl+Z restores it
+  - key: {key: "Delete"}
+  - expect: {query: {q: page_objects, page: 0}, len: 0}
+  - key: {key: "Z", command: true}
+  - expect: {query: {q: page_objects, page: 0}, len: 1}

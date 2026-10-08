@@ -2,7 +2,10 @@
 //!
 //! UI steps: `click: {label}`, `fill: {label, text}`, `type: {text}`, `key: {key, command, shift}`,
 //! `drag: {from: [x, y], to: [x, y]}` and `click_at: [x, y]` (page points on the canvas),
-//! `expect_ui: {label, exists}`, `run: {}`.
+//! `expect_ui: {label, exists}`, `focus: {label}` (keyboard focus), `scroll: {dx, dy}` (mouse wheel over
+//! the canvas, screen points), `run: {}`.
+//! Journey options: `startup_template_picker: true` starts the app as the desktop binary does;
+//! print jobs go to `<out>/print-spool/job-<n>.pdf`.
 //! Observation steps are shared with headless journeys: `expect`, `let`, `dump`, `expect_pdf`,
 //! `expect_png`, `expect_roundtrip` (they query the app's session).
 
@@ -113,6 +116,26 @@ fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Resul
                 bail!("UI element {label:?} exists = {got}, expected {want}");
             }
         }
+        "focus" => {
+            let label = args.get("label").and_then(|v| v.as_str()).ok_or_else(|| anyhow!("focus needs label"))?;
+            find(h, label)?.focus();
+            settle(h);
+        }
+        "scroll" => {
+            // Mouse-wheel scroll over the canvas centre, in screen points (positive = content moves up/left).
+            let dx = args.get("dx").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+            let dy = args.get("dy").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+            let c = h.state().page_to_screen(0.0, 0.0);
+            h.hover_at(c + egui::Vec2::new(40.0, 40.0));
+            h.run_steps(1);
+            h.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::Vec2::new(-dx, -dy),
+                modifiers: egui::Modifiers::NONE,
+                phase: egui::TouchPhase::Move,
+            });
+            settle(h);
+        }
         "run" => settle(h),
         "expect" if args.get("query").and_then(|q| q.get("q")).and_then(|q| q.as_str()) == Some("view") => {
             // App view state is answered by the app, not the engine.
@@ -122,6 +145,9 @@ fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Resul
                 actual = runner::pointer(&actual, p)?.clone();
             }
             runner::check_matchers(&actual, spec)?;
+            if let Some(Value::String(var)) = spec.get("as") {
+                ctx.vars.insert(var.clone(), actual);
+            }
         }
         "expect" | "let" | "dump" | "expect_pdf" | "expect_png" | "expect_image" | "expect_html"
         | "expect_roundtrip" => {
@@ -134,10 +160,12 @@ fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Resul
 }
 
 /// Runs a UI journey. Errors carry the 1-based failing step.
-pub fn run_ui_journey(steps: &[Value], ctx: &mut Ctx) -> Result<(), (usize, anyhow::Error)> {
+pub fn run_ui_journey(script: &Value, steps: &[Value], ctx: &mut Ctx) -> Result<(), (usize, anyhow::Error)> {
     let mut session = Session::bundled();
     session.base_dir = ctx.out.clone();
-    let app = NewpubApp::new(session);
+    let mut app = NewpubApp::new(session);
+    app.startup_picker = script.get("startup_template_picker").and_then(|v| v.as_bool()).unwrap_or(false);
+    app.print_spool = Some(ctx.out.join("print-spool"));
     let mut h = Harness::builder()
         .with_size(egui::Vec2::new(1280.0, 860.0))
         .with_max_steps(64)

@@ -1,0 +1,43 @@
+id: UI-GD-001
+title: Rulers in the chosen units, zoom stops, fit and actual size, scrolling, two-page spread view
+covers: [GD-04, UI-06]
+ui: true
+steps:
+  - expect_ui: {label: "Horizontal ruler"}
+  - expect_ui: {label: "Vertical ruler"}
+  - expect: {query: {q: view}, path: /units, equals: "in"}
+  # the units choice drives the rulers and the session's measurement units
+  - click: {label: "Measurement units"}
+  - click: {label: "Centimeters"}
+  - expect: {query: {q: view}, path: /units, equals: "cm"}
+  - expect: {query: {q: session}, path: /units, equals: "cm"}
+  # zoom: 100% is one screen point per document point; zoom steps go through the stops
+  - click: {label: "Actual size"}
+  - expect: {query: {q: view}, path: /zoom, equals: 1.0}
+  - click: {label: "Zoom In"}
+  - expect: {query: {q: view}, path: /zoom, equals: 1.5}
+  - key: {key: "Minus", command: true}
+  - expect: {query: {q: view}, path: /zoom, equals: 1.0}
+  - click: {label: "Fit page"}
+  - expect: {query: {q: view}, path: /fit, equals: true}
+  # at 400% the page is larger than the window: the wheel scrolls the canvas
+  - click: {label: "Actual size"}
+  - click: {label: "Zoom In"}
+  - click: {label: "Zoom In"}
+  - click: {label: "Zoom In"}
+  - click: {label: "Zoom In"}
+  - expect: {query: {q: view}, path: /zoom, equals: 4.0}
+  - expect: {query: {q: view}, path: /scroll/1, equals: 0.0}
+  - scroll: {dy: 200}
+  - expect: {query: {q: view}, path: /scroll/1, gt: 0.0}
+  # two-page spread: pages 2 and 3 are shown side by side; page 1 stands alone
+  - click: {label: "Add Page"}
+  - click: {label: "Add Page"}
+  - click: {label: "Two-page spread"}
+  - expect: {query: {q: view}, path: /spread, equals: true}
+  - click: {label: "Page 2"}
+  - expect: {query: {q: view}, path: /visible_pages, equals: [1, 2]}
+  - click: {label: "Page 1"}
+  - expect: {query: {q: view}, path: /visible_pages, equals: [0]}
+  - click: {label: "Two-page spread"}
+  - expect: {query: {q: view}, path: /spread, equals: false}

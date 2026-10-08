@@ -257,6 +257,22 @@ pub enum SessionAction {
     },
     /// Replace the publication with one copy of its pages per record, fields replaced by text. Undoable.
     MergeToPublication {},
+    // ---- BLOCKS task (engine/src/blocks.rs) ----
+    /// Save the objects as a user building block in the library (replaces a block of the same name).
+    SaveBuildingBlock {
+        ids: Vec<Id>,
+        name: String,
+        #[serde(default)]
+        category: String,
+    },
+    /// Insert a building block (user or built-in) with its top-left at (x, y) on `page`. Undoable;
+    /// created = the new top-level object ids.
+    InsertBuildingBlock {
+        name: String,
+        page: usize,
+        x: Length,
+        y: Length,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -326,6 +342,8 @@ impl SessionAction {
         "set_merge_options",
         "merge_to_pdf",
         "merge_to_publication",
+        "save_building_block",
+        "insert_building_block",
     ];
 }
 
@@ -463,6 +481,10 @@ pub enum Query {
     },
     /// `{fields, records (after filter), path}` or null when no data source is attached.
     DataSource,
+    /// `[{name, category, user}]`: built-in blocks then the user library.
+    BuildingBlocks,
+    /// `{path, user_count}` of the user building-block library.
+    BuildingBlockLibrary,
     /// Baselines of a frame's lines in page coordinates.
     PageBaselines {
         frame: Id,

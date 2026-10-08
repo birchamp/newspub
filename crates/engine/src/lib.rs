@@ -4,6 +4,7 @@
 
 pub mod action;
 mod autosave;
+mod blocks;
 mod fixups;
 mod guides;
 mod html;
@@ -98,6 +99,8 @@ pub struct Session {
     pub(crate) merge_preview: Option<usize>,
     /// The document as displayed when it differs from `doc` (merge preview); computed with the layout.
     view: Option<Arc<Document>>,
+    /// Folder of the user building-block library; None = `<base_dir>/library`.
+    pub library_dir: Option<PathBuf>,
 }
 
 impl Session {
@@ -120,6 +123,7 @@ impl Session {
             autosave: Default::default(),
             merge_preview: None,
             view: None,
+            library_dir: None,
         }
     }
 
@@ -347,6 +351,7 @@ impl Session {
             | SetMergeOptions { .. }
             | MergeToPdf { .. }
             | MergeToPublication {} => self.merge_action(s),
+            SaveBuildingBlock { .. } | InsertBuildingBlock { .. } => self.blocks_action(s),
             ExportPng { path, page, dpi } => {
                 let png = self.page_png(*page, *dpi)?;
                 std::fs::write(self.resolve(path), png)?;
@@ -784,6 +789,7 @@ impl Session {
             }
             TableFormats => json!(newpub_core::table::FORMATS.iter().map(|f| f.0).collect::<Vec<_>>()),
             DataSource => self.merge_query(q)?,
+            BuildingBlocks | BuildingBlockLibrary => self.blocks_query(q)?,
             PageLabel { page } => {
                 if *page >= self.doc.pages.len() {
                     return Err(CoreError::NoSuchPage(*page).into());

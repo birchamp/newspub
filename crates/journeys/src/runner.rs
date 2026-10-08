@@ -387,7 +387,7 @@ pub fn run_journey(script: &Value, root: &Path, results_root: &Path) -> JourneyR
     session.base_dir = out.clone();
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<(), (usize, anyhow::Error)> {
         if ui {
-            crate::ui::run_ui_journey(&steps, &mut ctx).map_err(|e| (e.0, e.1))?;
+            crate::ui::run_ui_journey(script, &steps, &mut ctx).map_err(|e| (e.0, e.1))?;
             return Ok(());
         }
         for (i, step) in steps.iter().enumerate() {

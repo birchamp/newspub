@@ -54,3 +54,21 @@ The dashboard parses this file:
   - engine: Session `view` doc (the preview substitution feeds layout, render and PDF).
 - Bug fixed: text typed after a field no longer inherits the field marker (`Story::insert`).
 - Local suite: 62/97.
+
+### 2026-10-08 21:00 — Batch 2 merged (12 tasks)
+- Approved by Sonnet review on the first attempt (10 tasks):
+  - GUIDES (GD-01..05, Sonnet); TEMPLATES (BB-01/02, Sonnet); SPELL (SP-01..03, Sonnet);
+  - PICTURES (IM-04/08, PG-10, Haiku); PDF (EX-03/05, PR-0x n-up, links/bookmarks); HTML (EX-04);
+  - PUB (PI-01..04, .pub import); MISC (TF-11 text/.docx import, FI-03 autosave); UI (selection handles, nudging, panels, recent files, shortcuts); LEGACY (FI-05 .newspub).
+- Not approved, then fixed by the lead:
+  - LAYERS (LY-02). Escalation: Haiku failed twice and moved to Sonnet, which also failed twice. Every failure was the same blocker: the Object query omitted `layer` when it was None (serde skip), so the fix lay outside the task's files. Lead decision: the Object query reports `"layer": null`; the file format is unchanged.
+  - EFFECTS (SH-05/07, IM-06/07). Blocked by the lead's ShapeKinds stub, which was already on the lead branch, and by a wrong J-IM-006 probe: [216,180] sits on the yellow box's corner. The probe moved to [288,144], image pixel (300,100), which is blue.
+- Lead merge work:
+  - render `push_object` merged as page-aware plus the screen flag;
+  - Table arms in io-html and pdfq;
+  - `Story.typing_attrs` in the legacy importer;
+  - new core `DuplicateObjects` command; the app's Cmd+D no longer rebuilds objects through individual commands, so groups, tables and shape text now duplicate;
+  - a clippy allow in the templates builder.
+- Journey corrections (lead's arithmetic): J-TF-010 deletes 112 chars, not 113; J-IM-006 probe as above.
+- Disk: the session disk filled up (12 GB target plus agent worktrees) and caused a rustc ICE. Freed by dropping target/debug; agents now share one target dir that the lead clears after each batch.
+- Local: 93/97. Remaining P0–P2: GD-04/UI-06 (rulers, zoom, spread view: UI-GD-001 to be written), PR-07 (print: UI-PR-001), AX-04 (keyboard/AccessKit: UI-AX-001), AX-03 (tagged PDF), BB-03/04 (building blocks, schemes), UI-08 (template picker).

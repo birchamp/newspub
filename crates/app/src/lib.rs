@@ -81,6 +81,11 @@ pub struct NewpubApp {
     run_delta: (f64, f64),
     fields: Fields,
     recent: recent::Recent,
+    /// Show the template picker before the first frame (UI-08; the desktop binary sets it).
+    pub startup_picker: bool,
+    /// When set, print jobs are written here as `job-<n>.pdf` instead of going to the OS print
+    /// system (PR-07; journeys use it, since CI has no printer).
+    pub print_spool: Option<std::path::PathBuf>,
 }
 
 /// Text buffers of the object and format panels.
@@ -121,6 +126,8 @@ impl NewpubApp {
             run_delta: (0.0, 0.0),
             fields: Fields::default(),
             recent: recent::Recent::default(),
+            startup_picker: false,
+            print_spool: None,
         }
     }
 

@@ -4,6 +4,7 @@ pub mod attrs;
 pub mod color;
 pub mod command;
 pub mod field;
+pub mod fragment;
 pub mod guides;
 pub mod history;
 pub mod layers;

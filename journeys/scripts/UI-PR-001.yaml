@@ -1,0 +1,23 @@
+id: UI-PR-001
+title: Print — print dialog with copies and page range, job handed to the printing system
+covers: [PR-07]
+ui: true
+steps:
+  - click: {label: "Add Page"}
+  - click: {label: "Add Page"}
+  - key: {key: "P", command: true}
+  - expect_ui: {label: "Print publication"}
+  - expect_ui: {label: "Printer"}
+  - fill: {label: "Copies", text: "2"}
+  - fill: {label: "Pages", text: "2-3"}
+  - click: {label: "Send to Printer"}
+  - expect_ui: {label: "Print publication", exists: false}
+  # journeys spool jobs to files instead of a real printer; the job is a PDF of the chosen pages
+  - expect: {query: {q: view}, path: /last_print_job/copies, equals: 2}
+  - expect: {query: {q: view}, path: /last_print_job/pages, equals: [1, 2]}
+  - expect_pdf: {file: print-spool/job-1.pdf, pages: 2}
+  # Cancel leaves no job
+  - key: {key: "P", command: true}
+  - click: {label: "Cancel"}
+  - expect_ui: {label: "Print publication", exists: false}
+  - expect: {query: {q: view}, path: /print_jobs, equals: 1}
