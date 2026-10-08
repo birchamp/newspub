@@ -1,0 +1,9 @@
+[package]
+name = "newpub-io-html"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+newpub-core.workspace = true
+newpub-layout.workspace = true

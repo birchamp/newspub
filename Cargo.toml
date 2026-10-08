@@ -7,6 +7,8 @@ members = [
     "crates/io-pdf",
     "crates/io-native",
     "crates/io-pub",
+    "crates/io-html",
+    "crates/spell",
     "crates/engine",
     "crates/app",
     "crates/journeys",
@@ -25,6 +27,8 @@ newpub-render = { path = "crates/render" }
 newpub-io-pdf = { path = "crates/io-pdf" }
 newpub-io-native = { path = "crates/io-native" }
 newpub-io-pub = { path = "crates/io-pub" }
+newpub-io-html = { path = "crates/io-html" }
+newpub-spell = { path = "crates/spell" }
 newpub-engine = { path = "crates/engine" }
 newpub-app = { path = "crates/app" }
 
