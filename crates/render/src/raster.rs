@@ -1,7 +1,7 @@
 //! Raster back end (tiny-skia).
 
 use crate::display::{Item, PageDisplay, PathEl, StrokeStyle};
-use newpub_core::{Affine, Color, Document, Id};
+use newpub_core::{Affine, Color, Document, Id, LineCap, LineJoin};
 use newpub_layout::{FaceId, FontStore, GlyphRun};
 use std::collections::HashMap;
 use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Transform};
@@ -120,7 +120,17 @@ impl Rasterizer {
         if s.width <= 0.0 {
             return;
         }
-        let mut st = tiny_skia::Stroke { width: s.width as f32, ..Default::default() };
+        let line_cap = match s.cap {
+            LineCap::Butt => tiny_skia::LineCap::Butt,
+            LineCap::Round => tiny_skia::LineCap::Round,
+            LineCap::Square => tiny_skia::LineCap::Square,
+        };
+        let line_join = match s.join {
+            LineJoin::Miter => tiny_skia::LineJoin::Miter,
+            LineJoin::Round => tiny_skia::LineJoin::Round,
+            LineJoin::Bevel => tiny_skia::LineJoin::Bevel,
+        };
+        let mut st = tiny_skia::Stroke { width: s.width as f32, line_cap, line_join, ..Default::default() };
         if !s.dash.is_empty() {
             st.dash = tiny_skia::StrokeDash::new(s.dash.iter().map(|d| *d as f32).collect(), 0.0);
         }

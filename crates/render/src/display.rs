@@ -18,6 +18,8 @@ pub struct StrokeStyle {
     pub color: Color,
     pub width: f64,
     pub dash: Vec<f64>,
+    pub cap: LineCap,
+    pub join: LineJoin,
 }
 
 #[derive(Clone, Debug)]
@@ -149,7 +151,107 @@ pub fn dash_pattern(d: Dash, width: f64) -> Vec<f64> {
 }
 
 fn stroke_style(s: &Stroke) -> StrokeStyle {
-    StrokeStyle { color: s.color.clone(), width: s.width.0, dash: dash_pattern(s.dash, s.width.0) }
+    StrokeStyle {
+        color: s.color.clone(),
+        width: s.width.0,
+        dash: dash_pattern(s.dash, s.width.0),
+        cap: s.cap,
+        join: s.join,
+    }
+}
+
+/// Arrowhead length and width (medium): both are this multiple of the line width.
+const ARROW_SCALE: f64 = 3.0;
+
+/// Maps every point of a path through `f`.
+fn map_path(path: Vec<PathEl>, f: impl Fn(f64, f64) -> (f64, f64)) -> Vec<PathEl> {
+    path.into_iter()
+        .map(|e| match e {
+            PathEl::Move(x, y) => {
+                let (x, y) = f(x, y);
+                PathEl::Move(x, y)
+            }
+            PathEl::Line(x, y) => {
+                let (x, y) = f(x, y);
+                PathEl::Line(x, y)
+            }
+            PathEl::Cubic(a, b, c, d, e, g) => {
+                let (a, b) = f(a, b);
+                let (c, d) = f(c, d);
+                let (e, g) = f(e, g);
+                PathEl::Cubic(a, b, c, d, e, g)
+            }
+            PathEl::Close => PathEl::Close,
+        })
+        .collect()
+}
+
+/// Geometry of one arrowhead: the outline (or open-V polyline) and how far the line must stop short of the tip.
+struct ArrowHead {
+    path: Vec<PathEl>,
+    filled: bool,
+    /// Distance from the tip back along the line where the drawn line should end.
+    shorten: f64,
+}
+
+/// Builds an arrowhead with its tip at `tip`, opening towards unit vector `back` (from the tip into the line body).
+fn arrow_head(kind: Arrow, tip: (f64, f64), back: (f64, f64), sw: f64) -> Option<ArrowHead> {
+    let len = sw * ARROW_SCALE;
+    let half = sw * ARROW_SCALE / 2.0;
+    // Normal to the line direction.
+    let n = (-back.1, back.0);
+    // Local frame: `at(a, b)` is `a` along `back` and `b` along `n`, measured from the tip.
+    let at = |a: f64, b: f64| (tip.0 + back.0 * a + n.0 * b, tip.1 + back.1 * a + n.1 * b);
+    match kind {
+        Arrow::None => None,
+        Arrow::Triangle => {
+            Some(ArrowHead { path: poly(&[tip, at(len, half), at(len, -half)], true), filled: true, shorten: len })
+        }
+        Arrow::Stealth => Some(ArrowHead {
+            path: poly(&[tip, at(len, half), at(2.0 * len / 3.0, 0.0), at(len, -half)], true),
+            filled: true,
+            shorten: 2.0 * len / 3.0,
+        }),
+        Arrow::Diamond => Some(ArrowHead {
+            path: poly(&[at(len / 2.0, 0.0), at(0.0, half), at(-len / 2.0, 0.0), at(0.0, -half)], true),
+            filled: true,
+            shorten: 0.0,
+        }),
+        Arrow::Oval => {
+            // Ellipse centred on the tip: `len` along the line, `2 * half` across it.
+            let path = map_path(ellipse_path(-len / 2.0, -half, len, 2.0 * half), |x, y| {
+                (tip.0 + back.0 * x + n.0 * y, tip.1 + back.1 * x + n.1 * y)
+            });
+            Some(ArrowHead { path, filled: true, shorten: 0.0 })
+        }
+        Arrow::Open => {
+            let (a, b) = (at(len, half), at(len, -half));
+            Some(ArrowHead {
+                path: vec![PathEl::Move(a.0, a.1), PathEl::Line(tip.0, tip.1), PathEl::Line(b.0, b.1)],
+                filled: false,
+                shorten: 0.0,
+            })
+        }
+    }
+}
+
+/// Path of a line running from local (0, 0) to (w, h), shortened under any filled arrowheads,
+/// and the arrowheads to draw on top of it.
+fn line_with_arrows(s: &Shape, w: f64, h: f64) -> (Vec<PathEl>, Vec<ArrowHead>) {
+    let len = w.hypot(h);
+    let sw = s.stroke.as_ref().map_or(0.0, |st| st.width.0);
+    if len <= 0.0 || sw <= 0.0 || (s.arrow_start == Arrow::None && s.arrow_end == Arrow::None) {
+        return (shape_path(&s.kind, w, h), vec![]);
+    }
+    let u = (w / len, h / len);
+    let start_head = arrow_head(s.arrow_start, (0.0, 0.0), u, sw);
+    let end_head = arrow_head(s.arrow_end, (w, h), (-u.0, -u.1), sw);
+    let start_d = start_head.as_ref().map_or(0.0, |a| a.shorten).min(len / 2.0);
+    let end_d = end_head.as_ref().map_or(0.0, |a| a.shorten).min(len / 2.0);
+    let (sx, sy) = (start_d * u.0, start_d * u.1);
+    let (ex, ey) = (w - end_d * u.0, h - end_d * u.1);
+    let path = vec![PathEl::Move(sx, sy), PathEl::Line(ex, ey)];
+    (path, [start_head, end_head].into_iter().flatten().collect())
 }
 
 fn visible(doc: &Document, o: &Object) -> bool {
@@ -168,12 +270,37 @@ fn push_object(doc: &Document, layout: &DocLayout, id: Id, parent: Affine, items
     let (w, h) = (o.rect.w, o.rect.h);
     match &o.kind {
         ObjectKind::Shape(s) => {
+            let (path, heads) = if matches!(s.kind, ShapeKind::Line) {
+                line_with_arrows(s, w, h)
+            } else {
+                (shape_path(&s.kind, w, h), vec![])
+            };
             items.push(Item::Path {
-                path: shape_path(&s.kind, w, h),
+                path,
                 fill: s.fill.clone(),
                 stroke: s.stroke.as_ref().map(stroke_style),
                 transform: t,
             });
+            if let Some(st) = &s.stroke {
+                for head in heads {
+                    items.push(if head.filled {
+                        Item::Path { path: head.path, fill: Some(st.color.clone()), stroke: None, transform: t }
+                    } else {
+                        Item::Path {
+                            path: head.path,
+                            fill: None,
+                            stroke: Some(StrokeStyle {
+                                color: st.color.clone(),
+                                width: st.width.0,
+                                dash: vec![],
+                                cap: LineCap::Butt,
+                                join: LineJoin::Bevel,
+                            }),
+                            transform: t,
+                        }
+                    });
+                }
+            }
         }
         ObjectKind::Text(tf) => {
             if tf.fill.is_some() || tf.stroke.is_some() {
