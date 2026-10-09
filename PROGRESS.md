@@ -238,3 +238,6 @@ The dashboard parses this file:
 - Journeys: UI-IN-001, UI-PD-001, UI-ML-001, UI-RV-001, UI-IS-001, UI-EX-001, UI-TE-001, UI-CB-001 and J-PG-009 (131/131 on Linux). PARITY UI-09..UI-15 get checked once CI is green on all three OSes.
 - Screenshots in docs/screenshots, shown in the README.
 - Known gaps: Find Next is the only find that selects text in place; the Format panel shows the first character's attributes for a mixed selection.
+- macOS: documents opened from Finder (double-click, Open With, dragging onto the Dock icon) now open in newpub. newpub builds winit's event loop itself on macOS and adds `application:openURLs:` to winit's delegate. The Package workflow proves it: `open -a newpub.app finder-test.npub`, then the file is in newpub's recent list (Package run 37979489501).
+- Also: Cmd+F opens Find and Replace; dialogs are centred and Escape cancels them; the Print dialog matches the other dialogs; the .dmg check retries a busy volume.
+- Version 0.2.0.
