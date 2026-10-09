@@ -267,3 +267,35 @@ pub fn hint(ui: &mut Ui, text: &str) {
 pub fn pal(ui: &Ui) -> Palette {
     theme::palette(ui.ctx())
 }
+
+/// A small colour chip button; `label` is its accessible name.
+pub fn swatch(ui: &mut Ui, color: Color32, label: &str, selected: bool) -> Response {
+    let p = theme::palette(ui.ctx());
+    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(22.0), Sense::click());
+    let kind = if selected { WidgetType::SelectableLabel } else { WidgetType::Button };
+    info(&resp, kind, true, label, selected.then_some(true));
+    if ui.is_rect_visible(rect) {
+        ui.painter().rect_filled(rect, CornerRadius::same(5), color);
+        let stroke = if selected { Stroke::new(2.0, p.primary) } else { Stroke::new(1.0, p.border) };
+        ui.painter().rect_stroke(rect, CornerRadius::same(5), stroke, StrokeKind::Inside);
+    }
+    resp.on_hover_text(label).on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// A labelled hex colour field (`#rrggbb`); returns the colour when the text was edited and parses.
+pub fn color_field(ui: &mut Ui, label: &str, value: &mut String) -> Option<newpub_engine::core::Color> {
+    use newpub_engine::core::Color;
+    let changed = ui
+        .horizontal(|ui| {
+            let l = ui.label(label);
+            let r = ui.add(egui::TextEdit::singleline(value).desired_width(90.0)).labelled_by(l.id);
+            if let Some(c) = Color::parse(value) {
+                let [r8, g8, b8, _] = c.to_rgba8();
+                let (rect, _) = ui.allocate_exact_size(Vec2::splat(18.0), Sense::hover());
+                ui.painter().rect_filled(rect, CornerRadius::same(4), Color32::from_rgb(r8, g8, b8));
+            }
+            r.changed()
+        })
+        .inner;
+    if changed { Color::parse(value) } else { None }
+}
