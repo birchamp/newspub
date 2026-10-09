@@ -8,6 +8,7 @@ mod files;
 mod freeform;
 mod icons;
 mod inspector;
+mod pages;
 mod pane;
 mod picker;
 mod print;
@@ -125,6 +126,8 @@ pub struct NewpubApp {
     ribbon_tab: shell::RibbonTab,
     /// Caret and text selection while editing a story (text_edit.rs).
     pub(crate) caret: Option<text_edit::Caret>,
+    /// Page thumbnails: texture and the revision it shows, per page index.
+    thumbs: std::collections::HashMap<usize, (TextureHandle, u64)>,
     /// Marker text put on the OS clipboard by the last object copy (None after a text copy).
     clip_objects: Option<String>,
     /// Fonts and styles installed into the egui context.
@@ -187,6 +190,7 @@ impl NewpubApp {
             ribbon_tab: shell::RibbonTab::default(),
             caret: None,
             clip_objects: None,
+            thumbs: Default::default(),
             themed: false,
             insert_ui: Default::default(),
             design_ui: Default::default(),
@@ -539,18 +543,6 @@ impl NewpubApp {
         self.selection = vec![next];
     }
 
-    fn page_navigator(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Pages");
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            for i in 0..self.session.doc().pages.len() {
-                if ui.selectable_label(self.page == i, format!("Page {}", i + 1)).clicked() {
-                    self.page = i;
-                    self.selection.clear();
-                }
-            }
-        });
-    }
-
     fn page_texture(&mut self, ctx: &egui::Context, ppp: f32) -> Option<TextureHandle> {
         let rev = self.session.revision();
         let scale_key = (self.zoom * ppp * 100.0) as u32;
@@ -575,36 +567,70 @@ impl NewpubApp {
         self.freeform_overlay(ui, ERect::from_min_max(full.max - self.canvas_size, full.max));
     }
 
-    fn draw_guides(&self, painter: &egui::Painter) {
+    /// Margin guides, frame boundaries, empty-frame placeholders and overflow badges of the current page.
+    fn draw_guides(&mut self, painter: &egui::Painter) {
+        let p = theme::palette(painter.ctx());
+        let layout = self.session.layout();
         let doc = self.session.doc();
         let (t, b, l, r) = doc.page_margins(self.page);
         let (w, h) = (doc.setup.width.0, doc.setup.height.0);
         let a = self.page_to_screen(l, t);
         let z = self.page_to_screen(w - r, h - b);
-        painter.rect_stroke(
-            ERect::from_min_max(a, z),
-            0.0,
-            Stroke::new(1.0, Color32::from_rgba_unmultiplied(90, 140, 220, 120)),
-            egui::StrokeKind::Middle,
-        );
-        // Text frame outlines.
-        if let Some(page) = doc.pages.get(self.page) {
-            for id in &page.objects {
-                if let Some(o) = doc.objects.get(id)
-                    && matches!(o.kind, ObjectKind::Text(_))
-                {
-                    let rr = ERect::from_min_max(
-                        self.page_to_screen(o.rect.x, o.rect.y),
-                        self.page_to_screen(o.rect.right(), o.rect.bottom()),
-                    );
-                    painter.rect_stroke(rr, 0.0, Stroke::new(0.5, Color32::from_gray(170)), egui::StrokeKind::Middle);
-                }
+        let guide = Color32::from_rgba_unmultiplied(200, 90, 170, 110);
+        dashed_rect(painter, ERect::from_min_max(a, z), Stroke::new(1.0, guide), 4.0);
+        let Some(page) = doc.pages.get(self.page) else { return };
+        for id in &page.objects {
+            let Some(o) = doc.objects.get(id) else { continue };
+            if !matches!(o.kind, ObjectKind::Text(_)) {
+                continue;
+            }
+            let rr = ERect::from_min_max(
+                self.page_to_screen(o.rect.x, o.rect.y),
+                self.page_to_screen(o.rect.right(), o.rect.bottom()),
+            );
+            let fl = layout.frames.get(id);
+            if self.view.boundaries {
+                dashed_rect(painter, rr, Stroke::new(1.0, Color32::from_gray(175)), 3.0);
+            }
+            let empty_story = doc.story_of(*id).ok().and_then(|sid| doc.story(sid).ok()).is_none_or(|st| st.is_empty());
+            if empty_story && !self.selection.contains(id) {
+                painter.text(
+                    rr.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "Text",
+                    egui::FontId::proportional(12.0 * self.zoom.clamp(0.6, 1.6)),
+                    Color32::from_gray(185),
+                );
+            }
+            if fl.is_some_and(|f| f.overflow) {
+                // Red "+" badge on the frame's bottom edge: more text than fits.
+                let c = Pos2::new(rr.right() - 10.0, rr.bottom());
+                painter.rect_filled(ERect::from_center_size(c, Vec2::splat(14.0)), 3.0, p.danger);
+                painter.text(c, egui::Align2::CENTER_CENTER, "+", egui::FontId::proportional(12.0), Color32::WHITE);
             }
         }
     }
 
+    /// Outline of the object under the pointer (Select tool, not dragging).
+    fn draw_hover(&self, painter: &egui::Painter, pointer: Option<Pos2>) {
+        if self.tool != Tool::Select || self.drag_start.is_some() {
+            return;
+        }
+        let Some(pos) = pointer else { return };
+        let (x, y) = self.screen_to_page(pos);
+        let Some(id) = self.hit(x, y).filter(|id| !self.selection.contains(id)) else { return };
+        let Some(o) = self.session.doc().objects.get(&id) else { return };
+        let rr = ERect::from_min_max(
+            self.page_to_screen(o.rect.x, o.rect.y),
+            self.page_to_screen(o.rect.right(), o.rect.bottom()),
+        );
+        let c = theme::palette(painter.ctx()).primary;
+        painter.rect_stroke(rr, 0.0, Stroke::new(1.0, c.gamma_multiply(0.6)), egui::StrokeKind::Outside);
+    }
+
     fn draw_selection(&self, painter: &egui::Painter) {
         let doc = self.session.doc();
+        let accent = theme::palette(painter.ctx()).primary;
         let off = self.moving.unwrap_or(Vec2::ZERO);
         let preview = self.resize_preview();
         for id in &self.selection {
@@ -615,20 +641,22 @@ impl NewpubApp {
                 };
                 let rr = ERect::from_min_max(self.page_to_screen(r.x, r.y), self.page_to_screen(r.right(), r.bottom()))
                     .translate(off * self.zoom);
+                let editing = self.caret.is_some_and(|c| c.frame == *id);
                 painter.rect_stroke(
                     rr,
                     0.0,
-                    Stroke::new(1.5, Color32::from_rgb(40, 120, 220)),
+                    Stroke::new(
+                        if editing { 1.0 } else { 1.5 },
+                        accent.gamma_multiply(if editing { 0.5 } else { 1.0 }),
+                    ),
                     egui::StrokeKind::Outside,
                 );
-                for c in [rr.left_top(), rr.right_top(), rr.left_bottom(), rr.right_bottom()] {
-                    painter.rect_filled(ERect::from_center_size(c, Vec2::splat(6.0)), 0.0, Color32::WHITE);
-                    painter.rect_stroke(
-                        ERect::from_center_size(c, Vec2::splat(6.0)),
-                        0.0,
-                        Stroke::new(1.0, Color32::from_rgb(40, 120, 220)),
-                        egui::StrokeKind::Middle,
-                    );
+                if o.locked || editing {
+                    continue;
+                }
+                for c in handle_points(rr) {
+                    painter.circle_filled(c, 4.5, Color32::WHITE);
+                    painter.circle_stroke(c, 4.5, Stroke::new(1.5, accent));
                 }
             }
         }
@@ -645,18 +673,18 @@ impl NewpubApp {
             .find(|id| doc.objects.get(id).map(|o| o.rect.contains(x, y)).unwrap_or(false))
     }
 
-    /// Corner handle (0 TL, 1 TR, 2 BL, 3 BR) of a selected object under a screen position.
+    /// Resize handle (0 TL, 1 TR, 2 BL, 3 BR, 4 top, 5 bottom, 6 left, 7 right) of a selected object under a
+    /// screen position.
     fn handle_at(&self, p: Pos2) -> Option<(Id, usize, Rect)> {
         let doc = self.session.doc();
         for id in &self.selection {
             let Some(o) = doc.objects.get(id) else { continue };
-            if o.locked {
+            if o.locked || self.caret.is_some_and(|c| c.frame == *id) {
                 continue;
             }
             let r = o.rect;
-            let corners = [(r.x, r.y), (r.right(), r.y), (r.x, r.bottom()), (r.right(), r.bottom())];
-            for (i, (cx, cy)) in corners.into_iter().enumerate() {
-                let c = self.page_to_screen(cx, cy);
+            let rr = ERect::from_min_max(self.page_to_screen(r.x, r.y), self.page_to_screen(r.right(), r.bottom()));
+            for (i, c) in handle_points(rr).into_iter().enumerate() {
                 if (c.x - p.x).abs() <= HANDLE_HIT && (c.y - p.y).abs() <= HANDLE_HIT {
                     return Some((*id, i, r));
                 }
@@ -667,19 +695,24 @@ impl NewpubApp {
 
     /// The rect of the object being resized, for the current pointer position.
     fn resize_preview(&self) -> Option<(Id, Rect)> {
-        let (id, corner, orig) = self.resizing?;
+        let (id, handle, orig) = self.resizing?;
         let (a, b) = (self.drag_start?, self.drag_now?);
         let d = (b - a) / self.zoom;
-        let (d, orig_corner, opposite) = match corner {
-            0 => (d, (orig.x, orig.y), (orig.right(), orig.bottom())),
-            1 => (d, (orig.right(), orig.y), (orig.x, orig.bottom())),
-            2 => (d, (orig.x, orig.bottom()), (orig.right(), orig.y)),
-            _ => (d, (orig.right(), orig.bottom()), (orig.x, orig.y)),
-        };
-        let moved = (orig_corner.0 + d.x as f64, orig_corner.1 + d.y as f64);
-        let (x0, x1) = (moved.0.min(opposite.0), moved.0.max(opposite.0));
-        let (y0, y1) = (moved.1.min(opposite.1), moved.1.max(opposite.1));
-        Some((id, Rect::new(x0, y0, (x1 - x0).max(1.0), (y1 - y0).max(1.0))))
+        let (dx, dy) = (d.x as f64, d.y as f64);
+        let (mut x0, mut y0, mut x1, mut y1) = (orig.x, orig.y, orig.right(), orig.bottom());
+        match handle {
+            0 => (x0, y0) = (x0 + dx, y0 + dy),
+            1 => (x1, y0) = (x1 + dx, y0 + dy),
+            2 => (x0, y1) = (x0 + dx, y1 + dy),
+            3 => (x1, y1) = (x1 + dx, y1 + dy),
+            4 => y0 += dy,
+            5 => y1 += dy,
+            6 => x0 += dx,
+            _ => x1 += dx,
+        }
+        let (l, r) = (x0.min(x1), x0.max(x1));
+        let (t, b) = (y0.min(y1), y0.max(y1));
+        Some((id, Rect::new(l, t, (r - l).max(1.0), (b - t).max(1.0))))
     }
 
     fn handle_canvas_input(&mut self, resp: &egui::Response) {
@@ -846,6 +879,29 @@ impl NewpubApp {
             }
             self.tool = Tool::Select;
         }
+    }
+}
+
+/// Screen positions of the eight resize handles of `r`, in handle-index order (see `handle_at`).
+fn handle_points(r: ERect) -> [Pos2; 8] {
+    let (cx, cy) = (r.center().x, r.center().y);
+    [
+        r.left_top(),
+        r.right_top(),
+        r.left_bottom(),
+        r.right_bottom(),
+        Pos2::new(cx, r.top()),
+        Pos2::new(cx, r.bottom()),
+        Pos2::new(r.left(), cy),
+        Pos2::new(r.right(), cy),
+    ]
+}
+
+/// A dashed rectangle outline.
+fn dashed_rect(painter: &egui::Painter, r: ERect, stroke: Stroke, dash: f32) {
+    let pts = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()];
+    for w in pts.windows(2) {
+        painter.extend(egui::Shape::dashed_line(&[w[0], w[1]], stroke, dash, dash));
     }
 }
 

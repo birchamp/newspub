@@ -109,7 +109,16 @@ impl NewpubApp {
 
     /// Ribbon controls: Edit Points, and the point commands while editing.
     pub(crate) fn freeform_controls(&mut self, ui: &mut egui::Ui) {
-        if ui.add_enabled(self.editable_path().is_some(), egui::Button::new("Edit Points")).clicked() {
+        use crate::{icons as ic, widgets::small_button};
+        if small_button(
+            ui,
+            ic::BEZIER_CURVE,
+            "Edit Points",
+            self.editing_path().is_some(),
+            self.editable_path().is_some(),
+        )
+        .clicked()
+        {
             self.freeform.editing = self.editable_path();
             self.freeform.selected = None;
         }
@@ -117,10 +126,17 @@ impl NewpubApp {
         let sel = self.freeform.selected;
         let has = sel.is_some();
         let count = self.session.doc().path_nodes(id).map(|n| n.len()).unwrap_or(0);
-        let smooth = ui.add_enabled(has, egui::Button::new("Smooth Point")).clicked();
-        let corner = ui.add_enabled(has, egui::Button::new("Corner Point")).clicked();
-        let delete = ui.add_enabled(has, egui::Button::new("Delete Point")).clicked();
-        let add = ui.add_enabled(has, egui::Button::new("Add Point")).clicked();
+        let col = |ui: &mut egui::Ui, a: (&str, &str), b: (&str, &str)| {
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 2.0;
+                let x = small_button(ui, a.0, a.1, false, has).clicked();
+                let y = small_button(ui, b.0, b.1, false, has).clicked();
+                (x, y)
+            })
+            .inner
+        };
+        let (smooth, corner) = col(ui, (ic::WAVE_SINE, "Smooth Point"), (ic::CORNERS_OUT, "Corner Point"));
+        let (add, delete) = col(ui, (ic::PLUS_CIRCLE, "Add Point"), (ic::MINUS_CIRCLE, "Delete Point"));
         let Some(index) = sel.filter(|i| *i < count) else { return };
         if smooth {
             self.act(Command::SetPathNodeKind { id, index, kind: NodeKind::Smooth });

@@ -28,6 +28,8 @@ pub struct ViewState {
     pub editing: Option<Id>,
     /// Show text frame and shape boundaries on the canvas.
     pub boundaries: bool,
+    /// Document (file, page size) the view was last fitted to.
+    pub fit_key: Option<(Option<std::path::PathBuf>, i64, i64)>,
     /// Egui id of the canvas widget.
     pub canvas_id: Option<egui::Id>,
     /// Texture of the second page of a spread: (texture, revision, page, scale key).
@@ -42,6 +44,7 @@ impl Default for ViewState {
             units: Units::In,
             editing: None,
             boundaries: true,
+            fit_key: None,
             canvas_id: None,
             other_tex: None,
         }
@@ -216,21 +219,34 @@ impl NewpubApp {
         self.canvas_size = cv.size();
 
         // Scrolling: apply the wheel, then clamp to the content.
-        let (cw, ch) = self.content_pts();
-        let content = Vec2::new(cw * self.zoom + 2.0 * PAD, ch * self.zoom + 2.0 * PAD);
-        let max_scroll = (content - cv.size()).max(Vec2::ZERO);
+        let (cw0, ch0) = self.content_pts();
+        let content0 = Vec2::new(cw0 * self.zoom + 2.0 * PAD, ch0 * self.zoom + 2.0 * PAD);
+        let max_scroll = (content0 - cv.size()).max(Vec2::ZERO);
         if ctx.pointer_hover_pos().is_some_and(|p| cv.contains(p)) {
             let d = ctx.input(|i| i.smooth_scroll_delta);
             self.view.scroll -= d;
         }
         self.view.scroll = self.view.scroll.clamp(Vec2::ZERO, max_scroll);
 
-        // Geometry of the shown pages.
+        // A new or opened publication (another file or page size) starts fitted to the window.
+        let key = (
+            self.session.path.clone(),
+            self.session.doc().setup.width.0 as i64,
+            self.session.doc().setup.height.0 as i64,
+        );
+        if self.view.fit_key.as_ref() != Some(&key) && cv.width() > 100.0 && cv.height() > 100.0 {
+            self.view.fit_key = Some(key);
+            self.fit_page();
+        }
+        let (cw, ch) = self.content_pts();
+        let content = Vec2::new(cw * self.zoom + 2.0 * PAD, ch * self.zoom + 2.0 * PAD);
+        // Geometry of the shown pages: centred while they fit the canvas.
         let doc = self.session.doc();
         let (w, h) = (doc.setup.width.0 as f32, doc.setup.height.0 as f32);
         let pages = self.visible_pages();
         let step = w * self.zoom + SPREAD_GAP;
-        let first_origin = cv.min + Vec2::splat(PAD) - self.view.scroll;
+        let centre = ((cv.size() - content) / 2.0).max(Vec2::ZERO);
+        let first_origin = cv.min + Vec2::splat(PAD) + centre - self.view.scroll;
         let idx = pages.iter().position(|p| *p == self.page).unwrap_or(0);
         self.page_origin = first_origin + Vec2::new(step * idx as f32, 0.0);
         let zoom = self.zoom;
@@ -275,7 +291,9 @@ impl NewpubApp {
         let painter = ui.painter().with_clip_rect(cv);
         for (k, p) in pages.iter().enumerate() {
             let rect = page_rect(k);
-            painter.rect_filled(rect.translate(Vec2::splat(3.0)), 0.0, Color32::from_black_alpha(60));
+            let shadow =
+                egui::epaint::Shadow { offset: [0, 6], blur: 22, spread: 0, color: Color32::from_black_alpha(46) };
+            painter.add(shadow.as_shape(rect, 2.0));
             let t = if *p == self.page { tex.clone() } else { self.other_texture(&ctx, *p, ppp) };
             match t {
                 Some(t) => {
@@ -287,15 +305,12 @@ impl NewpubApp {
             }
         }
         self.draw_guides(&painter);
+        self.draw_hover(&painter, ctx.pointer_hover_pos().filter(|p| cv.contains(*p)));
         self.draw_selection(&painter);
         self.draw_text_edit(&painter);
         if resp.has_focus() {
-            painter.rect_stroke(
-                cv.shrink(1.0),
-                0.0,
-                Stroke::new(2.0, Color32::from_rgb(40, 120, 220)),
-                egui::StrokeKind::Inside,
-            );
+            let c = crate::theme::palette(&ctx).primary;
+            painter.rect_stroke(cv.shrink(1.0), 0.0, Stroke::new(2.0, c), egui::StrokeKind::Inside);
         }
         self.handle_canvas_input(&resp);
         // Right-click selects what is under the pointer, then opens the context menu.
@@ -320,12 +335,9 @@ impl NewpubApp {
         if let (Some(a), Some(b)) = (self.drag_start, self.drag_now)
             && self.tool != Tool::Select
         {
-            painter.rect_stroke(
-                ERect::from_two_pos(a, b),
-                0.0,
-                Stroke::new(1.0, Color32::from_rgb(40, 120, 220)),
-                egui::StrokeKind::Middle,
-            );
+            let c = crate::theme::palette(&ctx).primary;
+            painter.rect_filled(ERect::from_two_pos(a, b), 0.0, c.gamma_multiply(0.08));
+            painter.rect_stroke(ERect::from_two_pos(a, b), 0.0, Stroke::new(1.0, c), egui::StrokeKind::Middle);
         }
 
         // Rulers.
@@ -341,9 +353,15 @@ impl NewpubApp {
     /// Draws a ruler along `r`; `origin` is the screen coordinate of document 0 along its axis.
     fn draw_ruler(&self, ui: &egui::Ui, r: ERect, horizontal: bool, origin: f32, pointer: Option<f32>) {
         let painter = ui.painter().with_clip_rect(r);
-        let bg = ui.visuals().faint_bg_color;
-        let fg = ui.visuals().text_color();
+        let pal = crate::theme::palette(ui.ctx());
+        let (bg, fg) = (pal.surface, pal.text_muted);
         painter.rect_filled(r, 0.0, bg);
+        let edge_line = if horizontal {
+            [Pos2::new(r.min.x, r.max.y - 0.5), Pos2::new(r.max.x, r.max.y - 0.5)]
+        } else {
+            [Pos2::new(r.max.x - 0.5, r.min.y), Pos2::new(r.max.x - 0.5, r.max.y)]
+        };
+        painter.line_segment(edge_line, Stroke::new(1.0, pal.border));
         let (a, b) = if horizontal { (r.min.x, r.max.x) } else { (r.min.y, r.max.y) };
         let unit = units_points(self.view.units);
         let (step, subs) = STEPS
@@ -356,7 +374,7 @@ impl NewpubApp {
         let k0 = ((a - origin) as f64 / minor).floor() as i64;
         let k1 = ((b - origin) as f64 / minor).ceil() as i64;
         let edge = if horizontal { r.max.y } else { r.max.x };
-        let font = FontId::proportional(9.0);
+        let font = FontId::proportional(9.5);
         for k in k0..=k1 {
             let pos = origin + (k as f64 * minor) as f32;
             let is_major = k.rem_euclid(subs) == 0;
@@ -366,7 +384,7 @@ impl NewpubApp {
             } else {
                 (Pos2::new(edge, pos), Pos2::new(edge - len, pos))
             };
-            painter.line_segment([p0, p1], Stroke::new(1.0, fg));
+            painter.line_segment([p0, p1], Stroke::new(1.0, fg.gamma_multiply(if is_major { 0.9 } else { 0.5 })));
             if is_major {
                 let label = tick_label(k as f64 / subs as f64 * step);
                 let at =
@@ -380,7 +398,7 @@ impl NewpubApp {
             } else {
                 (Pos2::new(r.min.x, p), Pos2::new(r.max.x, p))
             };
-            painter.line_segment([p0, p1], Stroke::new(1.0, Color32::from_rgb(220, 60, 60)));
+            painter.line_segment([p0, p1], Stroke::new(1.0, pal.primary));
         }
     }
 
