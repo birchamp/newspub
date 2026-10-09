@@ -1,0 +1,25 @@
+id: UI-ML-001
+title: Mailings tab — attach recipients, insert a merge field, preview records and merge to PDF through the ribbon
+covers: [UI-11]
+ui: true
+steps:
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 1in], to: [6in, 2in]}
+  - type: {text: "Dear "}
+  - expect: {query: {q: page_objects, page: 0}, path: /0, gt: 0, as: f}
+  - click: {label: "Mailings"}
+  - click: {label: "Select Recipients"}
+  - fill: {label: "Data source file", text: "fixtures/members.csv"}
+  - click: {label: "Attach Data Source"}
+  - expect: {query: {q: data_source}, path: /records, equals: 4}
+  - click: {label: "Insert Merge Field"}
+  - click: {label: "first"}
+  - expect: {query: {q: story_text, target: $f}, equals: "Dear ￼"}
+  - click: {label: "Preview Results"}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "Dear Ada"}
+  - click: {label: "Next Record"}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "Dear Grace"}
+  - click: {label: "Merge to PDF"}
+  - fill: {label: "Merged PDF file", text: "merged.pdf"}
+  - click: {label: "Merge"}
+  - expect_pdf: {file: merged.pdf, text_contains: ["Dear Ada", "Dear Grace"]}

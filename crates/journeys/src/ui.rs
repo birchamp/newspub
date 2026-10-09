@@ -99,13 +99,29 @@ fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Resul
             settle(h);
         }
         "click_at" => {
-            let (x, y) = pt(&args)?;
+            // click_at: [x, y] or {at: [x, y], button: secondary, double: true, shift: true} on the current page.
+            let at = args.get("at").cloned().unwrap_or_else(|| args.clone());
+            let (x, y) = pt(&at)?;
             let p = h.state().page_to_screen(x, y);
+            let flag = |k: &str| args.get(k).and_then(|v| v.as_bool()).unwrap_or(false);
+            let secondary = args.get("button").and_then(|v| v.as_str()) == Some("secondary");
+            let modifiers = if flag("shift") { egui::Modifiers::SHIFT } else { egui::Modifiers::NONE };
             h.hover_at(p);
             h.run_steps(1);
-            h.drag_at(p);
-            h.run_steps(1);
-            h.drop_at(p);
+            if secondary || flag("shift") || flag("double") {
+                let button = if secondary { egui::PointerButton::Secondary } else { egui::PointerButton::Primary };
+                let clicks = if flag("double") { 2 } else { 1 };
+                for _ in 0..clicks {
+                    for pressed in [true, false] {
+                        h.event(egui::Event::PointerButton { pos: p, button, pressed, modifiers });
+                        h.run_steps(1);
+                    }
+                }
+            } else {
+                h.drag_at(p);
+                h.run_steps(1);
+                h.drop_at(p);
+            }
             settle(h);
         }
         "expect_ui" => {

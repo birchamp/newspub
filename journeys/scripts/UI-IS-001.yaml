@@ -1,0 +1,39 @@
+id: UI-IS-001
+title: Inspector — colours, line, text colour, line spacing, frame margins and alignment, rotation and alt text
+covers: [UI-12]
+ui: true
+steps:
+  - click: {label: "Rectangle"}
+  - drag: {from: [1in, 1in], to: [3in, 2in]}
+  - expect: {query: {q: page_objects, page: 0}, path: /0, gt: 0, as: r}
+  - fill: {label: "Fill color", text: "#ff8800"}
+  - expect: {query: {q: object, id: $r}, path: /kind/fill/r, equals: 255}
+  - expect: {query: {q: object, id: $r}, path: /kind/fill/g, equals: 136}
+  - fill: {label: "Line color", text: "#000080"}
+  - expect: {query: {q: object, id: $r}, path: /kind/stroke/color/b, equals: 128}
+  - fill: {label: "Line width", text: "3"}
+  - expect: {query: {q: object, id: $r}, path: /kind/stroke/width, equals: 3}
+  - fill: {label: "Rotation", text: "15"}
+  - expect: {query: {q: object, id: $r}, path: /rotation, equals: 15}
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 4in], to: [5in, 6in]}
+  - type: {text: "Coloured and spaced"}
+  - expect: {query: {q: page_objects, page: 0}, path: /1, gt: 0, as: f}
+  - fill: {label: "Text color", text: "#cc0000"}
+  - expect: {query: {q: char_attrs, target: $f, at: 0}, path: /color/r, equals: 204}
+  - fill: {label: "Line spacing", text: "1.5"}
+  - expect: {query: {q: para_attrs, target: $f, at: 0}, path: /line_spacing, not_equals: null}
+  - fill: {label: "Space after", text: "6pt"}
+  - expect: {query: {q: para_attrs, target: $f, at: 0}, path: /space_after, equals: 6}
+  - click: {label: "Bulleted list"}
+  - expect: {query: {q: para_attrs, target: $f, at: 0}, path: /list/kind, equals: bullet}
+  - click: {label: "Middle"}
+  - expect: {query: {q: object, id: $f}, path: /kind/valign, equals: middle}
+  - fill: {label: "Inner margins", text: "0.25in"}
+  - expect: {query: {q: object, id: $f}, path: /kind/insets/left, equals: 18}
+  - click: {label: "Picture"}
+  - fill: {label: "Picture file", text: "fixtures/photo.png"}
+  - click: {label: "Place Picture"}
+  - expect: {query: {q: page_objects, page: 0}, path: /2, gt: 0, as: p}
+  - fill: {label: "Alt text", text: "Choir photo"}
+  - expect: {query: {q: object, id: $p}, path: /alt_text, equals: "Choir photo"}

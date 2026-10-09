@@ -104,6 +104,10 @@ impl NewpubApp {
                     self.open_export_pdf();
                 }
                 ui.add_space(4.0);
+                if widgets::header_pill(ui, ic::EXPORT, "Export As", false).clicked() {
+                    self.dialog = Dialog::Export(crate::files::ExportState::default());
+                }
+                ui.add_space(4.0);
                 if widgets::header_pill(ui, ic::PRINTER, "Print", false).clicked() {
                     self.dialog = Dialog::Print(print::PrintState::new());
                 }

@@ -1,0 +1,38 @@
+id: UI-EX-001
+title: Export dialog — HTML, EPUB, XPS, PNG and PDF/X-4 from one place, plus Pack and Go
+covers: [UI-13]
+ui: true
+steps:
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 1in], to: [6in, 2in]}
+  - type: {text: "Exported everywhere"}
+  - click: {label: "Export As"}
+  - click: {label: "Web page (HTML)"}
+  - fill: {label: "Export file", text: "site"}
+  - click: {label: "Export File"}
+  - expect_files: {dir: site, contains: ["index.html"]}
+  - click: {label: "Export As"}
+  - click: {label: "EPUB e-book"}
+  - fill: {label: "Export file", text: "book.epub"}
+  - click: {label: "Export File"}
+  - expect_zip: {file: book.epub, first: mimetype, entries: ["OEBPS/content.opf"]}
+  - click: {label: "Export As"}
+  - click: {label: "XPS document"}
+  - fill: {label: "Export file", text: "doc.xps"}
+  - click: {label: "Export File"}
+  - expect_zip: {file: doc.xps, entries: ["FixedDocumentSequence.fdseq"]}
+  - click: {label: "Export As"}
+  - click: {label: "PNG image"}
+  - fill: {label: "Export file", text: "page.png"}
+  - click: {label: "Export File"}
+  - expect_files: {dir: ".", contains: ["page.png"]}
+  - click: {label: "Export As"}
+  - click: {label: "PDF/X-4 for print shops"}
+  - fill: {label: "Export file", text: "print.pdf"}
+  - click: {label: "Export File"}
+  - expect_pdf: {file: print.pdf, text_contains: ["Exported everywhere"]}
+  - click: {label: "Export As"}
+  - click: {label: "Pack and Go"}
+  - fill: {label: "Export file", text: "packed"}
+  - click: {label: "Export File"}
+  - expect_files: {dir: packed, contains: ["publication.newspub"]}

@@ -1,0 +1,39 @@
+id: UI-IN-001
+title: Insert tab — table, WordArt, shape gallery, page number field and building blocks through the ribbon
+covers: [UI-09]
+ui: true
+steps:
+  - click: {label: "Insert"}
+  # table: a dialog asks for the size
+  - click: {label: "Table"}
+  - fill: {label: "Rows", text: "3"}
+  - fill: {label: "Columns", text: "4"}
+  - click: {label: "Insert Table"}
+  - expect: {query: {q: page_objects, page: 0}, len: 1}
+  - expect: {query: {q: page_objects, page: 0}, path: /0, gt: 0, as: t}
+  - expect: {query: {q: table, id: $t}, path: /rows, equals: 3}
+  - expect: {query: {q: table, id: $t}, path: /cols, equals: 4}
+  # WordArt with typed text
+  - click: {label: "WordArt"}
+  - fill: {label: "WordArt text", text: "SALE"}
+  - click: {label: "Insert WordArt"}
+  - expect: {query: {q: page_objects, page: 0}, len: 2}
+  - expect: {query: {q: page_objects, page: 0}, path: /1, gt: 0, as: w}
+  - expect: {query: {q: object, id: $w}, path: /kind/text, equals: "SALE"}
+  # shape gallery
+  - click: {label: "Shapes"}
+  - click: {label: "Star"}
+  - expect: {query: {q: page_objects, page: 0}, len: 3}
+  - expect: {query: {q: page_objects, page: 0}, path: /2, gt: 0, as: s}
+  - expect: {query: {q: object, id: $s}, path: /kind/kind/star/points, gt: 2}
+  # page number field into the selected text box
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 8in], to: [4in, 9in]}
+  - type: {text: "Page "}
+  - click: {label: "Page Number"}
+  - expect: {query: {q: page_objects, page: 0}, path: /3, gt: 0, as: f}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "Page 1"}
+  # built-in building block
+  - click: {label: "Building Blocks"}
+  - click: {label: "Pull quote"}
+  - expect: {query: {q: page_objects, page: 0}, len: {gte: 5}}

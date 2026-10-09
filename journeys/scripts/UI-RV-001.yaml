@@ -1,0 +1,26 @@
+id: UI-RV-001
+title: Review tab — spelling with suggestions, find and replace, accessibility checker through the ribbon
+covers: [UI-11]
+ui: true
+steps:
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 1in], to: [6in, 2in]}
+  - type: {text: "The comittee met. The fair is on."}
+  - expect: {query: {q: page_objects, page: 0}, path: /0, gt: 0, as: f}
+  - click: {label: "Review"}
+  - click: {label: "Spelling"}
+  - expect_ui: {label: "comittee"}
+  - click: {label: "committee"}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "The committee met. The fair is on."}
+  - click: {label: "Find and Replace"}
+  - fill: {label: "Find what", text: "fair"}
+  - fill: {label: "Replace with", text: "fete"}
+  - click: {label: "Replace All"}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "The committee met. The fete is on."}
+  - click: {label: "Home"}
+  - click: {label: "Picture"}
+  - fill: {label: "Picture file", text: "fixtures/photo.png"}
+  - click: {label: "Place Picture"}
+  - click: {label: "Review"}
+  - click: {label: "Accessibility Checker"}
+  - expect_ui: {label: "Picture has no alt text"}

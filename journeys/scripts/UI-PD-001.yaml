@@ -1,0 +1,35 @@
+id: UI-PD-001
+title: Page Design tab — page setup, colour and font schemes, background, master pages and grid guides through the ribbon
+covers: [UI-10]
+ui: true
+steps:
+  - click: {label: "Page Design"}
+  - click: {label: "Page Setup"}
+  - fill: {label: "Page width", text: "11in"}
+  - fill: {label: "Page height", text: "8.5in"}
+  - fill: {label: "Top margin", text: "0.75in"}
+  - click: {label: "Apply Page Setup"}
+  - expect: {query: {q: document}, path: /setup/width, equals: 792}
+  - expect: {query: {q: document}, path: /setup/height, equals: 612}
+  - expect: {query: {q: document}, path: /setup/margins/top, equals: 54}
+  - click: {label: "Color Scheme"}
+  - click: {label: "Ocean"}
+  - expect: {query: {q: color_scheme}, path: /name, equals: "Ocean"}
+  - click: {label: "Font Scheme"}
+  - click: {label: "Modern"}
+  - expect: {query: {q: document}, path: /font_scheme/name, equals: "Modern"}
+  - click: {label: "Background"}
+  - fill: {label: "Background color", text: "#ffeecc"}
+  - click: {label: "Apply Background"}
+  - expect: {query: {q: page, page: 0}, path: /background/g, equals: 238}
+  - click: {label: "Master Pages"}
+  - fill: {label: "Master name", text: "Main"}
+  - click: {label: "New Master"}
+  - expect: {query: {q: masters}, len: 1}
+  - click: {label: "Apply Master"}
+  - expect: {query: {q: page, page: 0}, path: /master, not_equals: null}
+  - click: {label: "Grid Guides"}
+  - fill: {label: "Grid columns", text: "3"}
+  - fill: {label: "Grid rows", text: "2"}
+  - click: {label: "Apply Guides"}
+  - expect: {query: {q: guides, page: 0}, path: /vertical, len: 6}
