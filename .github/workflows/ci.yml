@@ -132,12 +132,11 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install poppler ghostscript
-          # FileDevice can only be enabled in cups-files.conf; cupsd restarts on demand through launchd.
-          echo "FileDevice Yes" | sudo tee -a /etc/cups/cups-files.conf
-          sudo launchctl kickstart -k system/org.cups.cupsd || sudo launchctl stop org.cups.cupsd || true
-          sleep 2
-          # Raw queues are gone on macOS: use the system's generic PostScript driver.
-          sudo lpadmin -p FileOut -E -v file:///private/tmp/newpub-print.pdf \
+          # File-device queues are disabled on macOS and raw queues are gone: print through the generic PostScript
+          # driver to a socket queue, with a local listener saving whatever the printer would receive.
+          nohup nc -l 127.0.0.1 9100 > /tmp/newpub-print.ps 2>/dev/null &
+          sleep 1
+          sudo lpadmin -p FileOut -E -v socket://127.0.0.1:9100 \
             -P /System/Library/Frameworks/ApplicationServices.framework/Versions/A/Frameworks/PrintCore.framework/Resources/Generic.ppd
           sudo lpadmin -d FileOut
           lpstat -t || true
@@ -147,7 +146,7 @@ jobs:
           NEWPUB_REAL_PRINT: "1"
         run: |
           out="${RUNNER_TEMP}/newpub-print.pdf"
-          [ "$RUNNER_OS" = macOS ] && out=/private/tmp/newpub-print.pdf
+          [ "$RUNNER_OS" = macOS ] && out=/tmp/newpub-print.ps
           export NEWPUB_PRINT_OUTPUT="$out"
           ./target/release/newpub-journeys --root journeys/conformance --out target/native-print --filter UI-PR-101
           for _ in $(seq 1 60); do [ -s "$out" ] && break; sleep 1; done
@@ -156,11 +155,15 @@ jobs:
             [ "$RUNNER_OS" = macOS ] && { lpstat -W all -o || true; sudo tail -50 /var/log/cups/error_log || true; }
             exit 1
           fi
-          ls -l "$out"
-          head -c 16 "$out"; echo
           if [ "$RUNNER_OS" = macOS ]; then
-            # The generic driver spools PostScript (or PDF): either way the printed text must be there.
-            if head -c 4 "$out" | grep -q '%!'; then ps2pdf "$out" "$out.pdf"; else cp "$out" "$out.pdf"; fi
+            # The listener exits when CUPS closes the connection at the end of the job.
+            for _ in $(seq 1 60); do pgrep -f "nc -l 127.0.0.1 9100" >/dev/null || break; sleep 1; done
+          fi
+          ls -l "$out"
+          head -c 32 "$out" | od -c | head -3
+          if [ "$RUNNER_OS" = macOS ]; then
+            # The generic driver sends PostScript (or PDF): either way the printed text must be there.
+            if head -c 5 "$out" | grep -q '%PDF-'; then cp "$out" "$out.pdf"; else ps2pdf "$out" "$out.pdf"; fi
             pdftotext "$out.pdf" - | tee /dev/stderr | grep -q "Printed by newpub"
           else
             head -c 5 "$out" | grep -q '%PDF-'
