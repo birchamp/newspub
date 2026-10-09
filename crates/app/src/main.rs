@@ -151,10 +151,11 @@ mod macos {
     }
 }
 
-/// AutoRecover copies live in newpub's config folder; one is written every 5 changes.
+/// AutoRecover copies and the user's own templates live in newpub's config folder; a recovery copy is written
+/// every 5 changes.
 fn with_recovery(app: NewpubApp) -> NewpubApp {
     match newpub_app::config_dir() {
-        Some(dir) => app.with_recovery(dir.join("recovery"), 5),
+        Some(dir) => app.with_recovery(dir.join("recovery"), 5).with_user_templates(dir.join("templates")),
         None => app,
     }
 }

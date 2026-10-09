@@ -1,0 +1,50 @@
+id: UI-ST-001
+title: Styles — make a paragraph style and a character style from formatted text, apply them elsewhere, delete a style
+covers: [UI-22]
+ui: true
+steps:
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 1in], to: [6in, 2in]}
+  - type: {text: "Spring Fair"}
+  - key: {key: "A", command: true}
+  - key: {key: "B", command: true}
+  - fill: {label: "Font size", text: "24"}
+  - click: {label: "Center"}
+  # Home > Styles: a style from the formatted paragraph
+  - click: {label: "Styles"}
+  - fill: {label: "Style name", text: "Big Heading"}
+  - click: {label: "New Paragraph Style"}
+  - expect: {query: {q: styles}, path: /para, contains: "Big Heading"}
+  # a second box takes the style
+  - key: {key: "Escape"}
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 3in], to: [6in, 4in]}
+  - type: {text: "Bake sale results"}
+  - expect: {query: {q: find, text: "Bake sale"}, path: /0/story, gt: 0, as: s}
+  - click: {label: "Apply Big Heading"}
+  - expect: {query: {q: para_attrs, target: $s, at: 0}, path: /style, equals: "Big Heading"}
+  - expect: {query: {q: para_attrs, target: $s, at: 0}, path: /align, equals: "center"}
+  - expect: {query: {q: char_attrs, target: $s, at: 0}, path: /size, approx: [24, 0.01]}
+  - expect: {query: {q: char_attrs, target: $s, at: 0}, path: /bold, equals: true}
+  # a character style from selected text, applied to part of a paragraph
+  - key: {key: "A", command: true}
+  - key: {key: "I", command: true}
+  - fill: {label: "Style name", text: "Accent"}
+  - click: {label: "New Character Style"}
+  - expect: {query: {q: styles}, path: /chars, contains: "Accent"}
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 5in], to: [6in, 6in]}
+  - type: {text: "plain words"}
+  - key: {key: "Home"}
+  - key: {key: "ArrowRight", shift: true}
+  - key: {key: "ArrowRight", shift: true}
+  - key: {key: "ArrowRight", shift: true}
+  - key: {key: "ArrowRight", shift: true}
+  - key: {key: "ArrowRight", shift: true}
+  - click: {label: "Apply Accent"}
+  - expect: {query: {q: find, text: "plain words"}, path: /0/story, gt: 0, as: p}
+  - expect: {query: {q: char_attrs, target: $p, at: 0}, path: /italic, equals: true}
+  - expect: {query: {q: char_attrs, target: $p, at: 7}, path: /italic, equals: false}
+  # deleting a style
+  - click: {label: "Delete Accent"}
+  - expect: {query: {q: styles}, path: /chars, not_contains: "Accent"}

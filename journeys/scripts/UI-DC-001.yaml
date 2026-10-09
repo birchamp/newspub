@@ -1,0 +1,49 @@
+id: UI-DC-001
+title: Publication properties, the Design Checker, and Save as Template then start from My Templates
+covers: [UI-23]
+ui: true
+user_templates: true
+steps:
+  # Review > Properties
+  - click: {label: "Review"}
+  - click: {label: "Properties"}
+  - fill: {label: "Title", text: "Club Newsletter"}
+  - fill: {label: "Author", text: "Jo Smith"}
+  - expect: {query: {q: document}, path: /meta/title, equals: "Club Newsletter"}
+  - expect: {query: {q: document}, path: /meta/author, equals: "Jo Smith"}
+  # Review > Design Checker: a blank publication has no problems
+  - click: {label: "Design Checker"}
+  - expect_ui: {label: "No problems found"}
+  # an overflowing text box, an empty text box and a shape left on the pasteboard
+  - click: {label: "Home"}
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 1in], to: [2.5in, 1.5in]}
+  - paste: {text: "Members are invited to the spring fair on the village green. Stalls open at ten, with cakes, plants, books and games for children. Volunteers are still needed for the tea tent and the raffle, so please speak to the secretary if you can help."}
+  - key: {key: "Escape"}
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 4in], to: [3in, 5in]}
+  - key: {key: "Escape"}
+  - expect: {query: {q: page_objects, page: 0}, path: /1, gt: 0, as: empty}
+  - click: {label: "Rectangle"}
+  - drag: {from: [-2in, 1in], to: [-0.5in, 2in]}
+  - expect_ui: {label: "Text does not fit (page 1)"}
+  - expect_ui: {label: "Empty text box (page 1)"}
+  - expect_ui: {label: "Object is off the page (page 1)"}
+  - expect_ui: {label: "No problems found", exists: false}
+  # clicking a problem selects the object it is about
+  - click: {label: "Empty text box (page 1)"}
+  - expect: {query: {q: view}, path: /selection, equals: [$empty]}
+  # Save as Template (from the Save dialog), then start a new publication from it
+  - click: {label: "Save"}
+  - click: {label: "Save as Template"}
+  - fill: {label: "Template name", text: "Club Letter"}
+  - click: {label: "Save Template"}
+  - expect_files: {dir: templates, ext: npubt, count: 1}
+  - key: {key: "N", command: true}
+  - click: {label: "Don't Save"}
+  - expect_ui: {label: "Choose a template"}
+  - click: {label: "Club Letter"}
+  - click: {label: "Create"}
+  - expect: {query: {q: all_story_text}, contains: "Members are invited to the spring fair"}
+  - expect: {query: {q: session}, path: /path, is_null: true}
+  - expect: {query: {q: page_objects, page: 0}, len: 3}

@@ -266,3 +266,6 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | UI-18 | P0 | AutoRecover in the app: after a crash the next start offers unsaved work back (per-window locked copies; discarded work is not offered) | UI-AR-001 | [ ] |
 | UI-19 | P0 | Text flow in the UI: link text boxes, break links, flow onto new pages, import a text file, type in shapes, clear formatting | UI-TX-001, UI-TX-002 | [ ] |
 | UI-20 | P0 | Table editing in the UI: type in cells, Tab, merge/split, insert/delete rows and columns, sizes, table style, cell fill | UI-TB-101 | [ ] |
+| UI-21 | P1 | Pages and guides in the UI: reorder and duplicate pages from the page list; drag ruler guides out, move them, drag them back to remove | UI-PG-101 | [ ] |
+| UI-22 | P1 | Styles in the UI: paragraph and character styles from formatted text, apply, delete | UI-ST-001 | [ ] |
+| UI-23 | P1 | Publication properties, Design Checker (overflow, empty boxes, off-page objects), Save as Template and My Templates | UI-DC-001 | [ ] |

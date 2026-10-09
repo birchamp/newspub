@@ -1,7 +1,7 @@
 //! UI journeys: drive the real egui app through its AccessKit tree with egui_kittest.
 //!
-//! UI steps: `click: {label}`, `fill: {label, text}`, `type: {text}`, `key: {key, command, shift}`,
-//! `drag: {from: [x, y], to: [x, y]}` and `click_at: [x, y]` (page points on the canvas),
+//! UI steps: `click: {label, button}`, `fill: {label, text}`, `type: {text}`, `key: {key, command, shift}`,
+//! `drag: {from: [x, y], to: [x, y]}` (or `from_ruler`/`to_ruler: top | left` for one end) and `click_at: [x, y]` (page points on the canvas),
 //! `expect_ui: {label, exists}`, `focus: {label}` (keyboard focus), `scroll: {dx, dy}` (mouse wheel over
 //! the canvas, screen points), `close_window: {}` (the window's close button), `drop_file: {path, at}` (a file
 //! dragged from the desktop and dropped, optionally over a page point), `restart_app: {}` (the app goes away
@@ -66,8 +66,24 @@ fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Resul
     let args = substitute(raw, ctx)?;
     match name.as_str() {
         "click" => {
+            // click: {label} or {label, button: secondary} (a right-click, e.g. for a context menu).
             let label = args.get("label").and_then(|v| v.as_str()).ok_or_else(|| anyhow!("click needs label"))?;
-            find(h, label)?.click();
+            if args.get("button").and_then(|v| v.as_str()) == Some("secondary") {
+                let at = find(h, label)?.rect().center();
+                h.hover_at(at);
+                h.run_steps(1);
+                for pressed in [true, false] {
+                    h.event(egui::Event::PointerButton {
+                        pos: at,
+                        button: egui::PointerButton::Secondary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    });
+                    h.run_steps(1);
+                }
+            } else {
+                find(h, label)?.click();
+            }
             settle(h);
         }
         "fill" => {
@@ -121,10 +137,37 @@ fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Resul
             settle(h);
         }
         "drag" => {
-            let (x0, y0) = pt(args.get("from").ok_or_else(|| anyhow!("drag needs from"))?)?;
-            let (x1, y1) = pt(args.get("to").ok_or_else(|| anyhow!("drag needs to"))?)?;
-            let a = h.state().page_to_screen(x0, y0);
-            let b = h.state().page_to_screen(x1, y1);
+            // Page points; `from_ruler`/`to_ruler: top | left` start or end on a ruler, level with the other end.
+            let ruler = |h: &Harness<'_, NewpubApp>, which: &str| -> Result<egui::Rect> {
+                let label = match which {
+                    "top" => "Horizontal ruler",
+                    "left" => "Vertical ruler",
+                    other => bail!("unknown ruler {other:?} (top or left)"),
+                };
+                Ok(find(h, label)?.rect())
+            };
+            let on_ruler = |r: egui::Rect, which: &str, p: egui::Pos2| {
+                if which == "top" { egui::pos2(p.x, r.center().y) } else { egui::pos2(r.center().x, p.y) }
+            };
+            let from_ruler = args.get("from_ruler").and_then(|v| v.as_str()).map(str::to_string);
+            let to_ruler = args.get("to_ruler").and_then(|v| v.as_str()).map(str::to_string);
+            let (a, b) = match (&from_ruler, &to_ruler) {
+                (Some(w), None) => {
+                    let (x1, y1) = pt(args.get("to").ok_or_else(|| anyhow!("drag needs to"))?)?;
+                    let b = h.state().page_to_screen(x1, y1);
+                    (on_ruler(ruler(h, w)?, w, b), b)
+                }
+                (None, Some(w)) => {
+                    let (x0, y0) = pt(args.get("from").ok_or_else(|| anyhow!("drag needs from"))?)?;
+                    let a = h.state().page_to_screen(x0, y0);
+                    (a, on_ruler(ruler(h, w)?, w, a))
+                }
+                _ => {
+                    let (x0, y0) = pt(args.get("from").ok_or_else(|| anyhow!("drag needs from"))?)?;
+                    let (x1, y1) = pt(args.get("to").ok_or_else(|| anyhow!("drag needs to"))?)?;
+                    (h.state().page_to_screen(x0, y0), h.state().page_to_screen(x1, y1))
+                }
+            };
             h.hover_at(a);
             h.run_steps(1);
             h.drag_at(a);
@@ -224,6 +267,10 @@ fn start_app(script: &Value, ctx: &Ctx) -> Harness<'static, NewpubApp> {
     // (a CUPS virtual PDF printer) instead.
     if std::env::var_os("NEWPUB_REAL_PRINT").is_none() {
         app.print_spool = Some(ctx.out.join("print-spool"));
+    }
+    // `user_templates: true` keeps "My templates" in `<out>/templates`.
+    if script.get("user_templates").and_then(|v| v.as_bool()).unwrap_or(false) {
+        app = app.with_user_templates(ctx.out.join("templates"));
     }
     if script.get("recovery").and_then(|v| v.as_bool()).unwrap_or(false) {
         app = app.with_recovery(ctx.out.join("recovery"), 1);

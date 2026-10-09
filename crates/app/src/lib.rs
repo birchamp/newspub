@@ -104,6 +104,8 @@ pub struct NewpubApp {
     window_closes: u32,
     /// AutoRecover copies (the desktop app and recovery journeys).
     recovery: Option<recovery::Recovery>,
+    /// Folder of the user's own templates ("My templates"); none means the feature is off.
+    pub(crate) user_templates: Option<std::path::PathBuf>,
     /// Screen rect of the canvas, for drops.
     canvas_rect: egui::Rect,
     pub status: String,
@@ -202,6 +204,7 @@ impl NewpubApp {
             window_closes: 0,
             canvas_rect: egui::Rect::NOTHING,
             recovery: None,
+            user_templates: None,
             status: String::new(),
             texture: None,
             page_origin: Pos2::ZERO,
@@ -268,6 +271,12 @@ impl NewpubApp {
             self.dialog = Dialog::None;
         }
         true
+    }
+
+    /// Keeps the user's own templates ("My templates") in `dir`.
+    pub fn with_user_templates(mut self, dir: std::path::PathBuf) -> NewpubApp {
+        self.user_templates = Some(dir);
+        self
     }
 
     /// Recent files, newest first.
