@@ -1,8 +1,8 @@
 # newpub-rs: status report
 
 **Date:** 2026-10-09.
-**Commit:** 1d082f4, branch `claude/happy-davinci-r0kfpv`.
-**CI:** run 37864129775. Clippy, build and 122/122 journeys pass on Linux, macOS and Windows. The conformance job and the Windows native-print job are green.
+**Commit:** 6c25bc8, branch `claude/happy-davinci-r0kfpv`.
+**CI:** run 37870194049 is fully green: clippy, build and 122/122 journeys on Linux, macOS and Windows, the Linux conformance job, and the native-print jobs on Windows and macOS.
 
 **All 130 PARITY items, P0–P3 plus PF-01, pass their journeys on all three OSes.** IM-11 (EMF/WMF) was split out of IM-09 so that each could be checked honestly.
 
@@ -16,7 +16,7 @@
 | XPS (Windows) | Windows' own XPS reader (`System.Windows.Xps`) | opens, pages counted |
 | Print hand-off (Linux) | `lp`, then CUPS, then the cups-pdf virtual printer | job printed, text intact |
 | Print (Windows) | native GDI job to "Microsoft Print to PDF" | PDF written |
-| Print (macOS) | `lp`, then CUPS, then a file-device queue | CI run pending (fix in dc52474) |
+| Print (macOS) | `lp`, then CUPS with the generic PostScript driver, then a socket queue to a local listener | job printed, text intact (re-encoded by the PostScript conversion) |
 | PDF/X-4 | none (no free validator exists) | not externally validated |
 
 ## Parity by area

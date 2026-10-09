@@ -190,3 +190,14 @@ The dashboard parses this file:
   - Windows: a real GDI print to "Microsoft Print to PDF" through the test hook `NEWPUB_PRINT_OUTPUT`, and the journey XPS opened by Windows' own XPS reader (page count).
   - macOS: a real `lp` print to a CUPS file-device queue, with the text checked by pdftotext.
 - Usability test kit: docs/usability-test-plan.md. B-003 stays open because it needs people.
+
+### 2026-10-09 01:45 — CI fully green, including real printing on all three OSes
+- CI run 37864129775 (commit 1d082f4): 122/122 journeys on all three OSes. SH-08, AX-03 and PF-01 are checked again, so PARITY is 130/130.
+- CI run 37870194049 (commit 6c25bc8) is fully green, with the native-print jobs on Windows and macOS.
+- It took three fixes to get a macOS print queue in CI:
+  - `cupsctl FileDevice` is refused;
+  - raw queues are unsupported;
+  - file-device URIs stay disabled.
+- The queue that works uses the generic PostScript driver and a socket queue to a local `nc` listener.
+- macOS's PostScript conversion re-encodes subset fonts, so the printed text is checked as a consistent one-to-one re-encoding of "Printed by newpub" (tools/conformance/text_or_reencoded.py).
+- Open: the user asked about a Mac installer (.pkg). Proposed an unsigned universal .pkg CI job (signing needs an Apple Developer ID). Waiting for their answer.
