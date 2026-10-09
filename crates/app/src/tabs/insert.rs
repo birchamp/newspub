@@ -90,11 +90,6 @@ impl NewpubApp {
         matches!(self.session.doc().objects.get(&id)?.kind, ObjectKind::Image(_)).then_some(id)
     }
 
-    /// Where fields and symbols go in `frame`'s story: its end (a caret position would replace this).
-    fn insert_at(&self, frame: Id) -> usize {
-        self.insertion_point(frame)
-    }
-
     /// The page area inside the margins.
     fn margin_rect(&self) -> Rect {
         let s = &self.session.doc().setup;
@@ -195,7 +190,7 @@ impl NewpubApp {
                 ui.vertical(|ui| widgets::hint(ui, tip));
             }
             if let (Some(f), Some(field)) = (frame, field) {
-                let at = Some(self.insert_at(f));
+                let at = Some(self.insertion_point(f));
                 if let Some(field) = field {
                     self.act(Command::InsertField { target: f, at, field });
                 }
@@ -383,7 +378,7 @@ impl NewpubApp {
                             && !url.is_empty()
                             && let Some(f) = frame
                         {
-                            let end = self.insert_at(f);
+                            let end = self.insertion_point(f);
                             let cmd = Command::SetHyperlink { target: f, start: 0, end, url: Some(url), page: None };
                             if self.act(cmd).is_some() {
                                 close = true;
@@ -403,7 +398,7 @@ impl NewpubApp {
                         if ui.add_enabled(frame.is_some(), egui::Button::new(label)).clicked()
                             && let Some(f) = frame
                         {
-                            let at = Some(self.insert_at(f));
+                            let at = Some(self.insertion_point(f));
                             self.act(Command::InsertSpecialChar { target: f, at, char: ch });
                         }
                     }

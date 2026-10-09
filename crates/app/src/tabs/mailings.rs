@@ -59,12 +59,6 @@ impl NewpubApp {
             .find(|id| matches!(d.objects.get(id).map(|o| &o.kind), Some(ObjectKind::Text(_))))
     }
 
-    /// Where a merge field goes: the end of the frame's story (the lead may switch this to the caret).
-    fn insert_at(&self, frame: Id) -> usize {
-        let d = self.session.doc();
-        d.story_of(frame).ok().and_then(|s| d.stories.get(&s)).map(|s| s.len()).unwrap_or(0)
-    }
-
     pub(crate) fn mailings_tab(&mut self, ui: &mut egui::Ui) {
         let src = self.data_source();
         let has_src = src.is_some();
@@ -161,7 +155,7 @@ impl NewpubApp {
                         if ui.button(field).clicked()
                             && let Some(f) = frame
                         {
-                            let at = self.insert_at(f);
+                            let at = self.insertion_point(f);
                             self.act(Command::InsertMergeField { target: f, at: Some(at), field: field.clone() });
                         }
                     }

@@ -136,9 +136,7 @@ pub struct NewpubApp {
     themed: bool,
     pub(crate) insert_ui: tabs::insert::InsertState,
     pub(crate) design_ui: tabs::design::DesignState,
-    #[allow(dead_code)]
     pub(crate) mailings_ui: tabs::mailings::MailingsState,
-    #[allow(dead_code)]
     pub(crate) review_ui: tabs::review::ReviewState,
 }
 
