@@ -215,3 +215,7 @@ The dashboard parses this file:
 - First Package run: macOS was green. Linux and Windows failed the launch check:
   - **Linux** (a real packaging bug): the `.deb` lacked `libxkbcommon-x11-0`, so newpub panicked at start on systems without it. Reproduced locally and fixed in the dependency list.
   - **Windows:** newpub exited at once on the runner, which has no OpenGL 2. Startup now tries OpenGL first, then wgpu (Direct3D 12 with WARP on Windows), and shows an error box if both fail. The CI check now requires a window titled "newpub", so an error box cannot pass.
+- Second Package run (fdfc7b5): all three jobs green; the Windows runner (no OpenGL 2) opened the newpub window through the wgpu fallback. CI run 37957271073 is fully green on the same code.
+- **Released v0.1.0** (user: "yes, tag v0.1.0 when it's green"): https://github.com/birchamp/newspub/releases/tag/v0.1.0
+  - Seven assets: the Windows setup and portable zip, the macOS .dmg and .pkg, and the Linux AppImage, .deb and .tar.gz.
+  - This session's git proxy does not allow tag pushes, so the Package workflow gained a `release_tag` input. A manual run with it creates the tag on that run's commit (21b08f9: the workflow change only, with the same app code as fdfc7b5) and publishes the release.
