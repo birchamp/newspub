@@ -9,3 +9,7 @@ newpub-core.workspace = true
 cfb.workspace = true
 thiserror.workspace = true
 serde.workspace = true
+miniz_oxide = "0.8"
+
+[dev-dependencies]
+serde_json.workspace = true

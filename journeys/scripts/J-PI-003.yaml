@@ -7,14 +7,14 @@ steps:
   - expect: {query: {q: document}, path: /setup/width, approx: [595.3, 1]}
   - expect: {query: {q: document}, path: /setup/height, approx: [841.9, 1]}
   - expect: {query: {q: find, text: "This is some text on the first page"}, path: /0/story, gt: 0, as: s1}
-  - expect: {query: {q: char_box, target: $s1, at: 0}, path: /x, approx: [87.9, 4]}
-  - expect: {query: {q: char_box, target: $s1, at: 0}, path: /baseline, approx: [82.6, 5]}
+  - expect: {query: {q: char_box, target: $s1, at: 0}, path: /page_x, approx: [87.9, 4]}
+  - expect: {query: {q: char_box, target: $s1, at: 0}, path: /page_baseline, approx: [82.6, 5]}
   - expect: {query: {q: find, text: "This is in bold and italic"}, path: /0/story, gt: 0, as: s2}
-  - expect: {query: {q: char_box, target: $s2, at: 0}, path: /x, approx: [87.9, 4]}
-  - expect: {query: {q: char_box, target: $s2, at: 0}, path: /baseline, approx: [182.6, 6]}
+  - expect: {query: {q: char_box, target: $s2, at: 0}, path: /page_x, approx: [87.9, 4]}
+  - expect: {query: {q: char_box, target: $s2, at: 0}, path: /page_baseline, approx: [182.6, 6]}
   - expect: {query: {q: find, text: "This is the second page"}, path: /0/story, gt: 0, as: s3}
-  - expect: {query: {q: char_box, target: $s3, at: 0}, path: /x, approx: [68.1, 4]}
-  - expect: {query: {q: char_box, target: $s3, at: 0}, path: /baseline, approx: [85.5, 5]}
+  - expect: {query: {q: char_box, target: $s3, at: 0}, path: /page_x, approx: [68.1, 4]}
+  - expect: {query: {q: char_box, target: $s3, at: 0}, path: /page_baseline, approx: [85.5, 5]}
   # a landscape brochure keeps its orientation
   - import_pub: {path: fixtures/pub/SampleBrochure.pub}
   - expect: {query: {q: page_count}, equals: 2}
@@ -25,11 +25,15 @@ steps:
   - expect: {query: {q: page_count}, equals: 1}
   - expect: {query: {q: document}, path: /setup/width, approx: [612, 1]}
   - expect: {query: {q: document}, path: /setup/height, approx: [792, 1]}
-  # a four-page newsletter: the masthead is at the top of page 1
+  # a four-page newsletter: the masthead is at the top of page 1, right-aligned at the bottom of its box
   - import_pub: {path: fixtures/pub/SampleNewsletter.pub}
   - expect: {query: {q: page_count}, equals: 4}
   - expect: {query: {q: find, text: "Living and Learning"}, path: /0/story, gt: 0, as: title}
   - expect: {query: {q: char_box, target: $title, at: 0}, path: /page, equals: 0}
-  - expect: {query: {q: char_box, target: $title, at: 0}, path: /x, approx: [115.8, 6]}
+  # (its font, Rockwell Condensed, is not installed, so its exact x depends on the substitute's widths)
+  - expect: {query: {q: para_attrs, target: $title, at: 0}, path: /align, equals: "right"}
+  - expect: {query: {q: char_frame, target: $title, at: 0}, gt: 0, as: mast}
+  - expect: {query: {q: object, id: $mast}, path: /kind/valign, equals: "bottom"}
+  - expect: {query: {q: object, id: $mast}, path: /rect/y, approx: [93, 6]}
   - expect: {query: {q: find, text: "Back Page Story Headline"}, path: /0/story, gt: 0, as: back}
   - expect: {query: {q: char_page, target: $back, at: 0}, equals: 3}

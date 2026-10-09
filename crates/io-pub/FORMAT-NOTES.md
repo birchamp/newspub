@@ -1,57 +1,81 @@
 # Publisher (.pub) format notes
 
-Findings from one sample file (`journeys/fixtures/tika-sample.pub`, a Publisher 2000-era file) and public format
-descriptions, written in our own words. No third-party parser code was copied. Everything below is observed on that
-single file, so treat the constants as hypotheses until more samples are tested.
+Written in our own words from public descriptions of the format and from inspecting sample files. The main public
+reference is LibreOffice's **libmspub** (MPL-2.0), read to learn the format; none of its code or comments were copied
+or translated. The samples are Apache POI's Publisher test files (`journeys/fixtures/pub/`), and positions were
+checked against LibreOffice's rendering of the same files.
 
-## Container
+Units: geometry is in EMU (12,700 per point), measured from the **page centre**, in every version.
 
-An OLE compound file (cfb crate). Streams in the sample:
+## Container and versions
+
+An OLE compound file. `Contents` starts with `E8 AC` and a u16 format number: `0x2C` for Publisher 2002 and later,
+`0x22` for Publisher 98 and 2000 (and 97). The application version in `DocumentSummaryInformation` (PIDDSI_VERSION)
+names the 2002+ releases. A file saved down to the 98/2000 format by a newer Publisher still carries the newer version
+there, so 98 and 2000 are told apart from the shape records instead (below).
 
 | Stream | Role |
 |--------|------|
-| `Contents` | Main object database. Starts with `E8 AC` then a u16 format number (`0x2C` in the sample). Not decoded beyond the header. |
-| `Quill/QuillSub/CONTENTS` | Text and text formatting ("Quill" text engine). |
-| `Escher/EscherStm` | Office Drawing records: shapes and their positions. |
-| `Escher/EscherDelayStm` | Delayed blobs (pictures); empty in the sample. |
-| `\x01CompObj`, `\x05SummaryInformation`, `\x05DocumentSummaryInformation`, `Envelope`, `\x03Internal` | Standard OLE metadata. |
+| `Contents` | Document, pages, shapes, tables, palette, fonts |
+| `Quill/QuillSub/CONTENTS` | All text and its formatting (every version from 98 on) |
+| `Escher/EscherStm`, `Escher/EscherDelayStm` | 2002+: Office Drawing shape records and the picture store |
 
-Detection rule used: `Contents` plus either `Quill/QuillSub/CONTENTS` or `Escher/EscherStm`.
-Version names: `0x2A` -> "Publisher 98", `0x2C` -> "Publisher 2000" (the `0x2A` case is from public notes and
-unverified; other values are reported as "unknown version").
+## Quill CONTENTS (text)
 
-## Quill CONTENTS
+`CHNKINK ` header, then a chain of chunk lists (at 0x18; each list has a count, a link to the next list, and 24-byte
+entries: tag, id, offset, length). Chunks used:
 
-- Starts with the ASCII tag `CHNKINK ` and a 24-byte header; the chunk directory begins at byte 32.
-- Directory entries are 24 bytes: `u16 0x18`, 4-byte tag, 2 zero bytes, `u32 1`, 4-byte tag repeated, `u32 offset`,
-  `u32 length`. Offsets are from the start of the stream. Tags seen: TEXT, STSH, FDPP, FDPC, SYID, SGP, INK, BTEP, BTEC,
-  FONT, STRS, MCLD, PL.
-- TEXT: UTF-16LE. `\r` (U+000D) ends a paragraph; the last paragraph mark is a terminator, not an extra empty paragraph.
-  The sample has one text run covering all stories, so story boundaries live in another chunk (probably STRS/PL/MCLD,
-  not decoded).
-- FONT: `u32 chunk size`, `u32 count`, 12 bytes not understood, `count` x `u32` offsets (relative to the start of the
-  offset table, which is at byte 20 of the chunk), then entries `u16 length, UTF-16LE name, u32 id`. The first font is
-  the default (Times New Roman in the sample).
-- STSH/FDPP/FDPC (style sheet and formatting runs) are not decoded, so only the default font is applied.
+- `TEXT`: all stories, UTF-16LE. `\r` ends a paragraph, `\v` is a line break; a story's last mark is a terminator.
+- `STRS`: story lengths; `SYID`: story ids (the "text id" shapes refer to).
+- `FDPC` / `FDPP`: character and paragraph runs: a count, end offsets into the stream, and offsets of records made of
+  tagged blocks (bold 0x02, italic 0x03, size 0x0C in EMU, underline 0x1E, colour 0x2E or container 0x44, font
+  container 0x24, script 0x0F, scale 0x20, language 0x12; paragraph align 0x04, style index 0x19, line spacing
+  0x34, space before/after 0x12/0x13, indents 0x0C-0x0E, tabs 0x32).
+- `STSH`: the second one holds the default styles, alternating character and paragraph styles; a paragraph's style
+  index selects the pair its runs are relative to.
+- `FONT`: the font table; `PL  `: text colour references (2002+); `TCD `: cell ends of a table story.
 
-## Escher (Office Drawing records)
+Text colours: 2002+ records index the `PL  ` table. 98/2000 records hold a reference directly: type byte `0xC0`/`0xE0`
+indexes the publication palette, `0x00`/`0x80` a fixed table of 56 standard colours, `0x20`/`0x90` RGB.
 
-Standard record header `u16 ver/instance, u16 type, u32 length`, container records have version 15. Top-level
-containers are separated by a 4-byte field that is not part of any record, so the walker skips 4 bytes whenever a
-header is not valid.
+## Publisher 2002 and later
 
-Shapes are `0xF004` containers. A text box has shape type 202 (the instance of the `0xF00A` record). Its position is in
-a `0xF010` record of 28 bytes: a u32 `0x1C` followed by four `(u16 tag, i32)` pairs with tags `0x2001..0x2004` =
-left, top, right, bottom in EMU (914400 per inch, 12700 per point), measured from the **page centre**. In the sample
-this gives a box at x=65..536, y=37..94 on a US Letter page, which fits a 0.5 in margin layout, so the centre-origin
-reading is likely right.
+- `Contents`: a trailer (offset at 0x1A) lists numbered chunks; each is a list of tagged blocks (see `blocks.rs`).
+  Chunk types used: document 0x44 (page size), page 0x43 (shape list, master link), shape 0x01/0x20, group 0x30,
+  table 0x10 (rows 0x66, columns 0x67, sizes 0x6D, cell chunk 0x6B) with cells 0x63, palette 0x5C, fonts 0x6C.
+  Shapes give their text id (0x27), position in a linked chain (0x28) and vertical alignment (0x35).
+- `EscherStm`: standard drawing records. Shapes (0xF004) carry a type, flags (flips), a property table (fill, line,
+  insets, columns, rotation in 16.16 degrees, crop, picture index) and an anchor (0xF010, page-centre EMU) or a child
+  anchor inside a group. The picture store points into `EscherDelayStm`.
 
-`0xF011` (client data) and `0xF00D` (client textbox) carry the link between a shape and its text; their meaning is not
-decoded. The sample has two text boxes and one text run, so the importer puts the whole story in the bounding box of
-all text boxes and says so in a warning.
+## Publisher 98 and 2000
 
-## Not decoded
+`Contents` holds a trailer (offset at 0x16): a u16 count, then 10-byte entries `u16 ?, u16 id, u16 parent id,
+u32 offset`. A chunk's first u16 is its type: document 0x15 (page width and height as u32 at +0x14/+0x18), page 0x14,
+palette 0x47 (eight colour references at +0xA0), group 0x0F, picture 0x02 with its data in a child 0x21 chunk
+(`u32` length at +4, then a WMF), line 0x04, rectangle 0x05, autoshape 0x06 (kind at +0x31), ellipse 0x07, text box
+0x08, table 0x0A. Other chunk types under a page are properties, not shapes.
 
-- Page size (assumed US Letter, else A4, whichever holds all boxes).
-- Text-to-box mapping, story boundaries, multiple pages.
-- Character and paragraph formatting runs, colours, pictures (BLIPs in EscherDelayStm), shape fills and borders.
+Shape records: rotation at +4 (tenths of a degree, counter-clockwise), rectangle at +6 (four i32: xs, ys, xe, ye),
+flips at +0x33 (autoshapes) or +0x41 (lines). Text boxes: text id at +0x58, inner margins at +0x46 (four u16 twips:
+left, top, right, bottom). Tables: text id at +0x66, a count at +0x74 and `(end, size)` u32 pairs from +0x7E: the
+column boundaries first (increasing), then the row boundaries (starting again from the top). Group members keep page
+coordinates. Page ids 0x108, 0x109 (master), 0x10B, 0x10D, 0x116 and 0x119 are internal pages; a page whose records
+are all zero-sized holds Publisher's default shapes, not content.
+
+Fill and the first line sit at different offsets in the two versions: Publisher 2000 has the fill colour at +0x22,
+fill type at +0x2A (2 = solid) and the first line (u8 width code, u32 colour) at +0x2C; Publisher 98 has them two
+bytes earlier. Both put the further sides at +0x35, +0x3B and +0x41. The importer decides per file by looking at the
+bytes before the `FE FF` marker at +0x31 in its shape records. Line width codes are quarter points, with a compressed
+range above 0x81.
+
+## Fonts
+
+Publisher files name Windows fonts. When one is not installed, layout uses a bundled stand-in: Liberation Serif for
+Times New Roman and Liberation Sans for Arial (metric-compatible, so lines break in the same places), Carlito for
+Calibri, otherwise a face of the same kind (serif or sans serif). The Design Checker still lists the missing fonts.
+
+## Not imported
+
+Reported in the import's warnings when present: WordArt, embedded fonts, gradient and pattern fills, Publisher 97
+files, shapes that belong to no page, and autoshapes with no newpub equivalent.

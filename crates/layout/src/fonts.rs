@@ -89,6 +89,67 @@ pub const BUNDLED: &[(&str, &[u8])] = bundled![
 /// Families tried, in order, for characters the requested font lacks.
 pub const FALLBACK_FAMILIES: &[&str] = &["Carlito", "DejaVu Sans", "Liberation Sans"];
 
+/// Bundled stand-ins for common fonts that are not installed: metric-compatible ones first (Liberation for Times
+/// New Roman and Arial, Carlito for Calibri), so lines break where they would with the real font; otherwise a
+/// face of the same kind (serif or sans serif).
+pub fn substitutes(family: &str) -> &'static [&'static str] {
+    const SERIF: &[&str] = &["Liberation Serif"];
+    const SANS: &[&str] = &["Liberation Sans"];
+    const CALIBRI: &[&str] = &["Carlito"];
+    let f = family.to_ascii_lowercase();
+    let has = |words: &[&str]| words.iter().any(|w| f.contains(w));
+    if has(&["calibri"]) {
+        CALIBRI
+    } else if has(&[
+        "sans",
+        "arial",
+        "helvetica",
+        "arimo",
+        "verdana",
+        "tahoma",
+        "trebuchet",
+        "segoe",
+        "gothic",
+        "frutiger",
+        "futura",
+        "univers",
+        "myriad",
+        "lucida",
+        "corbel",
+        "candara",
+        "franklin",
+    ]) {
+        SANS
+    } else if has(&[
+        "times",
+        "tinos",
+        "serif",
+        "roman",
+        "georgia",
+        "garamond",
+        "cambria",
+        "palatino",
+        "book",
+        "century",
+        "baskerville",
+        "caslon",
+        "bodoni",
+        "didot",
+        "minion",
+        "rockwell",
+        "elephant",
+        "constantia",
+        "perpetua",
+        "goudy",
+        "sylfaen",
+        "cooper",
+    ]) {
+        SERIF
+    } else {
+        &[]
+    }
+}
+
 struct Inner {
     faces: Vec<Arc<Face>>,
     by_db: HashMap<fontdb::ID, FaceId>,
@@ -161,6 +222,7 @@ impl FontStore {
             return id;
         }
         let mut candidates: Vec<&str> = vec![family];
+        candidates.extend(substitutes(family));
         candidates.extend(FALLBACK_FAMILIES);
         let mut found = None;
         for fam in candidates {

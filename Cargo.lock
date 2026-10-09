@@ -2543,8 +2543,10 @@ name = "newpub-io-pub"
 version = "0.2.0"
 dependencies = [
  "cfb",
+ "miniz_oxide 0.8.9",
  "newpub-core",
  "serde",
+ "serde_json",
  "thiserror 2.0.21",
 ]
 

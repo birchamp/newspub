@@ -181,13 +181,21 @@ output consistent. Imposition (booklet, n-up) maps pages onto sheets as transfor
 build, and the full journey suite. Each OS uploads `journey-results-<os>` (results.json, screenshots, PDFs). A final job merges
 the three result sets with per-OS job status, runs `tools/dashboard`, uploads it as an artifact, and deploys it to GitHub Pages.
 
-## 9. .pub import research track
+## 9. .pub import (`newpub-io-pub`)
 
-Risk: **high**. The format is undocumented. Known facts: it is an OLE compound file with `Contents`, `Quill/QuillSub/CONTENTS`
-(text, in a Word-like piece table), `Escher/*` (Office Drawing records), and an `EnvelopeData` stream.
-libmspub (MPL-2.0, LibreOffice) documents much of the structure through its source. **We may read it to understand the format but must
-not copy its code**, because MPL is file-level copyleft. Plan: PI-01 (container and stream report) → PI-02 (text) → PI-03 (geometry and
-images) → PI-04 (formatting). Stop and ask a human if the approach needs code that would be derived from libmspub.
+The format is undocumented. libmspub (MPL-2.0, LibreOffice) is read to learn it, never copied or translated: MPL is
+file-level copyleft. The format notes are in crates/io-pub/FORMAT-NOTES.md.
+
+- Two readers produce one format-neutral intermediate form (`ir.rs`):
+  - `v2002.rs` reads Publisher 2002+: the `Contents` chunk directory plus the Escher drawing records.
+  - `legacy.rs` reads Publisher 98/2000: the fixed-layout `Contents` records.
+- Both read the shared Quill text stream (`quill.rs`).
+- `build.rs` turns the intermediate form into a newpub `Document`: pages, text boxes and their chains, formatting,
+  pictures (decoded by the engine, WMF/EMF through `newpub-io-metafile`), shapes, groups and tables.
+- What is not imported goes into the import report's warnings.
+- Opening a `.pub` anywhere in the app runs `SessionAction::Open`, which imports it as a new, unsaved publication.
+- Journeys J-PI-001..007 use Apache POI's Publisher samples. Expected positions come from LibreOffice's rendering of
+  the same files.
 
 ## 10. Conventions
 
@@ -216,6 +224,7 @@ images) → PI-04 (formatting). Stop and ask a human if the approach needs code 
 | 2026-10-09 | `Field::Date(DateFormat)` (`NEWPUB_TODAY` pins the date in journeys); app `view` query reports `text_selection`; runner allows `expect_files`/`expect_zip` in UI journeys | Insert tab date field, Find Next selecting text, UI-EX-001 |
 | 2026-10-09 | Query `PageObjectKinds{page}` (kinds of every object on a page, group members included) | .pub import journeys (J-PI-005, J-PI-006) |
 | 2026-10-09 | `Session::render_page_preview(page, dpi, cmd)` (renders a copy with one command applied); colour scheme "Navy"; built-in templates use scheme colours and fonts ("+major"/"+minor") with the Navy and Editorial schemes | Gallery live preview (UI-PD-002); schemes restyle templates |
+| 2026-10-09 | Layout `fonts::substitutes`: missing Windows fonts resolve to bundled stand-ins (Liberation for Times New Roman/Arial, Carlito for Calibri, else by kind) before the generic fallback; `char_box` also reports `page_x`/`page_baseline`; `.pub` import rewritten (v2002 + Publisher 98/2000 readers over one IR) | Real .pub import (PI-01..PI-07) |
 
 ## 12. Predecessor survey (NewsPub, Electron + React + TS) and what we adopt
 

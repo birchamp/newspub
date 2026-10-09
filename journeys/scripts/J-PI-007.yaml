@@ -9,7 +9,7 @@ steps:
   - expect: {query: {q: char_attrs, target: $a, at: 0}, path: /bold, equals: true}
   - expect: {query: {q: find, text: "This is the second page"}, path: /0/story, gt: 0, as: b}
   - expect: {query: {q: char_page, target: $b, at: 0}, equals: 1}
-  - expect: {query: {q: char_box, target: $b, at: 0}, path: /x, approx: [65.2, 4]}
+  - expect: {query: {q: char_box, target: $b, at: 0}, path: /page_x, approx: [65.2, 4]}
   - import_pub: {path: fixtures/pub/Sample2000.pub}
   - expect: {query: {q: find, text: "This is in bold and italic"}, path: /0/story, gt: 0, as: c}
   - expect: {query: {q: char_attrs, target: $c, at: 0}, path: /size, approx: [20, 0.01]}

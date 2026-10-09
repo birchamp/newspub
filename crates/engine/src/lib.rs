@@ -715,6 +715,17 @@ impl Session {
                 match (q, frame) {
                     (CharFrame { .. }, Some(f)) => json!(f),
                     (CharPage { .. }, Some(f)) => json!(self.doc.page_of(f)),
+                    // Text in a table cell is shown on the page of its table.
+                    (CharPage { .. }, None) => {
+                        let shown = l.stories.get(&sid).is_some_and(|s| s.overflow_at.is_none_or(|o| o > *at));
+                        let table = self.doc.objects.values().find(|o| {
+                            matches!(&o.kind, ObjectKind::Table(t) if t.cells.iter().any(|c| c.story == sid && !c.covered))
+                        });
+                        match table {
+                            Some(t) if shown && *at < self.doc.story(sid)?.len() => json!(self.doc.page_of(t.id)),
+                            _ => Value::Null,
+                        }
+                    }
                     _ => Value::Null,
                 }
             }
@@ -757,9 +768,12 @@ impl Session {
                                 .iter()
                                 .find(|g| g.char_index == *at && !g.generated && !g.text_range.is_empty())
                             {
-                                return Ok(
-                                    json!({"frame": f, "page": self.doc.page_of(f), "x": g.x, "baseline": g.y, "width": g.advance, "line": li}),
-                                );
+                                // x and baseline are relative to the frame; page_x and page_baseline to the page.
+                                let o = self.doc.object(f)?.rect;
+                                return Ok(json!({
+                                    "frame": f, "page": self.doc.page_of(f), "x": g.x, "baseline": g.y,
+                                    "page_x": o.x + g.x, "page_baseline": o.y + g.y, "width": g.advance, "line": li,
+                                }));
                             }
                         }
                     }

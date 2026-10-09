@@ -27,3 +27,8 @@ steps:
   - export_pdf: {path: metafiles.pdf}
   - expect_pdf: {file: metafiles.pdf, images: 0, ink: [{page: 1, rect: [80, 80, 50, 50], min: 0.95}, {page: 1, rect: [80, 224, 50, 50], min: 0.95}]}
   - expect_roundtrip: {}
+  # a WMF with no placeable header and a flipped y axis (as embedded in Publisher files) shows the whole picture
+  - new_document: {width: 4in, height: 4in}
+  - insert_picture: {path: fixtures/flipped-window.wmf, page: 0, x: 0, y: 0, width: 4in, height: 4in}
+  - export_png: {page: 0, dpi: 30, path: flipped.png}
+  - expect_image: {file: flipped.png, format: png, width: 120, height: 120, pixels: [{at: [60, 60], rgb: [255, 226, 158], tol: 12}, {at: [90, 90], rgb: [255, 226, 158], tol: 12}, {at: [15, 100], rgb: [255, 255, 255], tol: 6}]}

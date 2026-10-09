@@ -191,8 +191,10 @@ pub fn convert(bytes: &[u8]) -> Result<String, MetafileError> {
                 dc.vp_ext = dc.win_ext;
             }
         } else {
-            dc.vp_org = dc.win_org;
-            dc.vp_ext = dc.win_ext;
+            // No placeable header: the window becomes a positive output space, so a negative extent (a flipped
+            // axis, common in pictures embedded in other documents) maps the right way up.
+            dc.vp_org = (0.0, 0.0);
+            dc.vp_ext = (dc.win_ext.0.abs(), dc.win_ext.1.abs());
         }
     }
     let (view, wdim, hdim) = match frame {
@@ -200,9 +202,8 @@ pub fn convert(bytes: &[u8]) -> Result<String, MetafileError> {
             ((l, t, rr - l, b - t), format!("{:.4}in", (rr - l).abs() / inch), format!("{:.4}in", (b - t).abs() / inch))
         }
         None => {
-            let (x, y) = dc.win_org;
-            let (ew, eh) = dc.win_ext;
-            ((x, y, ew, eh), format!("{:.3}px", ew.abs()), format!("{:.3}px", eh.abs()))
+            let (ew, eh) = (dc.win_ext.0.abs(), dc.win_ext.1.abs());
+            ((0.0, 0.0, ew, eh), format!("{ew:.3}px"), format!("{eh:.3}px"))
         }
     };
     if !(view.2.abs() > 0.0 && view.3.abs() > 0.0) {
