@@ -68,7 +68,6 @@ impl NewpubApp {
     }
 
     /// Where inserted material (fields, special characters) goes: the caret, else the end of the story.
-    #[allow(dead_code)] // used by the Insert and Mailings tabs once they insert at the caret
     pub(crate) fn insertion_point(&self, frame: Id) -> usize {
         self.caret_in(frame).map(|c| c.range().start).unwrap_or_else(|| self.story_len_of(frame))
     }

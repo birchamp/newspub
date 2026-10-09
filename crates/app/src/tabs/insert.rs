@@ -122,8 +122,7 @@ impl NewpubApp {
 
     /// Where fields and symbols go in `frame`'s story: its end (a caret position would replace this).
     fn insert_at(&self, frame: Id) -> usize {
-        let doc = self.session.doc();
-        doc.story_of(frame).ok().and_then(|s| doc.story(s).ok()).map(|s| s.len()).unwrap_or(0)
+        self.insertion_point(frame)
     }
 
     /// The page area inside the margins.

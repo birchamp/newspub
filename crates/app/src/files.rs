@@ -264,18 +264,6 @@ fn confirm_row(ui: &mut egui::Ui, confirm: &str) -> (bool, bool) {
 }
 
 impl NewpubApp {
-    /// Open the Save dialog.
-    #[allow(dead_code)]
-    pub(crate) fn open_save_dialog(&mut self) {
-        self.dialog = Dialog::Save { path: "publication.npub".into() };
-    }
-
-    /// Open the Open dialog.
-    #[allow(dead_code)]
-    pub(crate) fn open_open_dialog(&mut self) {
-        self.dialog = Dialog::Open { path: "publication.npub".into() };
-    }
-
     /// Run the export described by the dialog state; true on success.
     fn run_export(&mut self, st: &ExportState) -> bool {
         use ExportFormat as F;

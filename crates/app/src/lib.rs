@@ -134,9 +134,7 @@ pub struct NewpubApp {
     clip_objects: Option<String>,
     /// Fonts and styles installed into the egui context.
     themed: bool,
-    #[allow(dead_code)] // read by the tab modules as they land
     pub(crate) insert_ui: tabs::insert::InsertState,
-    #[allow(dead_code)]
     pub(crate) design_ui: tabs::design::DesignState,
     #[allow(dead_code)]
     pub(crate) mailings_ui: tabs::mailings::MailingsState,
