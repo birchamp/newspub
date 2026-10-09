@@ -118,10 +118,10 @@ pub fn show(app: &mut NewpubApp, ctx: &egui::Context, st: &mut PrintState) -> bo
         labeled_field(ui, "Pages", &mut st.pages);
         ui.weak("Pages: leave empty for all, or e.g. 2-3 or 1,3-4");
         ui.horizontal(|ui| {
-            if ui.button("Send to Printer").clicked() {
+            if crate::widgets::primary_button(ui, "Send to Printer").clicked() {
                 close = send(app, st);
             }
-            if ui.button("Cancel").clicked() {
+            if crate::widgets::secondary_button(ui, "Cancel").clicked() {
                 close = true;
             }
         });

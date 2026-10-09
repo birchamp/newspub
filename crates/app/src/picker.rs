@@ -68,10 +68,10 @@ pub fn show(app: &mut NewpubApp, ctx: &egui::Context, st: &mut PickerState) -> b
         }
         ui.separator();
         ui.horizontal(|ui| {
-            if ui.button("Create").clicked() {
+            if crate::widgets::primary_button(ui, "Create").clicked() {
                 close = create(app, st);
             }
-            if ui.button("Cancel").clicked() {
+            if crate::widgets::secondary_button(ui, "Cancel").clicked() {
                 close = true;
             }
         });

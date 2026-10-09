@@ -26,6 +26,8 @@ pub struct ViewState {
     pub units: Units,
     /// Text frame being edited from the keyboard.
     pub editing: Option<Id>,
+    /// Show text frame and shape boundaries on the canvas.
+    pub boundaries: bool,
     /// Egui id of the canvas widget.
     pub canvas_id: Option<egui::Id>,
     /// Texture of the second page of a spread: (texture, revision, page, scale key).
@@ -39,6 +41,7 @@ impl Default for ViewState {
             spread: false,
             units: Units::In,
             editing: None,
+            boundaries: true,
             canvas_id: None,
             other_tex: None,
         }
@@ -171,18 +174,8 @@ impl NewpubApp {
         self.view.canvas_id.is_some_and(|id| ctx.memory(|m| m.has_focus(id)))
     }
 
-    /// Ribbon controls of this module: fit, actual size, spread, units.
-    pub(crate) fn view_controls(&mut self, ui: &mut egui::Ui) {
-        if ui.button("Actual size").clicked() {
-            self.actual_size();
-        }
-        if ui.button("Fit page").clicked() {
-            self.fit_page();
-        }
-        if ui.selectable_label(self.view.spread, "Two-page spread").clicked() {
-            self.view.spread = !self.view.spread;
-            self.reset_scroll();
-        }
+    /// The measurement-units choice (status bar).
+    pub(crate) fn units_combo(&mut self, ui: &mut egui::Ui) {
         let mut units = self.view.units;
         let combo = egui::ComboBox::from_id_salt("units").selected_text(units_name(units)).show_ui(ui, |ui| {
             for u in ALL_UNITS {
@@ -254,7 +247,6 @@ impl NewpubApp {
         }
 
         let resp = ui.interact(cv, id, Sense::click_and_drag());
-        let resp = resp.on_hover_text("Page canvas");
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Page canvas"));
         if ctx.memory(|m| m.has_focus(id)) {
             // Arrow keys and Escape belong to the canvas while it is focused.

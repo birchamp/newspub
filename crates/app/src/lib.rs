@@ -4,11 +4,16 @@
 mod a11y;
 mod dup;
 mod freeform;
+mod icons;
 mod pane;
 mod picker;
 mod print;
 mod recent;
+mod shell;
+mod tabs;
+pub mod theme;
 mod view;
+mod widgets;
 
 use egui::{Color32, Pos2, Rect as ERect, Stroke, TextureHandle, Vec2};
 use newpub_engine::core::{
@@ -71,7 +76,7 @@ pub struct NewpubApp {
     pub zoom: f32,
     pub dialog: Dialog,
     pub status: String,
-    texture: Option<(TextureHandle, u64, usize, u32)>,
+    pub(crate) texture: Option<(TextureHandle, u64, usize, u32)>,
     /// Canvas page origin on screen (top-left of the page) from the last frame.
     page_origin: Pos2,
     drag_start: Option<Pos2>,
@@ -103,6 +108,10 @@ pub struct NewpubApp {
     pane: pane::PaneState,
     /// Freeform tool and point editing (see freeform.rs).
     freeform: freeform::FreeformState,
+    /// Active ribbon tab.
+    ribbon_tab: shell::RibbonTab,
+    /// Fonts and styles installed into the egui context.
+    themed: bool,
 }
 
 /// Text buffers of the object and format panels.
@@ -150,6 +159,8 @@ impl NewpubApp {
             view: view::ViewState::default(),
             pane: pane::PaneState::default(),
             freeform: freeform::FreeformState::default(),
+            ribbon_tab: shell::RibbonTab::default(),
+            themed: false,
         }
     }
 
@@ -215,7 +226,7 @@ impl NewpubApp {
         self.end_run(key, out.is_some());
     }
 
-    fn zoom_step(&mut self, dir: i32) {
+    pub(crate) fn zoom_step(&mut self, dir: i32) {
         let z = self.zoom;
         let next = if dir > 0 {
             ZOOM_STOPS.iter().copied().find(|s| *s > z + 1e-4).unwrap_or(ZOOM_STOPS[ZOOM_STOPS.len() - 1])
@@ -296,21 +307,41 @@ impl NewpubApp {
     /// Draws the whole UI into the root `ui`. Called by eframe and by the UI-journey harness.
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
+        if !std::mem::replace(&mut self.themed, true) {
+            // Fonts registered now are usable from the next frame on.
+            theme::install(&ctx);
+            ctx.set_theme(egui::Theme::Light);
+            ctx.request_repaint();
+            return;
+        }
         if std::mem::take(&mut self.startup_picker) {
             self.open_picker();
         }
         self.sync_units();
         self.shortcuts(&ctx);
-        egui::Panel::top("ribbon").show(ui, |ui| self.ribbon(ui));
-        egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
-        egui::Panel::left("pages").resizable(false).default_size(90.0).show(ui, |ui| self.page_navigator(ui));
-        egui::Panel::right("format").resizable(false).default_size(190.0).show(ui, |ui| self.format_panel(ui));
-        egui::CentralPanel::default().show(ui, |ui| self.canvas(ui));
+        let p = theme::palette(&ctx);
+        let bar = |fill| egui::Frame::new().fill(fill).stroke(Stroke::new(1.0, p.border));
+        egui::Panel::top("header").exact_size(48.0).frame(egui::Frame::NONE).show(ui, |ui| self.header(ui));
+        egui::Panel::top("ribbon")
+            .frame(bar(p.surface).inner_margin(egui::Margin { left: 4, right: 4, top: 2, bottom: 4 }))
+            .show(ui, |ui| self.ribbon(ui));
+        egui::Panel::bottom("status").exact_size(30.0).frame(bar(p.surface)).show(ui, |ui| self.status_bar(ui));
+        egui::Panel::left("pages")
+            .resizable(false)
+            .exact_size(132.0)
+            .frame(bar(p.surface).inner_margin(egui::Margin::symmetric(10, 10)))
+            .show(ui, |ui| self.page_navigator(ui));
+        egui::Panel::right("format")
+            .resizable(false)
+            .exact_size(272.0)
+            .frame(bar(p.app_bg).inner_margin(egui::Margin::symmetric(10, 10)))
+            .show(ui, |ui| self.format_panel(ui));
+        egui::CentralPanel::default().frame(egui::Frame::new().fill(p.pasteboard)).show(ui, |ui| self.canvas(ui));
         self.dialogs(&ctx);
         self.selection_pane(&ctx);
     }
 
-    fn open_picker(&mut self) {
+    pub(crate) fn open_picker(&mut self) {
         self.dialog = Dialog::Picker(picker::PickerState::new(self));
     }
 
@@ -413,7 +444,7 @@ impl NewpubApp {
         }
     }
 
-    fn reorder(&mut self, op: ZOp) {
+    pub(crate) fn reorder(&mut self, op: ZOp) {
         let ids = self.selection.clone();
         if ids.is_empty() {
             return;
@@ -441,75 +472,6 @@ impl NewpubApp {
         self.selection = vec![next];
     }
 
-    fn ribbon(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal_wrapped(|ui| {
-            if ui.button("New").clicked() {
-                self.open_picker();
-            }
-            if ui.button("Open").clicked() {
-                self.dialog = Dialog::Open { path: String::new() };
-            }
-            if ui.button("Save").clicked() {
-                let path = self
-                    .session
-                    .path
-                    .as_ref()
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "publication.npub".into());
-                self.dialog = Dialog::Save { path };
-            }
-            if ui.button("Export PDF").clicked() {
-                self.dialog = Dialog::ExportPdf { path: "publication.pdf".into(), crop_marks: false, booklet: false };
-            }
-            if ui.button("Print").clicked() {
-                self.dialog = Dialog::Print(print::PrintState::new());
-            }
-            ui.separator();
-            if ui.add_enabled(self.session.can_undo(), egui::Button::new("Undo")).clicked() {
-                self.act(SessionAction::Undo);
-            }
-            if ui.add_enabled(self.session.can_redo(), egui::Button::new("Redo")).clicked() {
-                self.act(SessionAction::Redo);
-            }
-            ui.separator();
-            for (tool, label) in Tool::ALL {
-                if ui.selectable_label(self.tool == tool, label).clicked() {
-                    self.tool = tool;
-                }
-            }
-            self.freeform_controls(ui);
-            if ui.selectable_label(self.pane.open, "Selection Pane").clicked() {
-                self.pane.open = !self.pane.open;
-            }
-            if ui.button("Picture").clicked() {
-                self.dialog = Dialog::InsertPicture { path: String::new() };
-            }
-            ui.separator();
-            if ui.button("Add Page").clicked() {
-                let at = self.page + 1;
-                if self.act(Command::InsertPages { at: Some(at), count: 1, master: None }).is_some() {
-                    self.page = at;
-                }
-            }
-            if ui.button("Delete Page").clicked() {
-                let p = self.page;
-                self.act(Command::DeletePage { page: p });
-            }
-            if !self.selection.is_empty() && ui.button("Delete Object").clicked() {
-                let ids = std::mem::take(&mut self.selection);
-                self.act(Command::DeleteObjects { ids });
-            }
-            ui.separator();
-            if ui.button("Zoom In").clicked() {
-                self.zoom_step(1);
-            }
-            if ui.button("Zoom Out").clicked() {
-                self.zoom_step(-1);
-            }
-            self.view_controls(ui);
-        });
-    }
-
     fn page_navigator(&mut self, ui: &mut egui::Ui) {
         ui.heading("Pages");
         egui::ScrollArea::vertical().show(ui, |ui| {
@@ -530,9 +492,10 @@ impl NewpubApp {
         }
         let Some(frame) = self.selected_text_frame() else {
             if first.is_none() {
-                ui.label("Select a text box to format text.");
+                widgets::hint(ui, "Select a text box to format text.");
+            } else {
+                widgets::section(ui, icons::RULER, "Position and size", |ui| self.object_panel(ui));
             }
-            self.object_panel(ui);
             return;
         };
         let doc = self.session.doc();
@@ -604,8 +567,8 @@ impl NewpubApp {
                 }
             }
         });
-        ui.separator();
-        self.object_panel(ui);
+        ui.add_space(8.0);
+        widgets::section(ui, icons::RULER, "Position and size", |ui| self.object_panel(ui));
         let overflow = self
             .session
             .query(&newpub_engine::Query::Overflow { target: frame })
@@ -672,18 +635,6 @@ impl NewpubApp {
             }
             self.fields.columns = text;
         }
-    }
-
-    fn status_bar(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            ui.label(format!("Page {} of {}", self.page + 1, self.session.doc().pages.len()));
-            ui.separator();
-            ui.label(format!("Zoom {:.0}%", self.zoom * 100.0));
-            if !self.status.is_empty() {
-                ui.separator();
-                ui.label(&self.status);
-            }
-        });
     }
 
     fn page_texture(&mut self, ctx: &egui::Context, ppp: f32) -> Option<TextureHandle> {
@@ -954,7 +905,7 @@ impl NewpubApp {
                     ui.checkbox(crop_marks, "Crop marks");
                     ui.checkbox(booklet, "Booklet");
                     ui.horizontal(|ui| {
-                        if ui.button("Export").clicked() {
+                        if widgets::primary_button(ui, "Export").clicked() {
                             let options = PdfOptions {
                                 crop_marks: *crop_marks,
                                 bleed: *crop_marks,
@@ -972,7 +923,7 @@ impl NewpubApp {
                                 close = true;
                             }
                         }
-                        if ui.button("Cancel").clicked() {
+                        if widgets::secondary_button(ui, "Cancel").clicked() {
                             close = true;
                         }
                     });
@@ -982,14 +933,14 @@ impl NewpubApp {
                 egui::Window::new("Save Publication").collapsible(false).show(ctx, |ui| {
                     labeled_field(ui, "File name", path);
                     ui.horizontal(|ui| {
-                        if ui.button("Save File").clicked()
+                        if widgets::primary_button(ui, "Save File").clicked()
                             && self.act(SessionAction::Save { path: path.clone() }).is_some()
                         {
                             self.remember_recent();
                             self.status = format!("Saved {path}");
                             close = true;
                         }
-                        if ui.button("Cancel").clicked() {
+                        if widgets::secondary_button(ui, "Cancel").clicked() {
                             close = true;
                         }
                     });
@@ -1014,7 +965,7 @@ impl NewpubApp {
                         }
                     }
                     ui.horizontal(|ui| {
-                        if ui.button("Open File").clicked()
+                        if widgets::primary_button(ui, "Open File").clicked()
                             && self.act(SessionAction::Open { path: path.clone() }).is_some()
                         {
                             self.remember_recent();
@@ -1022,7 +973,7 @@ impl NewpubApp {
                             self.selection.clear();
                             close = true;
                         }
-                        if ui.button("Cancel").clicked() {
+                        if widgets::secondary_button(ui, "Cancel").clicked() {
                             close = true;
                         }
                     });
@@ -1032,7 +983,7 @@ impl NewpubApp {
                 egui::Window::new("Insert Picture").collapsible(false).show(ctx, |ui| {
                     labeled_field(ui, "Picture file", path);
                     ui.horizontal(|ui| {
-                        if ui.button("Insert").clicked() {
+                        if widgets::primary_button(ui, "Insert").clicked() {
                             let a = SessionAction::InsertPicture {
                                 path: path.clone(),
                                 page: Some(self.page),
@@ -1048,7 +999,7 @@ impl NewpubApp {
                                 close = true;
                             }
                         }
-                        if ui.button("Cancel").clicked() {
+                        if widgets::secondary_button(ui, "Cancel").clicked() {
                             close = true;
                         }
                     });

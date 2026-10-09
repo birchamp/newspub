@@ -22,7 +22,7 @@ impl NewpubApp {
         let mut toggle = None;
         let mut start_rename = false;
         let mut commit = None;
-        let pos = ctx.content_rect().right_top() + egui::vec2(-300.0, 120.0);
+        let pos = ctx.content_rect().right_top() + egui::vec2(-560.0, 230.0);
         egui::Window::new("Objects").default_pos(pos).show(ctx, |ui| {
             ui.heading("Objects on this page");
             for (id, label, hidden) in &rows {
