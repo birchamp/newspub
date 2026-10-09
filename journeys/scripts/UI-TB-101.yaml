@@ -1,0 +1,68 @@
+id: UI-TB-101
+title: Table editing — type in cells, Tab between cells, merge and split, insert and delete rows and columns, sizes, table style, cell fill
+covers: [UI-20]
+ui: true
+steps:
+  # a 2 x 2 table at the top margin: cells are 270 pt wide and 24 pt tall, starting at (36, 36)
+  - click: {label: "Insert"}
+  - click: {label: "Table"}
+  - fill: {label: "Rows", text: "2"}
+  - fill: {label: "Columns", text: "2"}
+  - click: {label: "Insert Table"}
+  - expect: {query: {q: page_objects, page: 0}, path: /0, gt: 0, as: t}
+  # click into a cell and type; Tab moves to the next cell
+  - click_at: [171, 48]
+  - click_at: [171, 48]
+  - expect: {query: {q: view}, path: /table_cell, equals: [0, 0]}
+  - type: {text: "Name"}
+  - key: {key: "Tab"}
+  - type: {text: "Phone"}
+  - expect: {query: {q: view}, path: /table_cell, equals: [0, 1]}
+  - expect: {query: {q: table_cell, table: $t, row: 0, col: 0}, path: /story, gt: 0, as: c00}
+  - expect: {query: {q: story_text, target: $c00}, equals: "Name"}
+  - expect: {query: {q: table_cell, table: $t, row: 0, col: 1}, path: /story, gt: 0, as: c01}
+  - expect: {query: {q: story_text, target: $c01}, equals: "Phone"}
+  # Tab in the last cell adds a row
+  - key: {key: "Tab"}
+  - type: {text: "Ann"}
+  - key: {key: "Tab"}
+  - type: {text: "555-0100"}
+  - key: {key: "Tab"}
+  - expect: {query: {q: table, id: $t}, path: /rows, equals: 3}
+  - expect: {query: {q: view}, path: /table_cell, equals: [2, 0]}
+  # Shift-click extends a cell selection; merge and split it
+  - click_at: [171, 48]
+  - click_at: {at: [441, 48], shift: true}
+  - expect: {query: {q: view}, path: /table_selection, equals: [0, 0, 1, 2]}
+  - click: {label: "Merge Cells"}
+  - expect: {query: {q: table_cell, table: $t, row: 0, col: 0}, path: /colspan, equals: 2}
+  - click: {label: "Split Cell"}
+  - expect: {query: {q: table_cell, table: $t, row: 0, col: 0}, path: /colspan, equals: 1}
+  # sizes of the current cell's column and row
+  - click_at: [171, 72]
+  - expect: {query: {q: view}, path: /table_cell, equals: [1, 0]}
+  - fill: {label: "Column width", text: "2in"}
+  - expect: {query: {q: table, id: $t}, path: /col_widths/0, approx: [144, 0.5]}
+  - fill: {label: "Row height", text: "0.5in"}
+  - expect: {query: {q: table, id: $t}, path: /row_heights/1, approx: [36, 0.5]}
+  # rows and columns from the Format panel act at the current cell
+  - click: {label: "Insert Row Below"}
+  - expect: {query: {q: table, id: $t}, path: /rows, equals: 4}
+  - click: {label: "Delete Row"}
+  - expect: {query: {q: table, id: $t}, path: /rows, equals: 3}
+  - click: {label: "Insert Column Right"}
+  - expect: {query: {q: table, id: $t}, path: /cols, equals: 3}
+  - click: {label: "Delete Column"}
+  - expect: {query: {q: table, id: $t}, path: /cols, equals: 2}
+  - click: {label: "Insert Row Above"}
+  - click: {label: "Insert Column Left"}
+  - expect: {query: {q: table, id: $t}, path: /rows, equals: 4}
+  - expect: {query: {q: table, id: $t}, path: /cols, equals: 3}
+  # table style, and a fill for the current cell
+  - click: {label: "Table style"}
+  - click: {label: "Harvest"}
+  - expect: {query: {q: table, id: $t}, path: /format, equals: "Harvest"}
+  - expect: {query: {q: view}, path: /table_cell/0, gte: 0, as: row}
+  - expect: {query: {q: view}, path: /table_cell/1, gte: 0, as: col}
+  - fill: {label: "Cell fill", text: "#FFEEAA"}
+  - expect: {query: {q: table_cell, table: $t, row: $row, col: $col}, path: /fill, not_equals: null}

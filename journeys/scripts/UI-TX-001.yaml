@@ -1,0 +1,40 @@
+id: UI-TX-001
+title: Text flow — import a text file, link an overflowing text box to another, break the link, flow onto new pages
+covers: [UI-19]
+ui: true
+steps:
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 1in], to: [3.5in, 3in]}
+  - expect: {query: {q: page_objects, page: 0}, path: /0, gt: 0, as: a}
+  # Insert > Text File puts a file's text into the selected text box
+  - click: {label: "Insert"}
+  - click: {label: "Text File"}
+  - fill: {label: "Text file", text: "fixtures/long-text.txt"}
+  - click: {label: "Insert Text"}
+  - expect: {query: {q: story_text, target: $a}, starts_with: "New mayor library hall"}
+  - expect: {query: {q: overflow, target: $a}, equals: true}
+  - click: {label: "Home"}
+  - click: {label: "Text Box"}
+  - drag: {from: [4in, 1in], to: [7in, 5in]}
+  - expect: {query: {q: page_objects, page: 0}, path: /1, gt: 0, as: b}
+  - key: {key: "Escape"}
+  # link: select the first box, Link to Next Box, then click the box the story continues in
+  - click_at: [2in, 2in]
+  - expect: {query: {q: view}, path: /selection/0, equals: $a}
+  - click: {label: "Link to Next Box"}
+  - click_at: [5.5in, 3in]
+  - expect: {query: {q: story_frames, target: $a}, len: 2}
+  - expect: {query: {q: story_frames, target: $a}, path: /1, equals: $b}
+  - expect: {query: {q: frame_text, frame: $b}, len: {gt: 100}}
+  # break the link: the second box empties and the first overflows again
+  - click_at: [2in, 2in]
+  - click: {label: "Break Link"}
+  - expect: {query: {q: story_frames, target: $a}, len: 1}
+  - expect: {query: {q: frame_text, frame: $b}, equals: ""}
+  - expect: {query: {q: overflow, target: $a}, equals: true}
+  # flow the rest onto new pages
+  - click_at: [2in, 2in]
+  - click: {label: "Flow onto New Pages"}
+  - expect: {query: {q: overflow, target: $a}, equals: false}
+  - expect: {query: {q: page_count}, gt: 1}
+  - expect: {query: {q: story_frames, target: $a}, len: {gt: 1}}

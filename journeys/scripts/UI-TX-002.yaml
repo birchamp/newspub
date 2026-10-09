@@ -1,0 +1,21 @@
+id: UI-TX-002
+title: Type inside a shape; Clear Formatting removes character formatting from the selection
+covers: [UI-19]
+ui: true
+steps:
+  - click: {label: "Rectangle"}
+  - drag: {from: [1in, 1in], to: [4in, 3in]}
+  - expect: {query: {q: page_objects, page: 0}, path: /0, gt: 0, as: r}
+  # double-click a shape to type in it
+  - click_at: {at: [2.5in, 2in], double: true}
+  - type: {text: "Inside the box"}
+  - expect: {query: {q: object, id: $r}, path: /kind/story, gt: 0, as: st}
+  - expect: {query: {q: story_text, target: $st}, equals: "Inside the box"}
+  - expect: {query: {q: view}, path: /editing, equals: true}
+  # select all, make it bold, then Clear Formatting
+  - key: {key: "A", command: true}
+  - key: {key: "B", command: true}
+  - expect: {query: {q: char_attrs, target: $st, at: 0}, path: /bold, equals: true}
+  - click: {label: "Clear Formatting"}
+  - expect: {query: {q: char_attrs, target: $st, at: 0}, path: /bold, equals: false}
+  - expect: {query: {q: story_text, target: $st}, equals: "Inside the box"}

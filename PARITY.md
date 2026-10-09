@@ -264,3 +264,5 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | UI-16 | P0 | Unsaved changes are never lost silently: Save Changes / Don't Save / Cancel before closing the window, New and Open | UI-SV-001 | [ ] |
 | UI-17 | P1 | Drag and drop from the desktop: pictures are placed where dropped; publications and .pub files open | UI-DD-001 | [ ] |
 | UI-18 | P0 | AutoRecover in the app: after a crash the next start offers unsaved work back (per-window locked copies; discarded work is not offered) | UI-AR-001 | [ ] |
+| UI-19 | P0 | Text flow in the UI: link text boxes, break links, flow onto new pages, import a text file, type in shapes, clear formatting | UI-TX-001, UI-TX-002 | [ ] |
+| UI-20 | P0 | Table editing in the UI: type in cells, Tab, merge/split, insert/delete rows and columns, sizes, table style, cell fill | UI-TB-101 | [ ] |
