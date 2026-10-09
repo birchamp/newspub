@@ -8,6 +8,41 @@ use newpub_engine::core::Command;
 const THUMB_W: f32 = 84.0;
 
 impl NewpubApp {
+    /// Right-click menu of a page in the page list.
+    fn page_menu(&mut self, ui: &mut egui::Ui, i: usize, n: usize) {
+        let mut cmd = None;
+        let mut go = i;
+        if ui.add_enabled(i > 0, egui::Button::new("Move Page Up")).clicked() {
+            cmd = Some(Command::MovePage { from: i, to: i - 1 });
+            go = i - 1;
+        }
+        if ui.add_enabled(i + 1 < n, egui::Button::new("Move Page Down")).clicked() {
+            cmd = Some(Command::MovePage { from: i, to: i + 1 });
+            go = i + 1;
+        }
+        ui.separator();
+        if ui.button("Insert Page After").clicked() {
+            cmd = Some(Command::InsertPages { at: Some(i + 1), count: 1, master: None });
+            go = i + 1;
+        }
+        if ui.button("Duplicate Page").clicked() {
+            cmd = Some(Command::DuplicatePage { page: i });
+            go = i + 1;
+        }
+        if ui.add_enabled(n > 1, egui::Button::new("Delete Page")).clicked() {
+            cmd = Some(Command::DeletePage { page: i });
+            go = i.min(n - 2);
+        }
+        if let Some(c) = cmd {
+            ui.close();
+            if self.act(c).is_some() {
+                self.page = go;
+                self.selection.clear();
+                self.end_text_edit();
+            }
+        }
+    }
+
     pub(crate) fn page_navigator(&mut self, ui: &mut egui::Ui) {
         let p = widgets::pal(ui);
         ui.horizontal(|ui| {
@@ -39,6 +74,7 @@ impl NewpubApp {
                 let label = format!("Page {}", i + 1);
                 let on = self.page == i;
                 resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, &label));
+                resp.context_menu(|ui| self.page_menu(ui, i, n));
                 if !ui.is_rect_visible(rect) {
                     continue;
                 }

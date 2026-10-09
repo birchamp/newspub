@@ -7,6 +7,7 @@ mod dup;
 mod files;
 mod freeform;
 mod guard;
+mod guides_ui;
 mod icons;
 mod inspector;
 mod pages;
@@ -865,6 +866,17 @@ impl NewpubApp {
         if self.view.link_from.is_some() {
             resp.ctx.set_cursor_icon(egui::CursorIcon::Alias);
         }
+        // Over a guide (and no object), the pointer shows that the guide can be dragged.
+        if self.tool == Tool::Select
+            && let Some(p) = resp.hover_pos()
+            && self.hit(self.screen_to_page(p).0, self.screen_to_page(p).1).is_none()
+            && let Some(g) = self.guide_at(p)
+        {
+            resp.ctx.set_cursor_icon(match g.orientation {
+                newpub_engine::core::Orientation::Horizontal => egui::CursorIcon::ResizeVertical,
+                newpub_engine::core::Orientation::Vertical => egui::CursorIcon::ResizeHorizontal,
+            });
+        }
         if self.tool == Tool::Freeform {
             self.freeform_input(resp);
             return;
@@ -926,7 +938,14 @@ impl NewpubApp {
                             }
                             self.moving = Some(Vec2::ZERO);
                         }
-                        None => self.selection.clear(),
+                        // Objects come first; a guide is grabbed only where there is none.
+                        None => match self.guide_at(p) {
+                            Some(g) => {
+                                self.view.guide_drag =
+                                    Some(guides_ui::GuideDrag { id: Some(g.id), orientation: g.orientation });
+                            }
+                            None => self.selection.clear(),
+                        },
                     }
                 }
             }
@@ -936,6 +955,13 @@ impl NewpubApp {
             if let (Some(m), Some(a), Some(b)) = (self.moving.as_mut(), self.drag_start, self.drag_now) {
                 *m = (b - a) / self.zoom;
             }
+        }
+        if resp.drag_stopped() && self.view.guide_drag.is_some() {
+            let area = self.view.canvas_area;
+            self.drop_guide(resp.interact_pointer_pos().or(resp.ctx.pointer_latest_pos()), area);
+            self.drag_start = None;
+            self.drag_now = None;
+            return;
         }
         if resp.drag_stopped() {
             let (a, b) = (self.drag_start, self.drag_now.or(resp.interact_pointer_pos()));

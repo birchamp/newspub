@@ -30,6 +30,10 @@ pub struct ViewState {
     pub link_from: Option<Id>,
     /// The far corner (table, row, col) of a cell selection that starts at the caret's cell.
     pub cell_extent: Option<(Id, usize, usize)>,
+    /// A ruler guide being dragged.
+    pub guide_drag: Option<crate::guides_ui::GuideDrag>,
+    /// Screen rect of the page area (inside the rulers) from the last frame.
+    pub canvas_area: ERect,
     /// Show text frame and shape boundaries on the canvas.
     pub boundaries: bool,
     /// Document (file, page size) the view was last fitted to.
@@ -49,6 +53,8 @@ impl Default for ViewState {
             editing: None,
             link_from: None,
             cell_extent: None,
+            guide_drag: None,
+            canvas_area: ERect::NOTHING,
             boundaries: true,
             fit_key: None,
             canvas_id: None,
@@ -281,6 +287,7 @@ impl NewpubApp {
             self.object_nodes(ui, *p, page_rect(k).min);
         }
 
+        self.view.canvas_area = cv;
         let resp = ui.interact(cv, id, Sense::click_and_drag());
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Page canvas"));
         if resp.clicked() || resp.drag_started() {
@@ -330,6 +337,7 @@ impl NewpubApp {
             }
         }
         self.draw_guides(&painter);
+        self.draw_ruler_guides(&painter, cv, ctx.pointer_latest_pos().filter(|_| self.view.guide_drag.is_some()));
         self.draw_hover(&painter, ctx.pointer_hover_pos().filter(|p| cv.contains(*p)));
         self.draw_selection(&painter);
         self.draw_cell_selection(&painter);
@@ -367,10 +375,13 @@ impl NewpubApp {
         }
 
         // Rulers.
-        let hresp = ui.interact(hr, ui.id().with("hruler"), Sense::hover());
+        let hresp = ui.interact(hr, ui.id().with("hruler"), Sense::drag());
         hresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Horizontal ruler"));
-        let vresp = ui.interact(vr, ui.id().with("vruler"), Sense::hover());
+        let vresp = ui.interact(vr, ui.id().with("vruler"), Sense::drag());
         vresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Vertical ruler"));
+        // Drag a guide out of a ruler: the top ruler gives a horizontal guide, the left one a vertical guide.
+        self.ruler_drag(&hresp, newpub_engine::core::Orientation::Horizontal, cv);
+        self.ruler_drag(&vresp, newpub_engine::core::Orientation::Vertical, cv);
         let pointer = ctx.pointer_hover_pos();
         self.draw_ruler(ui, hr, true, first_origin.x, pointer.map(|p| p.x));
         self.draw_ruler(ui, vr, false, first_origin.y, pointer.map(|p| p.y));
