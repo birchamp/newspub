@@ -131,12 +131,14 @@ jobs:
       - name: macOS printer
         if: runner.os == 'macOS'
         run: |
-          brew install poppler
+          brew install poppler ghostscript
           # FileDevice can only be enabled in cups-files.conf; cupsd restarts on demand through launchd.
           echo "FileDevice Yes" | sudo tee -a /etc/cups/cups-files.conf
           sudo launchctl kickstart -k system/org.cups.cupsd || sudo launchctl stop org.cups.cupsd || true
           sleep 2
-          sudo lpadmin -p FileOut -E -v file:///private/tmp/newpub-print.pdf -m raw
+          # Raw queues are gone on macOS: use the system's generic PostScript driver.
+          sudo lpadmin -p FileOut -E -v file:///private/tmp/newpub-print.pdf \
+            -P /System/Library/Frameworks/ApplicationServices.framework/Versions/A/Frameworks/PrintCore.framework/Resources/Generic.ppd
           sudo lpadmin -d FileOut
           lpstat -t || true
       - name: real print
@@ -155,9 +157,13 @@ jobs:
             exit 1
           fi
           ls -l "$out"
-          head -c 5 "$out" | grep -q '%PDF-'
+          head -c 16 "$out"; echo
           if [ "$RUNNER_OS" = macOS ]; then
-            pdftotext "$out" - | tee /dev/stderr | grep -q "Printed by newpub"
+            # The generic driver spools PostScript (or PDF): either way the printed text must be there.
+            if head -c 4 "$out" | grep -q '%!'; then ps2pdf "$out" "$out.pdf"; else cp "$out" "$out.pdf"; fi
+            pdftotext "$out.pdf" - | tee /dev/stderr | grep -q "Printed by newpub"
+          else
+            head -c 5 "$out" | grep -q '%PDF-'
           fi
       - uses: actions/download-artifact@v4
         if: runner.os == 'Windows'
