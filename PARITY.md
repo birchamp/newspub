@@ -195,14 +195,14 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 
 | ID | P | Feature | Journeys | Done |
 |----|---|---------|----------|------|
-| PI-01 | P2 | Open .pub container (OLE CFB); report streams; reject non-Publisher and damaged files gracefully | J-PI-001 | [ ] |
-| PI-02 | P1 | Import each story into its own text box on its own page | J-PI-002 | [ ] |
-| PI-03 | P1 | Import page size and orientation, page count, and text box positions | J-PI-003 | [ ] |
-| PI-04 | P1 | Import character and paragraph formatting (fonts, sizes, bold/italic, spacing) | J-PI-004 | [ ] |
-| PI-05 | P1 | Import pictures and shapes | J-PI-005 | [ ] |
-| PI-06 | P2 | Import tables | J-PI-006 | [ ] |
-| PI-07 | P1 | Import files from Publisher 98, 2000, 2003 and 2010+ | J-PI-007 | [ ] |
-| PI-08 | P0 | Open a .pub file from the app (Open dialog, file picker, double-click) | UI-PI-001 | [ ] |
+| PI-01 | P2 | Open .pub container (OLE CFB); report streams; reject non-Publisher and damaged files gracefully | J-PI-001 | [x] |
+| PI-02 | P1 | Import each story into its own text box on its own page | J-PI-002 | [x] |
+| PI-03 | P1 | Import page size and orientation, page count, and text box positions | J-PI-003 | [x] |
+| PI-04 | P1 | Import character and paragraph formatting (fonts, sizes, bold/italic, spacing) | J-PI-004 | [x] |
+| PI-05 | P1 | Import pictures and shapes | J-PI-005 | [x] |
+| PI-06 | P2 | Import tables | J-PI-006 | [x] |
+| PI-07 | P1 | Import files from Publisher 98, 2000, 2003 and 2010+ | J-PI-007 | [x] |
+| PI-08 | P0 | Open a .pub file from the app (Open dialog, file picker, double-click) | UI-PI-001 | [x] |
 
 ## UR: Undo/redo
 
@@ -261,12 +261,12 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | UI-13 | P1 | One export dialog for PDF/X-4, PNG, HTML, EPUB, XPS and Pack and Go | UI-EX-001 | [x] |
 | UI-14 | P0 | Text editing with a caret: click to place, arrows, selection, typing and deleting at the caret, formatting the selection | UI-TE-001 | [x] |
 | UI-15 | P1 | Clipboard and context menu: cut, copy, paste objects and text; right-click menu | UI-CB-001 | [x] |
-| UI-16 | P0 | Unsaved changes are never lost silently: Save Changes / Don't Save / Cancel before closing the window, New and Open | UI-SV-001 | [ ] |
-| UI-17 | P1 | Drag and drop from the desktop: pictures are placed where dropped; publications and .pub files open | UI-DD-001 | [ ] |
-| UI-18 | P0 | AutoRecover in the app: after a crash the next start offers unsaved work back (per-window locked copies; discarded work is not offered) | UI-AR-001 | [ ] |
-| UI-19 | P0 | Text flow in the UI: link text boxes, break links, flow onto new pages, import a text file, type in shapes, clear formatting | UI-TX-001, UI-TX-002 | [ ] |
-| UI-20 | P0 | Table editing in the UI: type in cells, Tab, merge/split, insert/delete rows and columns, sizes, table style, cell fill | UI-TB-101 | [ ] |
-| UI-21 | P1 | Pages and guides in the UI: reorder and duplicate pages from the page list; drag ruler guides out, move them, drag them back to remove | UI-PG-101 | [ ] |
-| UI-22 | P1 | Styles in the UI: paragraph and character styles from formatted text, apply, delete | UI-ST-001 | [ ] |
-| UI-23 | P1 | Publication properties, Design Checker (overflow, empty boxes, off-page objects), Save as Template and My Templates | UI-DC-001 | [ ] |
-| UI-24 | P2 | Gallery live preview: hovering a colour or font scheme shows it on the page before it is applied; built-in templates follow the schemes | UI-PD-002 | [ ] |
+| UI-16 | P0 | Unsaved changes are never lost silently: Save Changes / Don't Save / Cancel before closing the window, New and Open | UI-SV-001 | [x] |
+| UI-17 | P1 | Drag and drop from the desktop: pictures are placed where dropped; publications and .pub files open | UI-DD-001 | [x] |
+| UI-18 | P0 | AutoRecover in the app: after a crash the next start offers unsaved work back (per-window locked copies; discarded work is not offered) | UI-AR-001 | [x] |
+| UI-19 | P0 | Text flow in the UI: link text boxes, break links, flow onto new pages, import a text file, type in shapes, clear formatting | UI-TX-001, UI-TX-002 | [x] |
+| UI-20 | P0 | Table editing in the UI: type in cells, Tab, merge/split, insert/delete rows and columns, sizes, table style, cell fill | UI-TB-101 | [x] |
+| UI-21 | P1 | Pages and guides in the UI: reorder and duplicate pages from the page list; drag ruler guides out, move them, drag them back to remove | UI-PG-101 | [x] |
+| UI-22 | P1 | Styles in the UI: paragraph and character styles from formatted text, apply, delete | UI-ST-001 | [x] |
+| UI-23 | P1 | Publication properties, Design Checker (overflow, empty boxes, off-page objects), Save as Template and My Templates | UI-DC-001 | [x] |
+| UI-24 | P2 | Gallery live preview: hovering a colour or font scheme shows it on the page before it is applied; built-in templates follow the schemes | UI-PD-002 | [x] |

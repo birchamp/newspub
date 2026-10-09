@@ -267,4 +267,4 @@ The dashboard parses this file:
   - Shift is held for the whole of a shift-click;
   - a control is preferred over a caption with the same name;
   - frames step at 1/30 s, so double-clicks register.
-- 145/145 journeys pass locally. PARITY rows get checked once CI is green on all three OSes.
+- 145/145 journeys pass on Linux, macOS and Windows (CI run 38001645773, commit 6c857f4). PI-01..PI-08 and UI-16..UI-24 are checked; all 150 PARITY items are now checked.

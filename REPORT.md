@@ -1,26 +1,18 @@
 # newpub-rs: status report
 
 **Date:** 2026-10-09.
-**Commit:** 6755f2f, branch `claude/happy-davinci-r0kfpv`.
-**CI:** run 37978026939 is fully green: clippy, build and 131/131 journeys on Linux, macOS and Windows, the Linux conformance job, and the native-print jobs on Windows and macOS.
+**Commit:** 6c857f4, branch `claude/happy-davinci-r0kfpv`.
+**CI:** run 38001645773 is fully green: clippy, build and 145/145 journeys on Linux, macOS and Windows. All 150 PARITY items are checked.
 
-**Correction (later the same day).** Most PARITY items are proven by engine journeys, which drive the engine
-directly. An audit of which engine actions the app actually calls found that many checked features could not be
-reached from the UI at all:
+**Correction, resolved.** An audit found that many checked features could not be reached from the app, only from
+engine journeys:
 - text box linking, autoflow and text in shapes;
-- table editing (cells could not even be typed in);
+- table editing;
 - page reordering and duplication, and ruler guides;
-- style management, templates, document properties and the Design Checker queries.
+- styles, templates, document properties and the Design Checker.
 
-The `.pub` importer was also much shallower than its rows claimed: one text box on one page, with no formatting.
-The response:
-- PI-01..PI-04 are unchecked and rewritten against real Publisher files (Apache POI samples, positions measured from
-  LibreOffice's independent rendering), and PI-05..PI-08 are added.
-- New UI journeys UI-16..UI-23 cover the missing UI paths. Each row is checked only when its journey passes on all
-  three OSes.
-
-The UI-09..UI-15 rows (ribbon tabs, Format panel, Export As, caret editing, clipboard) were checked from CI run
-37978026939. IM-11 (EMF/WMF) was split out of IM-09 so that each could be checked honestly.
+It also found that the `.pub` importer only made one text box on one page. Those rows were reopened and given UI or
+import journeys (UI-16..UI-23, PI-01..PI-08). All of them are now built and pass on all three OSes.
 
 ## External conformance (CI jobs `conformance` on Linux, `native-print` on Windows and macOS)
 
@@ -52,8 +44,8 @@ The UI-09..UI-15 rows (ribbon tabs, Format panel, Export As, caret editing, clip
 | PR print production | 9/9 | Includes separations and overprint, and Pack and Go |
 | EX export | 6/6 | PDF, PDF/X-4, PDF/UA-1, PNG/JPEG, HTML, EPUB 3 (fixed layout), XPS |
 | FI files | 5/5 | |
-| PI .pub import | 4/4 | |
-| UR, SP, AX, FR, UI | 2/2, 3/3, 4/4, 3/3, 15/15 | UI: Venice Blue design system, light and dark themes, six-tab ribbon, Format panel, caret editing, clipboard |
+| PI .pub import | 8/8 | Publisher 98, 2000, 2002/2003 and 2007/2010+: pages, text boxes and chains, formatting, pictures (WMF clip art too), shapes, groups, tables |
+| UR, SP, AX, FR, UI | 2/2, 3/3, 4/4, 3/3, 24/24 | UI also covers: unsaved-changes prompt, drag and drop, AutoRecover, text flow, table editing, page list menu and ruler guides, styles, properties, Design Checker, My templates, live scheme preview |
 | PF performance | 1/1 | Incremental layout: ~10 ms per keystroke on a 60-page story |
 
 ## Known gaps
@@ -66,10 +58,14 @@ Each of these is real behaviour that a journey does not cover, or that is only p
 4. **EMF/WMF** conversion covers the common drawing records only. Bitmaps, clipping and gradients inside metafiles are skipped.
 5. **Separations** ignore overprint on group children. Composite PDFs carry no overprint flag.
 6. **Tagged PDF**: table headers are always column headers (no row headers). PDF/UA is validated for the built-in templates and the journey documents, not for user publications.
-7. **.pub import** covers text, frames, pictures, fonts and basic formatting only.
+7. **.pub import** skips WordArt, embedded fonts, gradient and pattern fills, and Publisher 97 files. Style "based on" chains are flattened into each paragraph. Fonts that are not installed are drawn with metric-compatible stand-ins, and the Design Checker lists them.
 8. **Incremental layout** does not apply to stories with fields (page numbers, dates, merge fields) or to table cells. These are always laid out in full.
 
 Fixed since the previous report:
+- Every engine feature the audit found unreachable now has a way in from the app and a UI journey (UI-16..UI-23).
+- Microsoft Publisher files really open (PI-01..PI-08): checked against Apache POI's samples, with positions measured from LibreOffice's rendering.
+- Gallery live preview: hovering a colour or font scheme shows it on the page (UI-24).
+- Very high zoom no longer crashes on a page image larger than the graphics card allows.
 - The UI redesign: a Venice Blue design system with light and dark themes, a gradient header, a six-tab ribbon, page thumbnails, a sectioned Format panel and a template start screen with previews.
 - Engine features the old UI could not reach are on the ribbon: tables, WordArt, building blocks, fields, schemes, masters, mail merge, spelling, find and replace, the accessibility checker and every export format.
 - Real text editing with a caret and selection, a clipboard for text and objects, and a right-click menu.
@@ -77,7 +73,7 @@ Fixed since the previous report:
 
 ## Top risks
 
-1. **UI depth.** Every workflow is on the ribbon now, but galleries are simpler than Publisher's (no live preview on hover), the Format panel shows the first character's attributes for a mixed selection, and nobody from the target audience has used the app yet.
+1. **UI depth.** Every workflow is on the ribbon now, but the Format panel shows the first character's attributes for a mixed selection, and nobody from the target audience has used the app yet.
 2. **Performance.** Layout is incremental per story, but the display copy of the document is still rebuilt on every change. Large merges are untested.
 3. **Core complexity.** The layout engine and the display list (effects, WordArt, tagging, separations) are dense, and only journeys pin them down.
 4. **Dependencies.** egui, krilla, krilla-svg, resvg/usvg and calamine are pinned and move quickly; so is the toolchain (1.97.0).
