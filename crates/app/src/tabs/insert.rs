@@ -158,6 +158,14 @@ impl NewpubApp {
             if ribbon_button(ui, ic::IMAGE, "Picture", false, true).clicked() {
                 self.dialog = Dialog::InsertPicture { path: String::new() };
             }
+            if ribbon_button(ui, ic::FILE_TEXT, "Text File", false, frame.is_some())
+                .on_disabled_hover_text("Select a text box first")
+                .on_hover_text("Insert the text of a .txt or .docx file into the selected text box")
+                .clicked()
+                && let Some(f) = frame
+            {
+                self.dialog = Dialog::InsertText { path: String::new(), target: f };
+            }
             if ribbon_button(ui, ic::TABLE, "Table", open == Open::Table, true).clicked() {
                 self.open_insert_window(Open::Table);
             }

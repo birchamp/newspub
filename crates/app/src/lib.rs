@@ -77,6 +77,11 @@ pub enum Dialog {
     InsertPicture {
         path: String,
     },
+    /// Insert a text file into a text box (Insert > Text File).
+    InsertText {
+        path: String,
+        target: Id,
+    },
     /// The export dialog for every format (files.rs).
     Export(files::ExportState),
 }
@@ -852,6 +857,9 @@ impl NewpubApp {
     }
 
     fn handle_canvas_input(&mut self, resp: &egui::Response) {
+        if self.view.link_from.is_some() {
+            resp.ctx.set_cursor_icon(egui::CursorIcon::Alias);
+        }
         if self.tool == Tool::Freeform {
             self.freeform_input(resp);
             return;
@@ -950,6 +958,18 @@ impl NewpubApp {
             && let Some(p) = resp.interact_pointer_pos()
         {
             let (x, y) = self.screen_to_page(p);
+            if self.tool == Tool::Select && self.view.link_from.is_some() {
+                self.finish_link(self.hit(x, y));
+                return;
+            }
+            if self.tool == Tool::Select
+                && let Some(f) = self.overflow_badge_at(p)
+            {
+                // The red "+" badge: continue the text in another box.
+                self.selection = vec![f];
+                self.start_link(f);
+                return;
+            }
             if self.tool == Tool::Select {
                 let hit = self.hit(x, y);
                 // A click in an already selected text box, shape with text or table places the caret there.
@@ -970,6 +990,42 @@ impl NewpubApp {
                 self.create_from_drag(p, b);
             }
         }
+    }
+
+    /// Starts "Link to Next Box": the next click on an empty text box continues `frame`'s story there.
+    pub(crate) fn start_link(&mut self, frame: Id) {
+        self.end_text_edit();
+        self.view.link_from = Some(frame);
+        self.status = "Click an empty text box to continue the story there (Esc cancels)".into();
+    }
+
+    fn finish_link(&mut self, target: Option<Id>) {
+        let Some(from) = self.view.link_from.take() else { return };
+        let is_text =
+            |id: &Id| self.session.doc().objects.get(id).is_some_and(|o| matches!(o.kind, ObjectKind::Text(_)));
+        match target.filter(is_text) {
+            Some(to) if to != from => {
+                if self.act(Command::LinkFrames { from, to }).is_some() {
+                    self.status = "Text boxes linked".into();
+                }
+                self.selection = vec![to];
+            }
+            _ => self.status = "Linking cancelled: click an empty text box".into(),
+        }
+    }
+
+    /// The overflowing text frame whose "+" badge is under `p`.
+    fn overflow_badge_at(&mut self, p: Pos2) -> Option<Id> {
+        let layout = self.session.layout();
+        let doc = self.session.doc();
+        let page = doc.pages.get(self.page)?;
+        page.objects.iter().copied().find(|id| {
+            layout.frames.get(id).is_some_and(|f| f.overflow)
+                && doc.objects.get(id).is_some_and(|o| {
+                    let c = self.page_to_screen(o.rect.right(), o.rect.bottom()) - Vec2::new(10.0, 0.0);
+                    ERect::from_center_size(c, Vec2::splat(16.0)).contains(p)
+                })
+        })
     }
 
     fn create_from_drag(&mut self, a: Pos2, b: Pos2) {

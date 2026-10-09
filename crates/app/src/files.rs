@@ -16,6 +16,8 @@ enum Browse {
     SavePub,
     /// Open a picture.
     Picture,
+    /// Open a text file to import.
+    Text,
     /// Choose where to save a file (filter name, extension).
     Save(&'static str, &'static str),
     /// Choose a folder.
@@ -39,6 +41,9 @@ fn browse(kind: Browse, current: &str) -> Option<String> {
             .add_filter("Pictures", &["png", "jpg", "jpeg", "gif", "bmp", "webp", "svg", "tif", "tiff"])
             .add_filter("All files", &["*"])
             .pick_file(),
+        Browse::Text => {
+            dlg.add_filter("Text files", &["txt", "text", "docx"]).add_filter("All files", &["*"]).pick_file()
+        }
         Browse::Save(name, ext) => dlg.add_filter(name, &[ext]).set_file_name(format!("publication.{ext}")).save_file(),
         Browse::Folder => dlg.pick_folder(),
     };
@@ -492,6 +497,23 @@ impl NewpubApp {
                         };
                         if let Some(o) = self.act(a) {
                             self.selection = o.created.first().copied().into_iter().collect();
+                            close = true;
+                        }
+                    }
+                    close |= cancel;
+                });
+            }
+            Dialog::InsertText { path, target } => {
+                let target = *target;
+                dialog_window("Insert Text File").show(ctx, |ui| {
+                    widgets::section(ui, ic::FILE_TEXT, "Text", |ui| {
+                        path_field(ui, "Text file", path, Browse::Text);
+                        widgets::hint(ui, "Plain text (.txt) or Word (.docx). The text goes in at the caret.");
+                    });
+                    let (ok, cancel) = confirm_row(ui, "Insert Text");
+                    if ok {
+                        let at = Some(self.insertion_point(target));
+                        if self.act(SessionAction::ImportText { target, path: path.clone(), at }).is_some() {
                             close = true;
                         }
                     }

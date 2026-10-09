@@ -515,6 +515,36 @@ impl NewpubApp {
                 ui.label(RichText::new("Text overflow").size(12.0).color(p.danger));
             });
         }
+        let doc = self.session.doc();
+        let chain = doc.story_of(id).ok().and_then(|s| doc.story(s).ok()).map(|s| s.frames.clone()).unwrap_or_default();
+        let has_next = chain.last().is_some_and(|l| *l != id);
+        let linking = self.view.link_from == Some(id);
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
+            if widgets::small_button(ui, icons::LINK, "Link to Next Box", linking, true)
+                .on_hover_text("Then click an empty text box: the story continues there")
+                .clicked()
+            {
+                if linking {
+                    self.view.link_from = None;
+                } else {
+                    self.start_link(id);
+                }
+            }
+            if widgets::small_button(ui, icons::LINK_BREAK, "Break Link", false, has_next)
+                .on_hover_text("The following boxes no longer continue this story")
+                .clicked()
+            {
+                self.act(Command::UnlinkFrame { frame: id });
+            }
+            if widgets::small_button(ui, icons::FILES, "Flow onto New Pages", false, overflow)
+                .on_hover_text("Add pages with linked boxes until all the text fits")
+                .on_disabled_hover_text("All the text fits")
+                .clicked()
+            {
+                self.act(newpub_engine::SessionAction::Autoflow { frame: id });
+            }
+        });
     }
 
     // ---- Shape ----------------------------------------------------------------------------------------------

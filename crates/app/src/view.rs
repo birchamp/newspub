@@ -26,6 +26,8 @@ pub struct ViewState {
     pub units: Units,
     /// Text frame being edited from the keyboard.
     pub editing: Option<Id>,
+    /// "Link to Next Box" is waiting for a click on the box the story should continue in.
+    pub link_from: Option<Id>,
     /// Show text frame and shape boundaries on the canvas.
     pub boundaries: bool,
     /// Document (file, page size) the view was last fitted to.
@@ -43,6 +45,7 @@ impl Default for ViewState {
             spread: false,
             units: Units::In,
             editing: None,
+            link_from: None,
             boundaries: true,
             fit_key: None,
             canvas_id: None,
@@ -173,7 +176,9 @@ impl NewpubApp {
 
     /// Escape: leaves text editing (keeping the selection), else clears the selection.
     pub(crate) fn escape(&mut self) {
-        if self.editing_frame().is_some() {
+        if self.view.link_from.take().is_some() {
+            self.status = "Linking cancelled".into();
+        } else if self.editing_frame().is_some() {
             self.view.editing = None;
         } else {
             self.selection.clear();
