@@ -95,7 +95,9 @@ jobs:
           lipo -archs /Volumes/newpub/newpub.app/Contents/MacOS/newpub
           codesign --verify --deep --strict /Volumes/newpub/newpub.app
           test -L /Volumes/newpub/Applications
-          hdiutil detach /Volumes/newpub
+          # Spotlight or codesign can still hold the volume for a moment; retry, then force.
+          for i in 1 2 3 4 5; do hdiutil detach /Volumes/newpub && break; sleep 3; done
+          [ ! -d /Volumes/newpub ] || hdiutil detach -force /Volumes/newpub
       - uses: actions/upload-artifact@v4
         with:
           name: newpub-macos
