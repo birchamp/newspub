@@ -176,6 +176,14 @@ impl NewpubApp {
                 self.dialog = Dialog::InsertPicture { path: String::new() };
             }
         });
+        group(ui, "Text", |ui| {
+            if ribbon_button(ui, ic::TEXT_AA, "Styles", self.styles_ui.open, true)
+                .on_hover_text("Make, apply and delete paragraph and character styles")
+                .clicked()
+            {
+                self.styles_ui.open = !self.styles_ui.open;
+            }
+        });
         group(ui, "Shapes", |ui| {
             for (tool, icon, label) in [
                 (Tool::Rectangle, ic::SQUARE, "Rectangle"),

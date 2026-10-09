@@ -18,6 +18,7 @@ mod recent;
 mod recovery;
 pub use recent::config_dir;
 mod shell;
+mod styles_ui;
 mod table_ui;
 mod tabs;
 mod text_edit;
@@ -167,6 +168,7 @@ pub struct NewpubApp {
     /// Fonts and styles installed into the egui context.
     themed: bool,
     pub(crate) insert_ui: tabs::insert::InsertState,
+    pub(crate) styles_ui: styles_ui::StylesUi,
     pub(crate) design_ui: tabs::design::DesignState,
     pub(crate) mailings_ui: tabs::mailings::MailingsState,
     pub(crate) review_ui: tabs::review::ReviewState,
@@ -248,6 +250,7 @@ impl NewpubApp {
             template_previews: Default::default(),
             themed: false,
             insert_ui: Default::default(),
+            styles_ui: Default::default(),
             design_ui: Default::default(),
             mailings_ui: Default::default(),
             review_ui: Default::default(),
@@ -487,6 +490,7 @@ impl NewpubApp {
         self.recovery_prompt(&ctx);
         self.recovery_tick();
         self.tab_windows(&ctx);
+        self.styles_window(&ctx);
         self.selection_pane(&ctx);
     }
 
