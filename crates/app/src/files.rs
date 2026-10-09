@@ -382,6 +382,9 @@ impl NewpubApp {
         let mut dialog = std::mem::replace(&mut self.dialog, Dialog::None);
         // Escape cancels any dialog.
         let mut close = !matches!(dialog, Dialog::None) && ctx.input(|i| i.key_pressed(egui::Key::Escape));
+        if close && matches!(dialog, Dialog::Save { .. }) {
+            self.save_finished(false);
+        }
         match &mut dialog {
             Dialog::None => {}
             Dialog::Picker(st) => close = picker::show(self, ctx, st),
@@ -430,8 +433,11 @@ impl NewpubApp {
                         self.remember_recent();
                         self.status = format!("Saved {path}");
                         close = true;
+                        self.save_finished(true);
+                    } else if cancel {
+                        close = true;
+                        self.save_finished(false);
                     }
-                    close |= cancel;
                 });
             }
             Dialog::Open { path } => {

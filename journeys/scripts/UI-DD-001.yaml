@@ -1,0 +1,20 @@
+id: UI-DD-001
+title: Drag files onto the window — a picture lands where it is dropped; a publication or Publisher file opens
+covers: [UI-17]
+ui: true
+steps:
+  - drop_file: {path: fixtures/photo.png, at: [3in, 4in]}
+  - expect: {query: {q: page_object_kinds, page: 0}, contains: "image"}
+  - expect: {query: {q: view}, path: /selection/0, gt: 0, as: pic}
+  # the picture's top-left corner is at the drop point
+  - expect: {query: {q: object, id: $pic}, path: /rect/x, approx: [216, 1]}
+  - expect: {query: {q: object, id: $pic}, path: /rect/y, approx: [288, 1]}
+  # a publication dropped on the window opens it (after asking about the unsaved picture)
+  - drop_file: {path: fixtures/v1-sample.npub}
+  - expect_ui: {label: "Save changes to Untitled publication?"}
+  - click: {label: "Don't Save"}
+  - expect: {query: {q: session}, path: /path, ends_with: "v1-sample.npub"}
+  # a Publisher file dropped on the window is imported
+  - drop_file: {path: fixtures/pub/Sample.pub}
+  - expect_ui: {label: "Imported from Sample.pub"}
+  - expect: {query: {q: all_story_text}, contains: "This is some text on the first page"}

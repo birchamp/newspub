@@ -46,7 +46,7 @@ impl NewpubApp {
     }
 
     /// Document name shown in the header.
-    fn doc_title(&self) -> String {
+    pub(crate) fn doc_title(&self) -> String {
         self.session
             .path
             .as_ref()
@@ -83,10 +83,10 @@ impl NewpubApp {
             ui.label(egui::RichText::new(title).font(theme::medium(13.0)).color(Color32::from_white_alpha(235)));
             ui.add_space(14.0);
             if widgets::header_button(ui, ic::FILE_PLUS, "New", true).clicked() {
-                self.open_picker();
+                self.guard(crate::guard::Pending::New);
             }
             if widgets::header_button(ui, ic::FOLDER_OPEN, "Open", true).clicked() {
-                self.dialog = Dialog::Open { path: String::new() };
+                self.guard(crate::guard::Pending::OpenDialog);
             }
             if widgets::header_button(ui, ic::FLOPPY_DISK, "Save", true).clicked() {
                 self.open_save();

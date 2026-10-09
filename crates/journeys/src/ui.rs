@@ -3,7 +3,8 @@
 //! UI steps: `click: {label}`, `fill: {label, text}`, `type: {text}`, `key: {key, command, shift}`,
 //! `drag: {from: [x, y], to: [x, y]}` and `click_at: [x, y]` (page points on the canvas),
 //! `expect_ui: {label, exists}`, `focus: {label}` (keyboard focus), `scroll: {dx, dy}` (mouse wheel over
-//! the canvas, screen points), `run: {}`.
+//! the canvas, screen points), `close_window: {}` (the window's close button), `drop_file: {path, at}` (a file
+//! dragged from the desktop and dropped, optionally over a page point), `run: {}`.
 //! Journey options: `startup_template_picker: true` starts the app as the desktop binary does;
 //! print jobs go to `<out>/print-spool/job-<n>.pdf`.
 //! Observation steps are shared with headless journeys: `expect`, `let`, `dump`, `expect_pdf`,
@@ -16,6 +17,20 @@ use egui_kittest::kittest::{NodeT, Queryable};
 use newpub_app::NewpubApp;
 use newpub_engine::Session;
 use serde_json::Value;
+
+/// A file dropped on the window from the desktop.
+#[derive(Debug)]
+struct DroppedPath(std::path::PathBuf);
+
+impl egui::DroppedFile for DroppedPath {
+    fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+
+    fn bytes(&self) -> Result<Vec<u8>, String> {
+        std::fs::read(&self.0).map_err(|e| e.to_string())
+    }
+}
 
 fn key_from(name: &str) -> Option<egui::Key> {
     egui::Key::from_name(name)
@@ -62,6 +77,22 @@ fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Resul
             h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
             h.run_steps(1);
             find(h, label)?.type_text(text);
+            settle(h);
+        }
+        "close_window" => {
+            h.input_mut().viewports.entry(egui::ViewportId::ROOT).or_default().events.push(egui::ViewportEvent::Close);
+            settle(h);
+        }
+        "drop_file" => {
+            let p = args.get("path").and_then(|v| v.as_str()).ok_or_else(|| anyhow!("drop_file needs path"))?;
+            let path = std::path::absolute(ctx.out.join(p))?;
+            if let Some(at) = args.get("at") {
+                let (x, y) = pt(at)?;
+                let pos = h.state().page_to_screen(x, y);
+                h.hover_at(pos);
+                h.run_steps(1);
+            }
+            h.input_mut().dropped_files.push(std::sync::Arc::new(DroppedPath(path)));
             settle(h);
         }
         "paste" => {

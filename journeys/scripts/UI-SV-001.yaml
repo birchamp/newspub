@@ -1,0 +1,45 @@
+id: UI-SV-001
+title: Unsaved changes are never lost silently — Save Changes, Don't Save and Cancel before New, Open and closing the window
+covers: [UI-16]
+ui: true
+steps:
+  # a clean publication closes without asking
+  - close_window: {}
+  - expect_ui: {label: "Save changes to Untitled publication?", exists: false}
+  - expect: {query: {q: view}, path: /window_closes, equals: 1}
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 1in], to: [4in, 2in]}
+  - type: {text: "Precious words"}
+  - expect: {query: {q: session}, path: /dirty, equals: true}
+  # New: Cancel keeps the publication and opens nothing
+  - key: {key: "N", command: true}
+  - expect_ui: {label: "Save changes to Untitled publication?"}
+  - click: {label: "Cancel"}
+  - expect_ui: {label: "Choose a template", exists: false}
+  - expect: {query: {q: all_story_text}, contains: "Precious words"}
+  # Open: Don't Save goes on to the Open dialog
+  - click: {label: "Open"}
+  - expect_ui: {label: "Save changes to Untitled publication?"}
+  - click: {label: "Don't Save"}
+  - expect_ui: {label: "Open a file"}
+  - key: {key: "Escape"}
+  # closing the window asks too; Cancel keeps it open
+  - close_window: {}
+  - expect_ui: {label: "Save changes to Untitled publication?"}
+  - click: {label: "Cancel"}
+  - expect: {query: {q: view}, path: /window_closes, equals: 1}
+  # Save Changes names the untitled file first, then carries on with closing
+  - close_window: {}
+  - click: {label: "Save Changes"}
+  - fill: {label: "File name", text: "precious.npub"}
+  - click: {label: "Save File"}
+  - expect: {query: {q: session}, path: /dirty, equals: false}
+  - expect_files: {dir: ".", contains: ["precious.npub"]}
+  - expect: {query: {q: view}, path: /window_closes, equals: 2}
+  # a saved file with later edits is saved in place without asking for a name
+  - type: {text: " again"}
+  - key: {key: "N", command: true}
+  - expect_ui: {label: "Save changes to precious?"}
+  - click: {label: "Save Changes"}
+  - expect: {query: {q: session}, path: /dirty, equals: false}
+  - expect_ui: {label: "Choose a template"}

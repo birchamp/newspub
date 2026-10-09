@@ -156,6 +156,7 @@ impl NewpubApp {
         v["spread"] = self.view.spread.into();
         v["visible_pages"] = serde_json::json!(self.visible_pages());
         v["editing"] = self.editing_frame().is_some().into();
+        v["window_closes"] = self.window_closes.into();
         v["text_selection"] = match &self.caret {
             Some(c) if self.editing_frame() == Some(c.frame) => serde_json::json!([c.range().start, c.range().end]),
             _ => serde_json::Value::Null,

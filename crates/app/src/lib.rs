@@ -6,6 +6,7 @@ mod clipboard;
 mod dup;
 mod files;
 mod freeform;
+mod guard;
 mod icons;
 mod inspector;
 mod pages;
@@ -89,6 +90,18 @@ pub struct NewpubApp {
     /// Zoom: screen points per document point.
     pub zoom: f32,
     pub dialog: Dialog,
+    /// The action waiting on the "Save changes?" prompt.
+    unsaved: Option<guard::Pending>,
+    /// The action to run once the Save dialog has saved the publication.
+    after_save: Option<guard::Pending>,
+    /// Close the window this frame (the publication was saved or discarded).
+    close_window: bool,
+    /// The user chose to close a publication with unsaved changes.
+    close_confirmed: bool,
+    /// How many times the window was let close (journeys observe it; the desktop app exits on the first).
+    window_closes: u32,
+    /// Screen rect of the canvas, for drops.
+    canvas_rect: egui::Rect,
     pub status: String,
     pub(crate) texture: Option<(TextureHandle, u64, usize, u32)>,
     /// Canvas page origin on screen (top-left of the page) from the last frame.
@@ -178,6 +191,12 @@ impl NewpubApp {
             selection: vec![],
             zoom: 0.9,
             dialog: Dialog::None,
+            unsaved: None,
+            after_save: None,
+            close_window: false,
+            close_confirmed: false,
+            window_closes: 0,
+            canvas_rect: egui::Rect::NOTHING,
             status: String::new(),
             texture: None,
             page_origin: Pos2::ZERO,
@@ -397,8 +416,9 @@ impl NewpubApp {
         let _ = OPEN_CTX.set(ctx.clone());
         let requests = std::mem::take(&mut *OPEN_REQUESTS.lock().unwrap_or_else(|e| e.into_inner()));
         for path in requests {
-            self.open_file(&path);
+            self.guard(guard::Pending::OpenFile(path));
         }
+        self.window_events(&ctx);
         self.sync_units();
         self.shortcuts(&ctx);
         let p = theme::palette(&ctx);
@@ -420,6 +440,7 @@ impl NewpubApp {
             .show(ui, |ui| self.format_panel(ui));
         egui::CentralPanel::default().frame(egui::Frame::new().fill(p.pasteboard)).show(ui, |ui| self.canvas(ui));
         self.dialogs(&ctx);
+        self.unsaved_prompt(&ctx);
         self.tab_windows(&ctx);
         self.selection_pane(&ctx);
     }
@@ -459,8 +480,8 @@ impl NewpubApp {
                     Key::E => self.open_export_pdf(),
                     Key::F => self.open_find(),
                     Key::S => self.open_save(),
-                    Key::O => self.dialog = Dialog::Open { path: String::new() },
-                    Key::N => self.open_picker(),
+                    Key::O => self.guard(guard::Pending::OpenDialog),
+                    Key::N => self.guard(guard::Pending::New),
                     _ if dialog_open => {}
                     Key::A => self.select_all(),
                     Key::C => self.copy(ctx, false),
@@ -611,6 +632,7 @@ impl NewpubApp {
 
     fn canvas(&mut self, ui: &mut egui::Ui) {
         let full = ui.available_rect_before_wrap();
+        self.canvas_rect = full;
         self.canvas_view(ui);
         self.freeform_overlay(ui, ERect::from_min_max(full.max - self.canvas_size, full.max));
     }

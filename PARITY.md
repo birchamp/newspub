@@ -261,3 +261,5 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | UI-13 | P1 | One export dialog for PDF/X-4, PNG, HTML, EPUB, XPS and Pack and Go | UI-EX-001 | [x] |
 | UI-14 | P0 | Text editing with a caret: click to place, arrows, selection, typing and deleting at the caret, formatting the selection | UI-TE-001 | [x] |
 | UI-15 | P1 | Clipboard and context menu: cut, copy, paste objects and text; right-click menu | UI-CB-001 | [x] |
+| UI-16 | P0 | Unsaved changes are never lost silently: Save Changes / Don't Save / Cancel before closing the window, New and Open | UI-SV-001 | [ ] |
+| UI-17 | P1 | Drag and drop from the desktop: pictures are placed where dropped; publications and .pub files open | UI-DD-001 | [ ] |
