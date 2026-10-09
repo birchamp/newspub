@@ -6,6 +6,8 @@ use newpub_core::{
     Align, Document, Id, LineSpacing, ListStyle, Object, ObjectKind, Rect, ResolvedPara, ShapeKind, Story, TabAlign,
     TextFrame, VAlign, WrapMode,
 };
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 /// Narrowest line piece worth filling when text wraps around objects.
 const MIN_PIECE: f64 = 18.0;
@@ -47,6 +49,7 @@ impl Exclusion {
     }
 }
 
+#[derive(Debug)]
 struct FrameGeom {
     id: Id,
     /// Page y of the frame's top (for the baseline grid); None when not on a page grid (table cells).
@@ -449,7 +452,97 @@ pub fn layout_story(
     page_override: Option<usize>,
 ) -> (StoryLayout, Vec<FrameLayout>) {
     let frames: Vec<FrameGeom> = story.frames.iter().filter_map(|f| frame_geom(doc, *f)).collect();
-    layout_in(doc, fonts, story, frames, page_override)
+    layout_in(doc, fonts, story, frames, page_override, None)
+}
+
+/// Lays out one story, reusing `memo` (the story's previous flow) from the first paragraph whose input
+/// changed, and stopping early when the flow rejoins the previous one (PF-01). `doc_key` identifies
+/// everything outside the story that text layout reads (styles, schemes, baseline grid, fonts).
+pub fn layout_story_memo(
+    doc: &Document,
+    fonts: &FontStore,
+    story: &Story,
+    doc_key: u64,
+    memo: &mut Option<StoryMemo>,
+) -> (StoryLayout, Vec<FrameLayout>) {
+    let frames: Vec<FrameGeom> = story.frames.iter().filter_map(|f| frame_geom(doc, *f)).collect();
+    layout_in(doc, fonts, story, frames, None, Some((doc_key, memo)))
+}
+
+/// A story's saved flow for incremental layout: per-paragraph input keys and start states, and the frames'
+/// lines before vertical alignment and continued notices.
+#[derive(Clone)]
+pub struct StoryMemo {
+    doc_key: u64,
+    frame_keys: Vec<u64>,
+    keys: Vec<u64>,
+    starts: Vec<usize>,
+    snaps: Vec<Option<Snap>>,
+    kwn: Vec<bool>,
+    outs: Vec<FrameLayout>,
+    overflow_at: Option<usize>,
+}
+
+/// Feeds `Debug` output straight into a hasher.
+struct HashWrite<'a>(&'a mut DefaultHasher);
+
+impl std::fmt::Write for HashWrite<'_> {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        s.hash(self.0);
+        Ok(())
+    }
+}
+
+fn debug_hash(h: &mut DefaultHasher, v: &dyn std::fmt::Debug) {
+    use std::fmt::Write;
+    let _ = write!(HashWrite(h), "{v:?}");
+}
+
+/// Key of everything a paragraph's own layout reads from the story: its attributes, text, runs (relative to
+/// the paragraph start) and the attributes of its paragraph mark.
+fn para_keys(story: &Story, ranges: &[std::ops::Range<usize>]) -> Vec<u64> {
+    let runs: Vec<(std::ops::Range<usize>, &newpub_core::CharAttrs)> =
+        story.runs().filter(|(r, _)| !r.is_empty()).collect();
+    let mut r0 = 0;
+    ranges
+        .iter()
+        .enumerate()
+        .map(|(pi, range)| {
+            let mut h = DefaultHasher::new();
+            debug_hash(&mut h, &story.paras[pi]);
+            crate::text::slice(story, range.clone()).hash(&mut h);
+            let mark = if range.end > range.start { range.end - 1 } else { range.start.saturating_sub(1) };
+            debug_hash(&mut h, &story.span_attrs_at(mark));
+            while r0 < runs.len() && runs[r0].0.end <= range.start {
+                r0 += 1;
+            }
+            for (rr, attrs) in runs[r0..].iter().take_while(|(rr, _)| rr.start < range.end) {
+                (rr.start.max(range.start) - range.start, rr.end.min(range.end) - range.start).hash(&mut h);
+                debug_hash(&mut h, attrs);
+            }
+            h.finish()
+        })
+        .collect()
+}
+
+fn frame_key(f: &FrameGeom) -> u64 {
+    let mut h = DefaultHasher::new();
+    debug_hash(&mut h, f);
+    h.finish()
+}
+
+/// A saved line moved to char offset `delta` and paragraph offset `dp` (paragraphs after an edit).
+fn shift_line(l: &Line, delta: isize, dp: isize) -> Line {
+    let mv = |x: usize, d: isize| x.saturating_add_signed(d);
+    let mut l = l.clone();
+    l.char_range = mv(l.char_range.start, delta)..mv(l.char_range.end, delta);
+    l.para = mv(l.para, dp);
+    for r in &mut l.runs {
+        for g in &mut r.glyphs {
+            g.char_index = mv(g.char_index, delta);
+        }
+    }
+    l
 }
 
 /// Lays out a table cell's story in the cell's content box (table-local coordinates); the result's
@@ -476,7 +569,7 @@ pub fn layout_cell(
         bottom: content.bottom(),
         ex: vec![],
     };
-    layout_in(doc, fonts, story, vec![geom], page)
+    layout_in(doc, fonts, story, vec![geom], page, None)
 }
 
 fn layout_in(
@@ -485,6 +578,7 @@ fn layout_in(
     story: &Story,
     frames: Vec<FrameGeom>,
     page_override: Option<usize>,
+    memo: Option<(u64, &mut Option<StoryMemo>)>,
 ) -> (StoryLayout, Vec<FrameLayout>) {
     let scale = frames.first().map(|f| f.tf.fit_scale).unwrap_or(1.0).clamp(0.01, 100.0);
     let mut outs: Vec<FrameLayout> = frames.iter().map(|f| FrameLayout { frame: f.id, ..Default::default() }).collect();
@@ -519,7 +613,90 @@ fn layout_in(
     let mut para_pos: Vec<Vec<(usize, usize)>> = vec![vec![]; n_paras];
     let mut kwn = vec![false; n_paras];
     let mut pi = 0;
+    // Incremental layout (PF-01). Stories with fields depend on their pages and are always laid out in full.
+    let mut memo = memo.filter(|_| !story.text.contains(newpub_core::field::FIELD_CHAR));
+    let (doc_key, keys, frame_keys) = match &memo {
+        Some((dk, _)) => (*dk, para_keys(story, &ranges), flow.frames.iter().map(frame_key).collect()),
+        None => (0, vec![], vec![]),
+    };
+    let old = memo.as_mut().and_then(|(_, slot)| slot.take()).filter(|m| m.doc_key == doc_key);
+    // New paragraph index from which the paragraphs match the previous flow's last ones (same frames only).
+    let mut tail_from: Option<usize> = None;
+    if let Some(o) = &old {
+        let n_old = o.keys.len();
+        let k = keys.iter().zip(&o.keys).take_while(|(a, b)| a == b).count();
+        let g = frame_keys.iter().zip(&o.frame_keys).take_while(|(a, b)| a == b).count();
+        let same_frames = g == frame_keys.len() && g == o.frame_keys.len();
+        if k == n_paras && k == n_old && same_frames {
+            // Nothing changed.
+            outs = o.outs.clone();
+            sl.overflow_at = o.overflow_at;
+            snaps = o.snaps.clone();
+            kwn = o.kwn.clone();
+            pi = n_paras;
+        } else {
+            // Resume at the first changed paragraph, or earlier: while keep-with-next ties a paragraph to the one
+            // before it (that one may move), and while the start state is unknown or lies in a changed frame.
+            let mut j = k.min(n_old.saturating_sub(1)).min(n_paras - 1);
+            while j > 0 && (o.kwn[j - 1] || o.snaps[j].as_ref().is_none_or(|s| s.fi >= g)) {
+                j -= 1;
+            }
+            if j > 0
+                && let Some(sn) = &o.snaps[j]
+            {
+                outs = flow
+                    .frames
+                    .iter()
+                    .enumerate()
+                    .map(|(f, fg)| match o.outs.get(f) {
+                        Some(out) if f < g => out.clone(),
+                        _ => FrameLayout { frame: fg.id, ..Default::default() },
+                    })
+                    .collect();
+                sn.restore(&mut flow, &mut outs, &mut prev_number, &mut sl);
+                snaps[..j].clone_from_slice(&o.snaps[..j]);
+                kwn[..j].copy_from_slice(&o.kwn[..j]);
+                pi = j;
+            }
+            if same_frames {
+                let m = keys.iter().rev().zip(o.keys.iter().rev()).take_while(|(a, b)| a == b).count();
+                tail_from = Some(n_paras - m.min(n_paras.min(n_old) - k));
+            }
+        }
+    }
     'paras: while pi < n_paras {
+        // Rejoining the previous flow: an unchanged paragraph starting in the same state lays out as before, and so
+        // does everything after it (nothing later reaches back past it), so the saved lines are reused, shifted.
+        if let (Some(from), Some(o)) = (tail_from, &old)
+            && pi >= from
+            && pi > 0
+            && !pushed[pi]
+            && widow_limit[pi].is_none()
+            && !kwn[pi - 1]
+        {
+            let oi = pi + o.keys.len() - n_paras;
+            if oi > 0
+                && !o.kwn[oi - 1]
+                && let Some(os) = &o.snaps[oi]
+                && os.same_state(&flow, prev_number)
+            {
+                let delta = ranges[pi].start as isize - o.starts[oi] as isize;
+                let dp = pi as isize - oi as isize;
+                let cur: Vec<(usize, usize)> = outs.iter().map(|x| (x.lines.len(), x.decorations.len())).collect();
+                for (f, out) in outs.iter_mut().enumerate() {
+                    let (l0, d0) = os.lens[f];
+                    out.lines.extend(o.outs[f].lines[l0..].iter().map(|l| shift_line(l, delta, dp)));
+                    out.decorations.extend_from_slice(&o.outs[f].decorations[d0..]);
+                }
+                sl.overflow_at = o.overflow_at.map(|x| x.saturating_add_signed(delta));
+                for q in oi..o.keys.len() {
+                    let nq = q - oi + pi;
+                    snaps[nq] = o.snaps[q].as_ref().map(|s| s.rebased(&os.lens, &cur));
+                    kwn[nq] = o.kwn[q];
+                }
+                break 'paras;
+            }
+        }
         let range = &ranges[pi];
         let rp = doc.resolve_para(&story.paras[pi]);
         kwn[pi] = rp.keep_with_next;
@@ -654,6 +831,10 @@ fn layout_in(
             let Some((mut slot, lines, lh, asc)) = placed else {
                 // Out of frames: the rest of the story overflows.
                 sl.overflow_at = Some(p.segs.front().map(|s| s.start).unwrap_or(range.start));
+                // Later paragraphs were not placed (snapshots left from before a rollback are stale).
+                for s in &mut snaps[pi + 1..] {
+                    *s = None;
+                }
                 break 'paras;
             };
             // Baseline grid (TY-14): move the line down so its baseline sits on the page's grid.
@@ -770,6 +951,18 @@ fn layout_in(
         flow.y += rp.space_after;
         pi += 1;
     }
+    if let Some((_, slot)) = memo {
+        *slot = Some(StoryMemo {
+            doc_key,
+            frame_keys,
+            keys,
+            starts: ranges.iter().map(|r| r.start).collect(),
+            snaps,
+            kwn,
+            outs: outs.clone(),
+            overflow_at: sl.overflow_at,
+        });
+    }
     // Char ranges, overflow flags, vertical alignment.
     for (i, out) in outs.iter_mut().enumerate() {
         let s = out.lines.first().map(|l| l.char_range.start);
@@ -823,6 +1016,23 @@ impl Snap {
             lens: outs.iter().map(|o| (o.lines.len(), o.decorations.len())).collect(),
             prev_number,
         }
+    }
+
+    fn same_state(&self, flow: &Flow, prev_number: Option<u32>) -> bool {
+        self.fi == flow.fi
+            && self.ci == flow.ci
+            && self.y == flow.y
+            && self.col_empty == flow.col_empty
+            && self.prev_number == prev_number
+    }
+
+    /// This snapshot with line counts moved from `from` to `to` (saved lines appended after an edit).
+    fn rebased(&self, from: &[(usize, usize)], to: &[(usize, usize)]) -> Snap {
+        let mut s = self.clone();
+        for ((l, f), t) in s.lens.iter_mut().zip(from).zip(to) {
+            *l = (l.0 - f.0 + t.0, l.1 - f.1 + t.1);
+        }
+        s
     }
 
     fn restore(&self, flow: &mut Flow, outs: &mut [FrameLayout], prev_number: &mut Option<u32>, sl: &mut StoryLayout) {

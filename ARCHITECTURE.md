@@ -122,6 +122,18 @@ The Pretext approach applied to frames:
 5. **Finish lines:** alignment and justification (space distribution), tabs, drop caps (an exclusion box for N lines),
    then per-frame vertical alignment.
 
+**Incremental layout (PF-01).** `layout_document_with(doc, fonts, &mut LayoutMemo)` keeps each story's previous flow:
+per-paragraph input keys (paragraph attributes, text, runs relative to the paragraph, paragraph-mark attributes), the
+flow state at each paragraph start (the keep-rule `Snap`), per-frame geometry keys, and the raw lines before vertical
+alignment and continued notices. A document-wide key covers styles, schemes, the baseline grid and the font store.
+On the next layout a story resumes at its first changed paragraph. It backs up while keep-with-next ties a paragraph to
+the one before it, or while that start state lies in a changed frame. It stops as soon as an unchanged paragraph starts
+in exactly the saved state (with no keep-with-next across the join): the saved lines after it are appended, shifted to
+the new char and paragraph offsets. Stories with fields (page numbers and the like) are always laid out in full.
+`NEWPUB_VERIFY_INCREMENTAL=1` checks every incremental result against a full layout through `DocLayout::fingerprint`
+(the journey suite passes in that mode). The engine keeps one memo per session; autoflow uses its own memo and adds
+pages in batches estimated from the fullest frame.
+
 Output: `DocLayout { frames: HashMap<Id, FrameLayout { lines: Vec<Line> }>, stories: HashMap<Id, StoryLayout> }` with glyph
 positions in **frame-local** coordinates (the renderer applies the frame transform, so rotation works).
 
@@ -183,6 +195,7 @@ images) → PI-04 (formatting). Stop and ask a human if the approach needs code 
 | 2026-10-08 | App: `NewpubApp.startup_picker`, `print_spool`; journey runner steps `focus`, `scroll`, journey option `startup_template_picker` | UI-08, PR-07, AX-04, UI-06 journeys |
 | 2026-10-08 | P3 interfaces (Batch 4): `CharAttrs.effects: TextEffects` (→ `ResolvedChar.effects`, `GlyphRun.effects`); `Object.hidden`, `Object.overprint` (+ patch); `ObjectKind::WordArt` (`core::wordart`), `ShapeKind::Bezier` + `BezierNode` (`core::freeform`, render `bezier_path`); commands PasteTableText, AddCaption, AddWordArt, SetWordArt, AddFreeform, Move/Insert/DeletePathNode, SetPathNodeKind, SetBusinessInfo, InsertBusinessField; `Field::Business`; `Document.sheet: SheetLayout`, `Document.business_info`; `MergeData.catalog`; `Imposition::DocumentSheet` (impose `plan` takes the doc sheet); `PdfOptions.separations` (`io-pdf::separations`); engine actions SetCatalogArea, ClearCatalogArea, Save/ApplyBusinessInfoSet, ReplaceAdvanced, NewFromPublicationType, PackAndGo, ExportEpub, ExportXps, AttachDataSource `sheet`; queries BusinessInfo(Sets), WordArtStyles, PathNodes, FindAdvanced, PublicationType(s), SeparationPlates; `imgformats::decode_picture`; runner `expect_files`, `expect_zip` | P3 items |
 | 2026-10-09 | Layout performance: `layout::text::slice` (per-pass char→byte tables replacing `Story::slice` in layout), global shaping cache in `layout::shape::shape`, glyph-coverage cache in `Face::has_glyph`; runner step `timed`; every PDF export is tagged, RTL runs get /ActualText; pdfcheck `actual_text_contains` | PF-01 (8 s → ~45 ms per edit on a 20-page story), RTL copy/paste |
+| 2026-10-09 | Incremental layout: `layout::LayoutMemo`, `layout_document_with`, `layout_one_with`, `DocLayout::fingerprint`, `FontStore::face_count`; engine `Session.layout_memo`, query `LayoutFingerprint`; autoflow adds pages in batches. App: Windows prints natively through GDI (`print_win`, test hook `NEWPUB_PRINT_OUTPUT`) | PF-01 (J-PF-002: ~150 ms → ~12 ms per keystroke on a 60-page story), PR-07 on Windows |
 
 ## 12. Predecessor survey (NewsPub, Electron + React + TS) and what we adopt
 

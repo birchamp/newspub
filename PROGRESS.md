@@ -7,7 +7,7 @@ The dashboard parses this file:
 
 ## Open blockers (need human input)
 
-- [B-003] Usability testing with the target users (newsletter and bulletin makers) needs real people: recruit 3–5 users, give them the starter templates and a short task list (make a 4-page newsletter, print a bulletin booklet, mail-merge a letter), and record where they get stuck. The UI polish backlog depends on what they find.
+- [B-003] Usability testing with the target users (newsletter and bulletin makers) needs real people: recruit 3–5 users, give them the starter templates and a short task list (make a 4-page newsletter, print a bulletin booklet, mail-merge a letter), and record where they get stuck. The UI polish backlog depends on what they find. The kit is ready: docs/usability-test-plan.md (screener, script, 7 task cards, observation sheet, SUS, consent).
 
 (B-001 resolved 2026-10-08: the dashboard is published as a claude.ai page at the user's request, and GitHub Pages also deploys from CI.)
 
@@ -176,3 +176,17 @@ The dashboard parses this file:
 - My first conformance run also validated a plain, non-UA export as UA-1, which was a wrong expectation. veraPDF now runs only on files that claim PDF/UA and logs the failed rules.
 - PARITY: 130/130 (PF-01 and SH-08 checked from CI 41e16cb).
 - REPORT.md updated. Remaining work needs people (B-003 usability testing) or real Windows/macOS printers and viewers.
+
+### 2026-10-09 02:10 — Remaining next steps (user: "go ahead with the remaining next steps")
+- Polyline point editing (J-SH-009), TH with column scope in tagged tables, and PDF/UA exports of every built-in template validated by veraPDF in CI (J-AX-004). Committed in bc1876a.
+- Incremental layout (PF-01, new J-PF-002; design in ARCHITECTURE §5):
+  - Each story resumes at its first changed paragraph and stops once it rejoins its previous flow, reusing the saved lines shifted to their new offsets.
+  - On a 60-page story a keystroke costs about 7–13 ms, against about 150 ms for a full layout. Autoflow of 60 pages takes about 230 ms, adding pages in batches.
+  - J-PF-002 compares the edited layout's fingerprint with a fresh layout after save and open, and checks that an undone format change returns the same fingerprint.
+  - The whole suite also passes with `NEWPUB_VERIFY_INCREMENTAL=1`, which checks every incremental layout against a full one.
+  - PF-01 is unchecked until CI is green with J-PF-002.
+- Windows printing (Sonnet agent, reviewed and merged): native GDI printing replaces PowerShell PrintTo, and EnumPrintersW lists the printers.
+- New CI job `native-print`:
+  - Windows: a real GDI print to "Microsoft Print to PDF" through the test hook `NEWPUB_PRINT_OUTPUT`, and the journey XPS opened by Windows' own XPS reader (page count).
+  - macOS: a real `lp` print to a CUPS file-device queue, with the text checked by pdftotext.
+- Usability test kit: docs/usability-test-plan.md. B-003 stays open because it needs people.

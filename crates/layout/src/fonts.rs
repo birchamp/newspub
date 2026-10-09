@@ -125,6 +125,11 @@ impl FontStore {
     }
 
     /// Adds font bytes (e.g. a font embedded in a document).
+    /// Number of font faces known (changes when fonts are added).
+    pub fn face_count(&self) -> usize {
+        self.db.len()
+    }
+
     pub fn add_font(&mut self, bytes: Vec<u8>) {
         self.db.load_font_data(bytes);
         if let Ok(mut inner) = self.inner.write() {

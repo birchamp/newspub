@@ -75,6 +75,8 @@ pub struct Session {
     history: History<Document>,
     fonts: Arc<FontStore>,
     layout: Option<Arc<DocLayout>>,
+    /// Previous story flows, reused by the next layout (incremental layout, PF-01).
+    layout_memo: newpub_layout::LayoutMemo,
     raster: Rasterizer,
     /// Snapshot taken at `begin_group`, plus nesting depth.
     group: Option<(Document, usize)>,
@@ -108,6 +110,7 @@ impl Session {
             history: History::default(),
             fonts,
             layout: None,
+            layout_memo: Default::default(),
             raster: Rasterizer::new(),
             group: None,
             typing: None,
@@ -167,7 +170,7 @@ impl Session {
                 self.raster.clear_images();
             }
             let doc = self.view.as_deref().unwrap_or(&self.doc);
-            self.layout = Some(Arc::new(newpub_layout::layout_document(doc, &self.fonts)));
+            self.layout = Some(Arc::new(newpub_layout::layout_document_with(doc, &self.fonts, &mut self.layout_memo)));
         }
         self.layout.clone().expect("layout computed")
     }
@@ -495,30 +498,36 @@ impl Session {
         let tf = tf.clone();
         let mut d = self.doc.clone();
         let mut created = vec![];
+        let mut memo = newpub_layout::LayoutMemo::default();
         for _ in 0..2000 {
-            let layout = newpub_layout::layout_document(&d, &self.fonts);
-            if layout.stories.get(&sid).and_then(|s| s.overflow_at).is_none() {
-                break;
+            let Some((sl, frames)) = newpub_layout::layout_one_with(&d, &self.fonts, sid, &mut memo) else { break };
+            let Some(over) = sl.overflow_at else { break };
+            // Add the pages the rest of the text needs at the fullest frame's rate, less a margin, so the last
+            // passes add one page at a time and no page is left empty.
+            let rest = d.story(sid)?.len().saturating_sub(over);
+            let per_frame = frames.iter().map(|f| f.char_range.len()).max().unwrap_or(0).max(1);
+            let count = (rest * 9 / 10 / per_frame).clamp(1, 200);
+            for _ in 0..count {
+                let last = *d.story(sid)?.frames.last().ok_or(CoreError::NotText(frame))?;
+                let last_page = d.page_of(last).unwrap_or(d.pages.len() - 1);
+                let at = last_page + 1;
+                d.apply(&Command::InsertPages { at: Some(at), count: 1, master: None })?;
+                let r = d.apply(&Command::AddTextFrame {
+                    page: Some(at),
+                    master: None,
+                    rect: template.rect,
+                    columns: Some(tf.columns),
+                    gutter: Some(tf.gutter),
+                })?;
+                let nf = r.created[0];
+                d.apply(&Command::SetTextFrame {
+                    id: nf,
+                    patch: TextFramePatch { insets: Some(tf.insets), valign: Some(tf.valign), ..Default::default() },
+                })?;
+                d.apply(&Command::LinkFrames { from: last, to: nf })?;
+                created.push(d.pages[at].id);
+                created.push(nf);
             }
-            let last = *d.story(sid)?.frames.last().ok_or(CoreError::NotText(frame))?;
-            let last_page = d.page_of(last).unwrap_or(d.pages.len() - 1);
-            let at = last_page + 1;
-            d.apply(&Command::InsertPages { at: Some(at), count: 1, master: None })?;
-            let r = d.apply(&Command::AddTextFrame {
-                page: Some(at),
-                master: None,
-                rect: template.rect,
-                columns: Some(tf.columns),
-                gutter: Some(tf.gutter),
-            })?;
-            let nf = r.created[0];
-            d.apply(&Command::SetTextFrame {
-                id: nf,
-                patch: TextFramePatch { insets: Some(tf.insets), valign: Some(tf.valign), ..Default::default() },
-            })?;
-            d.apply(&Command::LinkFrames { from: last, to: nf })?;
-            created.push(d.pages[at].id);
-            created.push(nf);
         }
         self.commit(d, None);
         Ok(Outcome { created })
@@ -550,6 +559,7 @@ impl Session {
         Ok(match q {
             Document => serde_json::to_value(&self.doc).map_err(|e| EngineError::Other(e.to_string()))?,
             PageCount => json!(self.doc.pages.len()),
+            LayoutFingerprint => json!(self.layout().fingerprint()),
             Page { page } => {
                 let p = self.doc.pages.get(*page).ok_or(CoreError::NoSuchPage(*page))?;
                 to(p)

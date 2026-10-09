@@ -234,7 +234,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 
 | ID | P | Feature | Journeys | Done |
 |----|---|---------|----------|------|
-| PF-01 | P2 | Editing and exporting a long publication stays responsive (no quadratic slow-downs) | J-PF-001 | [x] |
+| PF-01 | P2 | Editing and exporting a long publication stays responsive (no quadratic slow-downs; edits re-flow only what they change) | J-PF-001, J-PF-002 | [ ] |
 
 ## UI: Application shell (real-UI journeys)
 

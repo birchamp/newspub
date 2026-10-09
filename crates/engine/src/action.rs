@@ -431,6 +431,8 @@ pub enum Query {
     /// The whole document model as JSON.
     Document,
     PageCount,
+    /// Hash of the current layout (every glyph position): equal values mean the same layout (PF-01).
+    LayoutFingerprint,
     /// `{id, master, ignore_master, background, objects: [ids]}`.
     Page {
         page: usize,

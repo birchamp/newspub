@@ -24,6 +24,48 @@ pub struct DocLayout {
 }
 
 impl DocLayout {
+    /// Hash of every placed glyph, line, decoration and overflow point (positions to 1/1000 pt): equal
+    /// fingerprints mean the same layout.
+    pub fn fingerprint(&self) -> String {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        let q = |v: f64| (v * 1000.0).round() as i64;
+        let frame = |h: &mut std::collections::hash_map::DefaultHasher, f: &FrameLayout| {
+            (f.frame, &f.char_range, f.overflow, f.lines.len()).hash(h);
+            for l in &f.lines {
+                (l.column, q(l.x), q(l.width), q(l.top), q(l.height), q(l.baseline)).hash(h);
+                (&l.char_range, l.para, l.hyphenated, l.runs.len()).hash(h);
+                for r in &l.runs {
+                    (format!("{:?}", r.face), q(r.size), q(r.x_scale), &r.text, r.glyphs.len()).hash(h);
+                    for g in &r.glyphs {
+                        (g.id, q(g.x), q(g.y), q(g.advance), &g.text_range, g.char_index, g.generated).hash(h);
+                    }
+                }
+            }
+            for d in &f.decorations {
+                (d.kind == DecorationKind::Underline, q(d.x0), q(d.x1), q(d.y), q(d.thickness)).hash(h);
+            }
+        };
+        let mut ids: Vec<&Id> = self.frames.keys().collect();
+        ids.sort();
+        for id in ids {
+            frame(&mut h, &self.frames[id]);
+        }
+        let mut keys: Vec<&(Id, usize)> = self.page_frames.keys().collect();
+        keys.sort();
+        for k in keys {
+            k.hash(&mut h);
+            frame(&mut h, &self.page_frames[k]);
+        }
+        let mut ids: Vec<&Id> = self.stories.keys().collect();
+        ids.sort();
+        for id in ids {
+            let s = &self.stories[id];
+            (id, s.overflow_at, &s.frames, q(s.scale)).hash(&mut h);
+        }
+        format!("{:016x}", h.finish())
+    }
+
     /// Layout of `frame` as shown on page `page` (master frames with fields differ per page).
     pub fn frame_on(&self, frame: Id, page: Option<usize>) -> Option<&FrameLayout> {
         page.and_then(|p| self.page_frames.get(&(frame, p))).or_else(|| self.frames.get(&frame))
@@ -162,12 +204,72 @@ pub fn cell_natural_height(
     if story.is_empty() { 0.0 } else { used + cell.insets.bottom.0 }
 }
 
+/// Saved story flows that let the next layout of a changed document redo only what the change affects
+/// (PF-01): each story reflows from its first changed paragraph and stops once it rejoins its previous flow.
+#[derive(Default)]
+pub struct LayoutMemo {
+    stories: HashMap<Id, story::StoryMemo>,
+}
+
+/// Key of the document-wide inputs to text layout.
+fn doc_key(doc: &Document, fonts: &FontStore) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    format!("{:?}", (&doc.styles, &doc.color_scheme, &doc.font_scheme, &doc.baseline_grid)).hash(&mut h);
+    (fonts as *const FontStore as usize, fonts.face_count()).hash(&mut h);
+    h.finish()
+}
+
+/// Like `layout_one`, reusing and updating `memo`.
+pub fn layout_one_with(
+    doc: &Document,
+    fonts: &FontStore,
+    story: Id,
+    memo: &mut LayoutMemo,
+) -> Option<(StoryLayout, Vec<FrameLayout>)> {
+    let _pass = text::Pass::begin();
+    let s = doc.stories.get(&story)?;
+    let mut slot = memo.stories.remove(&story);
+    let out = story::layout_story_memo(doc, fonts, s, doc_key(doc, fonts), &mut slot);
+    if let Some(m) = slot {
+        memo.stories.insert(story, m);
+    }
+    Some(out)
+}
+
 /// Lays out every story in the document.
 pub fn layout_document(doc: &Document, fonts: &FontStore) -> DocLayout {
+    layout_document_in(doc, fonts, None)
+}
+
+/// Lays out every story, reusing and updating `memo` (incremental layout). With the environment variable
+/// `NEWPUB_VERIFY_INCREMENTAL` set, every result is checked against a full layout (a testing aid).
+pub fn layout_document_with(doc: &Document, fonts: &FontStore, memo: &mut LayoutMemo) -> DocLayout {
+    let out = layout_document_in(doc, fonts, Some(memo));
+    if std::env::var_os("NEWPUB_VERIFY_INCREMENTAL").is_some() {
+        let full = layout_document(doc, fonts);
+        assert_eq!(out.fingerprint(), full.fingerprint(), "incremental layout differs from a full layout");
+    }
+    out
+}
+
+fn layout_document_in(doc: &Document, fonts: &FontStore, mut memo: Option<&mut LayoutMemo>) -> DocLayout {
     let _pass = text::Pass::begin();
     let mut out = DocLayout::default();
+    let dk = if memo.is_some() { doc_key(doc, fonts) } else { 0 };
+    let mut kept = HashMap::new();
     for story in doc.stories.values() {
-        let (sl, frames) = story::layout_story(doc, fonts, story, None);
+        let (sl, frames) = match memo.as_deref_mut() {
+            Some(m) => {
+                let mut slot = m.stories.remove(&story.id);
+                let r = story::layout_story_memo(doc, fonts, story, dk, &mut slot);
+                if let Some(s) = slot {
+                    kept.insert(story.id, s);
+                }
+                r
+            }
+            None => story::layout_story(doc, fonts, story, None),
+        };
         for f in frames {
             out.frames.insert(f.frame, f);
         }
@@ -189,6 +291,9 @@ pub fn layout_document(doc: &Document, fonts: &FontStore) -> DocLayout {
                 }
             }
         }
+    }
+    if let Some(m) = memo {
+        m.stories = kept;
     }
     // Table cells: each visible cell's story in its cell box (table-local coordinates).
     for o in doc.objects.values() {

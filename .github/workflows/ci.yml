@@ -99,8 +99,88 @@ jobs:
           path: target/conformance
           if-no-files-found: warn
 
+  native-print:
+    # Real print jobs through the native print paths: GDI to "Microsoft Print to PDF" on Windows (plus XPS
+    # read back by Windows' own XPS reader), CUPS to a file-device queue on macOS.
+    name: native-print-${{ matrix.label }}
+    needs: journeys
+    if: always()
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, label: macos }
+          - { os: windows-latest, label: windows }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+      - name: build
+        run: cargo build -p newpub-journeys --release
+      - name: Windows printer
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Start-Service Spooler
+          if (-not (Get-Printer -Name "Microsoft Print to PDF" -ErrorAction SilentlyContinue)) {
+            Enable-WindowsOptionalFeature -Online -FeatureName Printing-PrintToPDFServices-Features -All -NoRestart
+          }
+          Get-Printer | Format-Table Name, DriverName, PortName
+          Get-CimInstance Win32_Printer -Filter "Name='Microsoft Print to PDF'" | Invoke-CimMethod -MethodName SetDefaultPrinter
+      - name: macOS printer
+        if: runner.os == 'macOS'
+        run: |
+          brew install poppler
+          sudo cupsctl FileDevice=Yes
+          sudo lpadmin -p FileOut -E -v file:///tmp/newpub-print.pdf -m raw
+          sudo lpadmin -d FileOut
+          lpstat -t || true
+      - name: real print
+        shell: bash
+        env:
+          NEWPUB_REAL_PRINT: "1"
+        run: |
+          out="${RUNNER_TEMP}/newpub-print.pdf"
+          [ "$RUNNER_OS" = macOS ] && out=/tmp/newpub-print.pdf
+          export NEWPUB_PRINT_OUTPUT="$out"
+          ./target/release/newpub-journeys --root journeys/conformance --out target/native-print --filter UI-PR-101
+          for _ in $(seq 1 60); do [ -s "$out" ] && break; sleep 1; done
+          if [ ! -s "$out" ]; then
+            echo "no print output at $out"
+            [ "$RUNNER_OS" = macOS ] && { lpstat -W all -o || true; sudo tail -50 /var/log/cups/error_log || true; }
+            exit 1
+          fi
+          ls -l "$out"
+          head -c 5 "$out" | grep -q '%PDF-'
+          if [ "$RUNNER_OS" = macOS ]; then
+            pdftotext "$out" - | tee /dev/stderr | grep -q "Printed by newpub"
+          fi
+      - uses: actions/download-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: journey-results-windows
+          path: ci-results/windows
+      - name: XPS opened by Windows' XPS reader
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Add-Type -AssemblyName ReachFramework, PresentationCore, WindowsBase
+          $path = (Resolve-Path "ci-results/windows/J-EX-006/news.xps").Path
+          $doc = New-Object System.Windows.Xps.Packaging.XpsDocument($path, [System.IO.FileAccess]::Read)
+          $pages = $doc.GetFixedDocumentSequence().DocumentPaginator.PageCount
+          $doc.Close()
+          Write-Output "news.xps: $pages pages"
+          if ($pages -lt 1) { exit 1 }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-print-${{ matrix.label }}
+          path: target/native-print
+          if-no-files-found: warn
+
   dashboard:
-    needs: [journeys, conformance]
+    needs: [journeys, conformance, native-print]
     if: always()
     runs-on: ubuntu-latest
     permissions:

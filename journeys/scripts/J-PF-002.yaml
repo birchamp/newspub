@@ -1,0 +1,129 @@
+id: J-PF-002
+title: Edits re-flow only what they change, and the result equals a fresh layout
+covers: [PF-01]
+steps:
+  # ~290 KB of text (24 copies of a 24-paragraph text) in one two-column story flowed over ~60 pages
+  - new_document: {width: 8.5in, height: 11in}
+  - add_text_frame: {page: 0, rect: [0.75in, 0.75in, 7in, 9.5in], columns: 2}
+    as: f
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  - insert_text: {target: $f, text: "@file:fixtures/long-text.txt"}
+  # keep rules and list numbering in the flow, so re-flow has to respect them
+  - format_paras: {target: $f, start: 140000, end: 140000, attrs: {keep_with_next: true}}
+  - format_paras: {target: $f, start: 150000, end: 152000, attrs: {list: {kind: numbered, format: decimal, start: 1, suffix: ".", indent: 24}}}
+  - format_paras: {target: $f, start: 160000, end: 160000, attrs: {keep_together: true}}
+  # autoflow adds the pages a few at a time (limit about 4x a laptop)
+  - timed:
+      max_ms: 3000
+      steps:
+        - autoflow: {frame: $f}
+  - expect: {query: {q: page_count}, gte: 50}
+  - expect: {query: {q: overflow, target: $f}, equals: false}
+  # typing on the last page: 10 keystrokes, each followed by a layout query
+  - timed:
+      max_ms: 600
+      steps:
+        - type_text: {target: $f, at: 292000, text: "a"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 292001, text: "b"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 292002, text: "c"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 292003, text: "d"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 292004, text: "e"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 292005, text: "f"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 292006, text: "g"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 292007, text: "h"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 292008, text: "i"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 292009, text: "j"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+  # typing on page 1 (the rest of the story keeps its lines and is reused)
+  - timed:
+      max_ms: 600
+      steps:
+        - type_text: {target: $f, at: 10, text: "k"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 11, text: "l"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 12, text: "m"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 13, text: "n"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 14, text: "o"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 15, text: "p"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 16, text: "q"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 17, text: "r"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 18, text: "s"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 19, text: "t"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+  # typing in the middle, inside the numbered list
+  - timed:
+      max_ms: 600
+      steps:
+        - type_text: {target: $f, at: 151000, text: "u"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 151001, text: "v"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 151002, text: "w"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 151003, text: "x"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 151004, text: "y"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - type_text: {target: $f, at: 151005, text: "z"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+  # a new paragraph in the middle, then joined again
+  - timed:
+      max_ms: 600
+      steps:
+        - type_text: {target: $f, at: 100000, text: "\n"}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+        - delete_text: {target: $f, start: 100000, end: 100001}
+        - expect: {query: {q: overflow, target: $f}, equals: false}
+  # a format change near the end, undone: the layout is as before
+  - let: {before_format: {q: layout_fingerprint}}
+  - format_paras: {target: $f, start: 291000, end: 291000, attrs: {align: center}}
+  - expect: {query: {q: layout_fingerprint}, not_equals: $before_format}
+  - undo: {}
+  - expect: {query: {q: layout_fingerprint}, equals: $before_format}
+  - format_paras: {target: $f, start: 291000, end: 291000, attrs: {align: center}}
+  # the edited layout equals a fresh layout of the same publication
+  - let: {edited: {q: layout_fingerprint}}
+  - expect: {query: {q: frame_text, frame: $f}, contains: "kl"}
+  - save: {path: long.npub}
+  - new_document: {width: 8.5in, height: 11in}
+  - open: {path: long.npub}
+  - expect: {query: {q: layout_fingerprint}, equals: $edited}
