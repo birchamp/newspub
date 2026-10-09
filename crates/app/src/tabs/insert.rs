@@ -177,17 +177,14 @@ impl NewpubApp {
             let on = frame.is_some();
             let tip = "Select a text box first";
             let mut field = None;
-            if ribbon_button(ui, ic::HASH, "Page Number", false, on).clicked() {
+            if ribbon_button(ui, ic::HASH, "Page Number", false, on).on_disabled_hover_text(tip).clicked() {
                 field = Some(Some(Field::PageNumber));
             }
-            if ribbon_button(ui, ic::FILES, "Page Count", false, on).clicked() {
+            if ribbon_button(ui, ic::FILES, "Page Count", false, on).on_disabled_hover_text(tip).clicked() {
                 field = Some(Some(Field::PageCount));
             }
-            if ribbon_button(ui, ic::CALENDAR, "Date", false, on).clicked() {
+            if ribbon_button(ui, ic::CALENDAR, "Date", false, on).on_disabled_hover_text(tip).clicked() {
                 field = Some(Some(Field::Date(newpub_engine::core::field::DateFormat::Long)));
-            }
-            if !on {
-                ui.vertical(|ui| widgets::hint(ui, tip));
             }
             if let (Some(f), Some(field)) = (frame, field) {
                 let at = Some(self.insertion_point(f));
@@ -212,6 +209,8 @@ impl NewpubApp {
                 {
                     self.insert_ui.open = Open::Symbols;
                 }
+            });
+            ui.vertical(|ui| {
                 if widgets::small_button(ui, ic::SUBTITLES, "Caption", false, picture.is_some())
                     .on_disabled_hover_text("Select a picture first")
                     .clicked()

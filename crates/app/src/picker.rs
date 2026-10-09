@@ -98,7 +98,7 @@ pub fn show(app: &mut NewpubApp, ctx: &egui::Context, st: &mut PickerState) -> b
     // A fixed position: re-centring on the measured size each frame would move widgets between frames.
     let screen = ctx.content_rect();
     let pos = egui::pos2(
-        (screen.center().x - 430.0).max(screen.left() + 8.0),
+        (screen.center().x - 454.0).max(screen.left() + 8.0),
         (screen.center().y - 330.0).max(screen.top() + 8.0),
     );
     let id = egui::Id::new("start-screen");
@@ -114,9 +114,9 @@ pub fn show(app: &mut NewpubApp, ctx: &egui::Context, st: &mut PickerState) -> b
         .frame(frame)
         .backdrop_color(Color32::from_black_alpha(110))
         .show(ctx, |ui| {
-            ui.set_width(860.0);
+            ui.set_width(908.0);
             // Hero band.
-            let (hero, _) = ui.allocate_exact_size(Vec2::new(860.0, 92.0), Sense::hover());
+            let (hero, _) = ui.allocate_exact_size(Vec2::new(908.0, 92.0), Sense::hover());
             // Rounded top corners only: a rounded gradient, then square corners over its bottom edge.
             theme::gradient_rect(ui.painter(), hero, p.grad_a, p.grad_b, 16.0);
             theme::gradient_rect(

@@ -149,6 +149,8 @@ impl NewpubApp {
         ui.add_space(4.0);
         egui::ScrollArea::horizontal().id_salt("ribbon-scroll").show(ui, |ui| {
             ui.horizontal(|ui| {
+                // Every tab is the same height, so the canvas does not jump when switching tabs.
+                ui.set_height(76.0);
                 ui.add_space(6.0);
                 match self.ribbon_tab {
                     RibbonTab::Home => self.home_tab(ui),
