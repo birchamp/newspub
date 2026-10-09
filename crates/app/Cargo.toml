@@ -7,9 +7,11 @@ license.workspace = true
 [dependencies]
 newpub-core.workspace = true
 newpub-engine.workspace = true
+newpub-io-pdf.workspace = true
 eframe.workspace = true
 egui.workspace = true
 serde_json.workspace = true
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "=0.61.2", features = [
