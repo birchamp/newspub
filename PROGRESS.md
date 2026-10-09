@@ -241,3 +241,4 @@ The dashboard parses this file:
 - macOS: documents opened from Finder (double-click, Open With, dragging onto the Dock icon) now open in newpub. newpub builds winit's event loop itself on macOS and adds `application:openURLs:` to winit's delegate. The Package workflow proves it: `open -a newpub.app finder-test.npub`, then the file is in newpub's recent list (Package run 37979489501).
 - Also: Cmd+F opens Find and Replace; dialogs are centred and Escape cancels them; the Print dialog matches the other dialogs; the .dmg check retries a busy volume.
 - Version 0.2.0.
+- **Released v0.2.0** (CI run 37980609786 and Package run 37980609854 green on f7b108e): https://github.com/birchamp/newspub/releases/tag/v0.2.0. It has seven assets: the Windows setup and portable zip, the macOS .dmg and .pkg, and the Linux AppImage, .deb and .tar.gz.
