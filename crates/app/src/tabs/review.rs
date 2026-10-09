@@ -201,6 +201,16 @@ impl NewpubApp {
         }
     }
 
+    /// Cmd+F: opens Find and Replace on the Review tab, starting from the selected text if there is any.
+    pub(crate) fn open_find(&mut self) {
+        self.ribbon_tab = crate::shell::RibbonTab::Review;
+        self.review_ui.find_open = true;
+        if let Some(t) = self.selected_text().filter(|t| !t.contains(['\n', '\u{2028}'])) {
+            self.review_ui.find = t;
+            self.review_ui.next_hit = 0;
+        }
+    }
+
     fn find_hits(&mut self) -> Vec<(Id, usize, usize)> {
         let r = &self.review_ui;
         if r.find.is_empty() {

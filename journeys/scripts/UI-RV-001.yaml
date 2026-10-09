@@ -1,5 +1,5 @@
 id: UI-RV-001
-title: Review tab — spelling with suggestions, find and replace, accessibility checker through the ribbon
+title: Review tab — spelling with suggestions, find and replace (also Cmd+F), accessibility checker through the ribbon
 covers: [UI-11]
 ui: true
 steps:
@@ -27,3 +27,9 @@ steps:
   - click: {label: "Review"}
   - click: {label: "Accessibility Checker"}
   - expect_ui: {label: "Picture has no alt text"}
+  # Cmd+F opens Find and Replace from any tab
+  - click: {label: "Find and Replace"}
+  - click: {label: "Home"}
+  - expect_ui: {label: "Find what", exists: false}
+  - key: {key: "F", command: true}
+  - expect_ui: {label: "Find what"}

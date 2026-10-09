@@ -445,6 +445,7 @@ impl NewpubApp {
                     }
                     Key::P => self.dialog = Dialog::Print(print::PrintState::new()),
                     Key::E => self.open_export_pdf(),
+                    Key::F => self.open_find(),
                     Key::S => self.open_save(),
                     Key::O => self.dialog = Dialog::Open { path: String::new() },
                     Key::N => self.open_picker(),
