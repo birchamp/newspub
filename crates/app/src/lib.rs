@@ -2,6 +2,7 @@
 //! becomes an [`Action`], every displayed fact comes from the session.
 
 mod a11y;
+mod checker;
 mod clipboard;
 mod dup;
 mod files;
@@ -79,6 +80,12 @@ pub enum Dialog {
     },
     InsertPicture {
         path: String,
+    },
+    /// Save the publication into "My templates" (from the Save dialog).
+    SaveTemplate {
+        name: String,
+        keep_text: bool,
+        keep_images: bool,
     },
     /// Insert a text file into a text box (Insert > Text File).
     InsertText {
@@ -172,6 +179,7 @@ pub struct NewpubApp {
     pub(crate) design_ui: tabs::design::DesignState,
     pub(crate) mailings_ui: tabs::mailings::MailingsState,
     pub(crate) review_ui: tabs::review::ReviewState,
+    pub(crate) checker_ui: checker::CheckerUi,
 }
 
 /// Text buffers of the object and format panels.
@@ -254,6 +262,7 @@ impl NewpubApp {
             design_ui: Default::default(),
             mailings_ui: Default::default(),
             review_ui: Default::default(),
+            checker_ui: Default::default(),
         }
     }
 
@@ -491,6 +500,7 @@ impl NewpubApp {
         self.recovery_tick();
         self.tab_windows(&ctx);
         self.styles_window(&ctx);
+        self.checker_windows(&ctx);
         self.selection_pane(&ctx);
     }
 

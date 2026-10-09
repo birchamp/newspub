@@ -94,6 +94,22 @@ impl NewpubApp {
                 self.review_ui.find_open = !self.review_ui.find_open;
             }
         });
+        group(ui, "Publication", |ui| {
+            if ribbon_button(ui, ic::INFO, "Properties", self.checker_ui.properties_open, true)
+                .on_hover_text("Title, author and language")
+                .clicked()
+            {
+                self.checker_ui.properties_open = !self.checker_ui.properties_open;
+            }
+            if ribbon_button(ui, ic::SEAL_CHECK, "Design Checker", self.checker_ui.checker_open, true)
+                .on_hover_text(
+                    "Find text that does not fit, empty boxes, objects off the page, missing fonts and pictures",
+                )
+                .clicked()
+            {
+                self.checker_ui.checker_open = !self.checker_ui.checker_open;
+            }
+        });
         group(ui, "Accessibility", |ui| {
             if ribbon_button(ui, ic::WHEELCHAIR, "Accessibility Checker", self.review_ui.a11y_open, true).clicked() {
                 self.review_ui.a11y_open = !self.review_ui.a11y_open;
@@ -244,6 +260,6 @@ impl NewpubApp {
 }
 
 /// Default window position: below the ribbon, towards the right, clear of the tab buttons.
-fn window_pos(ctx: &egui::Context) -> egui::Pos2 {
+pub(crate) fn window_pos(ctx: &egui::Context) -> egui::Pos2 {
     egui::pos2((ctx.content_rect().right() - 340.0).max(20.0), 200.0)
 }

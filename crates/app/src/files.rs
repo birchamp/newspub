@@ -433,8 +433,20 @@ impl NewpubApp {
                         path_field(ui, "File name", path, Browse::SavePub);
                         widgets::hint(ui, "Publications are saved as .npub files.");
                     });
+                    let mut as_template = false;
+                    if self.user_templates.is_some() {
+                        ui.add_space(4.0);
+                        as_template = widgets::small_button(ui, ic::LAYOUT, "Save as Template", false, true)
+                            .on_hover_text("Keep this publication in My templates, to start new ones from it")
+                            .clicked();
+                    }
                     let (ok, cancel) = confirm_row(ui, "Save File");
-                    if ok && self.act(SessionAction::Save { path: path.clone() }).is_some() {
+                    if as_template {
+                        // The template dialog takes over from this one.
+                        let title = self.session.doc().meta.title.clone();
+                        self.dialog = Dialog::SaveTemplate { name: title, keep_text: true, keep_images: true };
+                        close = true;
+                    } else if ok && self.act(SessionAction::Save { path: path.clone() }).is_some() {
                         self.remember_recent();
                         self.status = format!("Saved {path}");
                         close = true;
@@ -497,6 +509,38 @@ impl NewpubApp {
                         };
                         if let Some(o) = self.act(a) {
                             self.selection = o.created.first().copied().into_iter().collect();
+                            close = true;
+                        }
+                    }
+                    close |= cancel;
+                });
+            }
+            Dialog::SaveTemplate { name, keep_text, keep_images } => {
+                dialog_window("Save as Template").show(ctx, |ui| {
+                    widgets::section(ui, ic::LAYOUT, "Template", |ui| {
+                        ui.horizontal(|ui| {
+                            let l = ui.label("Template name");
+                            ui.add(egui::TextEdit::singleline(name).desired_width(220.0)).labelled_by(l.id);
+                        });
+                        ui.checkbox(keep_text, "Keep text");
+                        ui.checkbox(keep_images, "Keep pictures");
+                        widgets::hint(ui, "Without them, text boxes and picture frames stay as empty placeholders.");
+                    });
+                    let (ok, cancel) = confirm_row(ui, "Save Template");
+                    let clean = name.trim().replace(['/', '\\', ':'], "-");
+                    if ok && clean.is_empty() {
+                        self.status = "Give the template a name".into();
+                    } else if ok && let Some(dir) = self.user_templates.clone() {
+                        let file = dir.join(format!("{clean}.npubt"));
+                        let a = SessionAction::SaveTemplate {
+                            path: file.to_string_lossy().to_string(),
+                            name: name.trim().to_string(),
+                            keep_text: *keep_text,
+                            keep_images: *keep_images,
+                        };
+                        if std::fs::create_dir_all(&dir).is_ok() && self.act(a).is_some() {
+                            self.status = format!("Saved template {clean}");
+                            self.template_previews.retain(|k, _| !k.starts_with("file:"));
                             close = true;
                         }
                     }
