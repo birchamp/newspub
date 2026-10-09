@@ -24,6 +24,22 @@ fn config_file() -> Option<PathBuf> {
 }
 
 impl Recent {
+    /// The saved theme (true = dark), when the list is persistent and a choice was saved.
+    pub fn dark_mode(&self) -> Option<bool> {
+        let t = std::fs::read_to_string(self.store.as_ref()?.with_file_name("theme")).ok()?;
+        Some(t.trim() == "dark")
+    }
+
+    /// Saves the theme choice next to the list (persistent lists only).
+    pub fn set_dark_mode(&self, dark: bool) {
+        if let Some(store) = &self.store {
+            if let Some(dir) = store.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            let _ = std::fs::write(store.with_file_name("theme"), if dark { "dark" } else { "light" });
+        }
+    }
+
     /// Loads (and from now on saves) the list in the OS config dir. Errors are ignored.
     pub fn persistent() -> Recent {
         let store = config_file();

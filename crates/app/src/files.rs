@@ -311,7 +311,7 @@ impl NewpubApp {
 
     fn export_dialog(&mut self, ctx: &egui::Context, st: &mut ExportState) -> bool {
         let mut close = false;
-        egui::Window::new("Export As").collapsible(false).show(ctx, |ui| {
+        dialog_window("Export As").show(ctx, |ui| {
             ui.horizontal_top(|ui| {
                 ui.vertical(|ui| {
                     ui.set_width(250.0);
@@ -378,13 +378,14 @@ impl NewpubApp {
 
     pub(crate) fn dialogs(&mut self, ctx: &egui::Context) {
         let mut dialog = std::mem::replace(&mut self.dialog, Dialog::None);
-        let mut close = false;
+        // Escape cancels any dialog.
+        let mut close = !matches!(dialog, Dialog::None) && ctx.input(|i| i.key_pressed(egui::Key::Escape));
         match &mut dialog {
             Dialog::None => {}
             Dialog::Picker(st) => close = picker::show(self, ctx, st),
             Dialog::Print(st) => close = print::show(self, ctx, st),
             Dialog::ExportPdf { path, crop_marks, booklet } => {
-                egui::Window::new("Export PDF").collapsible(false).show(ctx, |ui| {
+                dialog_window("Export PDF").show(ctx, |ui| {
                     widgets::section(ui, ic::FILE_PDF, "Where to save", |ui| {
                         path_field(ui, "PDF file", path, Browse::Save("PDF", "pdf"));
                     });
@@ -417,7 +418,7 @@ impl NewpubApp {
                 });
             }
             Dialog::Save { path } => {
-                egui::Window::new("Save Publication").collapsible(false).show(ctx, |ui| {
+                dialog_window("Save Publication").show(ctx, |ui| {
                     widgets::section(ui, ic::FOLDER_OPEN, "Save as", |ui| {
                         path_field(ui, "File name", path, Browse::SavePub);
                         widgets::hint(ui, "Publications are saved as .npub files.");
@@ -432,7 +433,7 @@ impl NewpubApp {
                 });
             }
             Dialog::Open { path } => {
-                egui::Window::new("Open Publication").collapsible(false).show(ctx, |ui| {
+                dialog_window("Open Publication").show(ctx, |ui| {
                     widgets::section(ui, ic::FOLDER_OPEN, "Open a file", |ui| {
                         path_field(ui, "File name", path, Browse::OpenPub);
                     });
@@ -468,7 +469,7 @@ impl NewpubApp {
             }
             Dialog::Export(st) => close = self.export_dialog(ctx, st),
             Dialog::InsertPicture { path } => {
-                egui::Window::new("Insert Picture").collapsible(false).show(ctx, |ui| {
+                dialog_window("Insert Picture").show(ctx, |ui| {
                     widgets::section(ui, ic::IMAGE, "Picture", |ui| {
                         path_field(ui, "Picture file", path, Browse::Picture);
                         widgets::hint(ui, "PNG, JPEG, GIF, BMP, WebP or SVG.");
@@ -498,4 +499,9 @@ impl NewpubApp {
             self.dialog = dialog;
         }
     }
+}
+
+/// A dialog window centred near the top of the app window.
+pub(crate) fn dialog_window(title: &str) -> egui::Window<'_> {
+    egui::Window::new(title).collapsible(false).resizable(false).anchor(egui::Align2::CENTER_TOP, [0.0, 96.0])
 }

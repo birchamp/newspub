@@ -103,7 +103,7 @@ fn parse_pages(text: &str, count: usize) -> Result<Vec<usize>, String> {
 /// Draws the print window; returns true when it should close.
 pub fn show(app: &mut NewpubApp, ctx: &egui::Context, st: &mut PrintState) -> bool {
     let mut close = false;
-    egui::Window::new("Print publication").collapsible(false).show(ctx, |ui| {
+    crate::files::dialog_window("Print publication").show(ctx, |ui| {
         ui.horizontal(|ui| {
             ui.label("Printer:");
             let shown = st.printers.get(st.printer).cloned().unwrap_or_default();

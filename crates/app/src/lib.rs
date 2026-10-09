@@ -199,7 +199,8 @@ impl NewpubApp {
         }
     }
 
-    /// Keeps the recent-files list in the OS config dir (the desktop binary does this; journeys stay in memory).
+    /// Keeps the recent-files list and the theme choice in the OS config dir (the desktop binary does this;
+    /// journeys stay in memory).
     pub fn with_persistent_recent(mut self) -> NewpubApp {
         self.recent = recent::Recent::persistent();
         self
@@ -345,7 +346,8 @@ impl NewpubApp {
         if !std::mem::replace(&mut self.themed, true) {
             // Fonts registered now are usable from the next frame on.
             theme::install(&ctx);
-            ctx.set_theme(egui::Theme::Light);
+            let dark = self.recent.dark_mode().unwrap_or(false);
+            ctx.set_theme(if dark { egui::Theme::Dark } else { egui::Theme::Light });
             ctx.request_repaint();
             return;
         }

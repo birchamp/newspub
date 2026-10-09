@@ -143,6 +143,22 @@ positions in **frame-local** coordinates (the renderer applies the frame transfo
 from model + layout. Two back ends consume it: tiny-skia (PNG, screen) and krilla (PDF). This keeps screen and PDF
 output consistent. Imposition (booklet, n-up) maps pages onto sheets as transforms over display lists.
 
+## 6a. App UI (`newpub-app`)
+
+- **Design system:** `theme.rs` holds the light and dark `Palette` (Venice Blue `#085078` to seafoam `#85D8CE`),
+  the Inter and Phosphor font families and the egui style. `widgets.rs` has the shared buttons, cards and fields; every
+  widget sets its AccessKit label, which is what UI journeys click.
+- **Shell:** `shell.rs` draws the gradient header, the tabbed ribbon (Home, Insert, Page Design, Mailings, Review,
+  View; every tab the same height) and the status bar. Each non-Home tab lives in `tabs/` with its own window state.
+- **Panels:** `pages.rs` (thumbnails), `inspector.rs` (Format panel), `view.rs` (canvas, rulers, zoom), `files.rs`
+  (Save, Open, Export As, Insert Picture; `dialog_window` centres every dialog, Escape cancels), `picker.rs`
+  (start screen).
+- **Text editing:** `text_edit.rs` keeps a `Caret {frame, pos, anchor}` in story offsets and hit-tests against the
+  layout's glyph positions. Formatting from shortcuts and the Format panel targets the selection
+  (`text_target_range`) or the caret's paragraphs (`para_target_range`); inserts go to `insertion_point`.
+- **Preferences:** the recent-files list and the theme choice live in the OS config dir (`recent.rs`); journeys keep
+  both in memory.
+
 ## 7. Journeys (the only tests)
 
 - Scripts: `journeys/scripts/<ID>.yaml`. Fixtures: `journeys/fixtures/`. Approved goldens: `journeys/goldens/<ID>/<name>.png`.
@@ -197,6 +213,7 @@ images) → PI-04 (formatting). Stop and ask a human if the approach needs code 
 | 2026-10-09 | Layout performance: `layout::text::slice` (per-pass char→byte tables replacing `Story::slice` in layout), global shaping cache in `layout::shape::shape`, glyph-coverage cache in `Face::has_glyph`; runner step `timed`; every PDF export is tagged, RTL runs get /ActualText; pdfcheck `actual_text_contains` | PF-01 (8 s → ~45 ms per edit on a 20-page story), RTL copy/paste |
 | 2026-10-09 | Incremental layout: `layout::LayoutMemo`, `layout_document_with`, `layout_one_with`, `DocLayout::fingerprint`, `FontStore::face_count`; engine `Session.layout_memo`, query `LayoutFingerprint`; autoflow adds pages in batches. App: Windows prints natively through GDI (`print_win`, test hook `NEWPUB_PRINT_OUTPUT`) | PF-01 (J-PF-002: ~150 ms → ~12 ms per keystroke on a 60-page story), PR-07 on Windows |
 | 2026-10-09 | Engine object clipboard: `SessionAction::CopyObjects`, `CutObjects`, `PasteObjects{page,x,y}` over `core::fragment` (session clipboard; paste cascades 12 pt). App: design system (`theme.rs`, `widgets.rs`, `icons.rs`), shell (`shell.rs`), per-area modules (`inspector.rs`, `files.rs`, `tabs/`), caret text editing (`text_edit.rs`), clipboard and context menu (`clipboard.rs`); runner `click_at` with button/double/shift and a `paste` step | UI redesign, UI-14, UI-15 |
+| 2026-10-09 | `Field::Date(DateFormat)` (`NEWPUB_TODAY` pins the date in journeys); app `view` query reports `text_selection`; runner allows `expect_files`/`expect_zip` in UI journeys | Insert tab date field, Find Next selecting text, UI-EX-001 |
 
 ## 12. Predecessor survey (NewsPub, Electron + React + TS) and what we adopt
 

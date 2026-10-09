@@ -245,6 +245,7 @@ impl NewpubApp {
             let (icon, label) = if dark { (ic::SUN, "Light Mode") } else { (ic::MOON, "Dark Mode") };
             if ribbon_button(ui, icon, label, false, true).clicked() {
                 ui.ctx().set_theme(if dark { egui::Theme::Light } else { egui::Theme::Dark });
+                self.recent.set_dark_mode(!dark);
                 self.texture = None;
             }
         });

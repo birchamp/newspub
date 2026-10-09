@@ -219,3 +219,22 @@ The dashboard parses this file:
 - **Released v0.1.0** (user: "yes, tag v0.1.0 when it's green"): https://github.com/birchamp/newspub/releases/tag/v0.1.0
   - Seven assets: the Windows setup and portable zip, the macOS .dmg and .pkg, and the Linux AppImage, .deb and .tar.gz.
   - This session's git proxy does not allow tag pushes, so the Package workflow gained a `release_tag` input. A manual run with it creates the tag on that run's commit (21b08f9: the workflow change only, with the same app code as fdfc7b5) and publishes the release.
+
+### 2026-10-09 — UI redesign (user: "The UI design needs a massive improvement")
+- New design system: Venice Blue to seafoam gradient (from the colorion palettes the user pointed to), Inter for text, Phosphor icons, and light and dark themes. Dark mode is remembered between launches.
+- New shell: a gradient header (file actions, Print, Export As, Export PDF), a ribbon with six tabs, a page thumbnail strip and a status bar with zoom, units and spread controls.
+- The canvas has a pasteboard, a page shadow, 8 round resize handles, hover outlines, dashed boundaries, empty-frame placeholders and overflow badges.
+- Gaps closed by wiring up engine features the UI could not reach before (four Sonnet agents, reviewed and merged by the lead):
+  - **Insert:** tables, shape gallery, WordArt, building blocks, fields, captions, hyperlinks and symbols.
+  - **Page Design:** page setup, colour and font schemes, background, masters, guides and baseline grid.
+  - **Mailings:** recipients, merge fields, preview, filter and sort, merge to PDF and to a publication.
+  - **Review:** spelling with suggestions, find and replace (Find Next selects the match), and the accessibility checker.
+  - **Export As:** one dialog for all ten export formats, with native Browse buttons (rfd).
+  - **Format panel:** text, paragraph, text box, shape, picture, position and arrange cards. It acts on the text selection while editing.
+- Real text editing (UI-14): a caret, click to place, arrows, word and line moves, Shift selection, drag selection, typing over a selection, Cmd+B/I/U on the selection.
+- Clipboard (UI-15): cut, copy and paste of text (through the OS clipboard) and objects (through a new engine clipboard), plus a right-click menu.
+- New start screen: template cards with rendered previews, blank sizes and publication types.
+- Engine: a real Date field (`Field::Date`).
+- Journeys: UI-IN-001, UI-PD-001, UI-ML-001, UI-RV-001, UI-IS-001, UI-EX-001, UI-TE-001, UI-CB-001 and J-PG-009 (131/131 on Linux). PARITY UI-09..UI-15 get checked once CI is green on all three OSes.
+- Screenshots in docs/screenshots, shown in the README.
+- Known gaps: Find Next is the only find that selects text in place; the Format panel shows the first character's attributes for a mixed selection.
