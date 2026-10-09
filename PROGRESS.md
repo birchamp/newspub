@@ -271,3 +271,4 @@ The dashboard parses this file:
 
 ### 2026-10-09 — v0.3.0 (user: "yes, cut v0.3.0")
 - Version 0.3.0. It brings the real `.pub` import and the UI paths UI-16..UI-24 to the installers.
+- **Released v0.3.0** (CI run 38003123705 and Package run 38003123649 green on 784886c; release published by Package run 38004300374, started by hand with `release_tag` because this session cannot push tags): https://github.com/birchamp/newspub/releases/tag/v0.3.0. It has seven assets: the Windows setup and portable zip, the macOS .dmg and .pkg, and the Linux AppImage, .deb and .tar.gz.
