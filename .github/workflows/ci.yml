@@ -164,7 +164,8 @@ jobs:
           if [ "$RUNNER_OS" = macOS ]; then
             # The generic driver sends PostScript (or PDF): either way the printed text must be there.
             if head -c 5 "$out" | grep -q '%PDF-'; then cp "$out" "$out.pdf"; else ps2pdf "$out" "$out.pdf"; fi
-            pdftotext "$out.pdf" - | tee /dev/stderr | grep -q "Printed by newpub"
+            # The PostScript conversion re-encodes subset fonts, so the text may come back under other codes.
+            pdftotext "$out.pdf" - | python3 tools/conformance/text_or_reencoded.py "Printed by newpub"
           else
             head -c 5 "$out" | grep -q '%PDF-'
           fi
