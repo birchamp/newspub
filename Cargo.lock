@@ -2396,6 +2396,7 @@ dependencies = [
  "newpub-core",
  "newpub-engine",
  "serde_json",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

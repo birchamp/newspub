@@ -1,13 +1,20 @@
 //! The "Print publication" window and handing the job to the OS print system (PR-07).
 
 use crate::{NewpubApp, labeled_field};
+#[cfg(windows)]
+#[path = "print_win.rs"]
+mod print_win;
 use newpub_engine::PdfOptions;
+#[cfg(not(windows))]
 use std::process::{Command, Stdio};
+#[cfg(not(windows))]
 use std::sync::mpsc;
+#[cfg(not(windows))]
 use std::time::Duration;
 
 const DEFAULT_PRINTER: &str = "Default printer";
 /// How long listing printers may take before we give up.
+#[cfg(not(windows))]
 const LIST_TIMEOUT: Duration = Duration::from_millis(1500);
 
 #[derive(Clone, Debug, PartialEq)]
@@ -25,6 +32,7 @@ impl PrintState {
 }
 
 /// Runs a command with a time limit and returns its stdout lines.
+#[cfg(not(windows))]
 fn run_lines(program: &'static str, args: &'static [&'static str]) -> Vec<String> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
@@ -41,19 +49,24 @@ fn run_lines(program: &'static str, args: &'static [&'static str]) -> Vec<String
     }
 }
 
+#[cfg(windows)]
 fn list_printers() -> Vec<String> {
-    let mut names: Vec<String> = if cfg!(windows) {
-        run_lines("powershell", &["-NoProfile", "-Command", "Get-Printer | ForEach-Object { $_.Name }"])
-    } else {
-        let mut v: Vec<String> = run_lines("lpstat", &["-e"]);
-        if v.is_empty() {
-            v = run_lines("lpstat", &["-a"])
-                .iter()
-                .filter_map(|l| l.split_whitespace().next().map(str::to_string))
-                .collect();
-        }
-        v
-    };
+    let mut names = print_win::list_printers();
+    if names.is_empty() {
+        names.push(DEFAULT_PRINTER.into());
+    }
+    names
+}
+
+#[cfg(not(windows))]
+fn list_printers() -> Vec<String> {
+    let mut names: Vec<String> = run_lines("lpstat", &["-e"]);
+    if names.is_empty() {
+        names = run_lines("lpstat", &["-a"])
+            .iter()
+            .filter_map(|l| l.split_whitespace().next().map(str::to_string))
+            .collect();
+    }
     names.dedup();
     if names.is_empty() {
         names.push(DEFAULT_PRINTER.into());
@@ -132,6 +145,19 @@ fn send(app: &mut NewpubApp, st: &PrintState) -> bool {
         }
     };
     let printer = st.printers.get(st.printer).cloned().unwrap_or_else(|| DEFAULT_PRINTER.into());
+    // Windows prints natively through GDI; journeys (print_spool) still get a PDF spool file.
+    #[cfg(windows)]
+    if app.print_spool.is_none() {
+        let title = app.session.doc().meta.title.clone();
+        let session = &mut app.session;
+        let mut render = |page: usize, dpi: f64| session.render_page(page, dpi).map_err(|e| e.to_string());
+        let target = (printer != DEFAULT_PRINTER).then_some(printer.as_str());
+        if let Err(e) = print_win::print(target, copies, &title, &pages, &mut render) {
+            app.status = format!("Print failed: {e}");
+            return false;
+        }
+        return finish(app, copies, pages, &printer, None);
+    }
     let bytes = match app.session.pdf_bytes(&PdfOptions { pages: Some(pages.clone()), ..Default::default() }) {
         Ok(b) => b,
         Err(e) => {
@@ -154,41 +180,34 @@ fn send(app: &mut NewpubApp, st: &PrintState) -> bool {
         app.status = format!("Print failed: {e}");
         return false;
     }
+    #[cfg(not(windows))]
     if app.print_spool.is_none()
         && let Err(e) = hand_to_os(&file, &printer, copies)
     {
         app.status = format!("Print failed: {e}");
         return false;
     }
-    app.print_jobs = n;
+    finish(app, copies, pages, &printer, Some(file.to_string_lossy().into_owned()))
+}
+
+/// Records the finished job for the journeys and the status bar; returns true (close the window).
+fn finish(app: &mut NewpubApp, copies: u32, pages: Vec<usize>, printer: &str, file: Option<String>) -> bool {
+    app.print_jobs += 1;
     app.last_print_job = Some(serde_json::json!({
-        "copies": copies, "pages": pages, "printer": printer, "file": file.to_string_lossy(),
+        "copies": copies, "pages": pages, "printer": printer, "file": file,
     }));
     app.status = format!("Sent {copies} cop{} to {printer}", if copies == 1 { "y" } else { "ies" });
     true
 }
 
+/// Hands the PDF to CUPS (`lp`).
+#[cfg(not(windows))]
 fn hand_to_os(file: &std::path::Path, printer: &str, copies: u32) -> Result<(), String> {
-    if cfg!(windows) {
-        for _ in 0..copies {
-            let script = format!(
-                "Start-Process -FilePath '{}' -Verb PrintTo -ArgumentList '\"{}\"'",
-                file.display().to_string().replace('\'', "''"),
-                printer.replace('\'', "''")
-            );
-            let s = Command::new("powershell").args(["-NoProfile", "-Command", &script]).status();
-            if !s.map_err(|e| e.to_string())?.success() {
-                return Err("the print command failed".into());
-            }
-        }
-        Ok(())
-    } else {
-        let mut cmd = Command::new("lp");
-        cmd.arg("-n").arg(copies.to_string());
-        if printer != DEFAULT_PRINTER {
-            cmd.arg("-d").arg(printer);
-        }
-        let out = cmd.arg(file).stdin(Stdio::null()).output().map_err(|e| format!("cannot run lp: {e}"))?;
-        if out.status.success() { Ok(()) } else { Err(String::from_utf8_lossy(&out.stderr).trim().to_string()) }
+    let mut cmd = Command::new("lp");
+    cmd.arg("-n").arg(copies.to_string());
+    if printer != DEFAULT_PRINTER {
+        cmd.arg("-d").arg(printer);
     }
+    let out = cmd.arg(file).stdin(Stdio::null()).output().map_err(|e| format!("cannot run lp: {e}"))?;
+    if out.status.success() { Ok(()) } else { Err(String::from_utf8_lossy(&out.stderr).trim().to_string()) }
 }
