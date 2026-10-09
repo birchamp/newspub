@@ -150,6 +150,7 @@ pub(crate) struct Fields {
     w: String,
     h: String,
     columns: String,
+    pub(crate) more: inspector::InspectorFields,
 }
 
 pub(crate) fn parse_len(s: &str) -> Option<Length> {
@@ -909,16 +910,6 @@ fn normalize_line(r: Rect) -> (Rect, bool, bool) {
     let fh = r.w < 0.0;
     let fv = r.h < 0.0;
     (Rect::new(r.x.min(r.x + r.w), r.y.min(r.y + r.h), r.w.abs(), r.h.abs()), fh, fv)
-}
-
-/// A labelled single-line field that reports (edited this frame, has keyboard focus).
-pub(crate) fn labeled_field_state(ui: &mut egui::Ui, label: &str, value: &mut String) -> (bool, bool) {
-    ui.horizontal(|ui| {
-        let l = ui.label(label);
-        let r = ui.add(egui::TextEdit::singleline(value).desired_width(70.0)).labelled_by(l.id);
-        (r.changed(), r.has_focus())
-    })
-    .inner
 }
 
 /// A number without trailing zeros.

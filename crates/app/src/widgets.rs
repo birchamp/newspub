@@ -244,14 +244,14 @@ pub fn section<R>(ui: &mut Ui, icon: &str, title: &str, add: impl FnOnce(&mut Ui
         .fill(p.surface)
         .stroke(Stroke::new(1.0, p.border))
         .corner_radius(CornerRadius::same(10))
-        .inner_margin(egui::Margin::symmetric(12, 10))
+        .inner_margin(egui::Margin::symmetric(12, 8))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(icon).font(theme::icon_font(14.0)).color(p.primary));
                 ui.label(egui::RichText::new(title).font(theme::semibold(12.5)).color(p.text));
             });
-            ui.add_space(4.0);
+            ui.add_space(2.0);
             add(ui)
         })
         .inner
@@ -269,7 +269,7 @@ pub fn pal(ui: &Ui) -> Palette {
 }
 
 /// A small colour chip button; `label` is its accessible name.
-pub fn swatch(ui: &mut Ui, color: Color32, label: &str, selected: bool) -> Response {
+pub fn color_chip(ui: &mut Ui, color: Color32, label: &str, selected: bool) -> Response {
     let p = theme::palette(ui.ctx());
     let (rect, resp) = ui.allocate_exact_size(Vec2::splat(22.0), Sense::click());
     let kind = if selected { WidgetType::SelectableLabel } else { WidgetType::Button };
@@ -298,4 +298,38 @@ pub fn color_field(ui: &mut Ui, label: &str, value: &mut String) -> Option<newpu
         })
         .inner;
     if changed { Color::parse(value) } else { None }
+}
+
+/// A colour swatch `size` points square. `rgba` None draws the "no colour" slash. With `click` it is a button
+/// named `label`; otherwise a passive preview.
+pub fn swatch(ui: &mut Ui, rgba: Option<[u8; 4]>, size: f32, label: &str, selected: bool, click: bool) -> Response {
+    let p = theme::palette(ui.ctx());
+    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(size), if click { Sense::click() } else { Sense::hover() });
+    if click {
+        info(&resp, WidgetType::Button, true, label, selected.then_some(true));
+    }
+    if ui.is_rect_visible(rect) {
+        let r = CornerRadius::same(5);
+        match rgba {
+            Some([r8, g8, b8, a8]) => {
+                ui.painter().rect_filled(rect, r, Color32::from_rgba_unmultiplied(r8, g8, b8, a8));
+            }
+            None => {
+                ui.painter().rect_filled(rect, r, p.surface);
+                ui.painter().line_segment(
+                    [rect.left_bottom() + Vec2::new(3.0, -3.0), rect.right_top() + Vec2::new(-3.0, 3.0)],
+                    Stroke::new(1.5, p.danger),
+                );
+            }
+        }
+        let (w, col) = if selected {
+            (2.0, p.primary)
+        } else if resp.hovered() && click {
+            (1.5, p.text_muted)
+        } else {
+            (1.0, p.border)
+        };
+        ui.painter().rect_stroke(rect, r, Stroke::new(w, col), StrokeKind::Inside);
+    }
+    if click { resp.on_hover_text(label).on_hover_cursor(egui::CursorIcon::PointingHand) } else { resp }
 }

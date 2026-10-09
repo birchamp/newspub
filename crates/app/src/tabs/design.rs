@@ -375,7 +375,7 @@ impl NewpubApp {
             ui.horizontal(|ui| {
                 for hex in BG_SWATCHES {
                     let c = Color::parse(hex).map(|c| to_color32(&c)).unwrap_or(Color32::WHITE);
-                    if widgets::swatch(ui, c, &format!("Swatch {hex}"), d.bg.eq_ignore_ascii_case(hex)).clicked() {
+                    if widgets::color_chip(ui, c, &format!("Swatch {hex}"), d.bg.eq_ignore_ascii_case(hex)).clicked() {
                         d.bg = hex.to_string();
                     }
                 }

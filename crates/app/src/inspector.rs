@@ -1,114 +1,647 @@
-//! The right-hand inspector: formatting of the selected text and properties of the selected objects.
+//! The right-hand inspector: sectioned cards for the formatting of the selected text and the properties of the
+//! selected objects. Labels sit left in muted text, inputs share one right-aligned column.
 
-use crate::{Fields, NewpubApp, fmt_len, fmt_num, icons, labeled_field_state, widgets};
-use egui::Color32;
+use crate::{NewpubApp, fmt_len, fmt_num, icons, widgets};
+use egui::{Align, Layout, RichText};
 use newpub_engine::core::{
-    self as core, Align, CharAttrs, Command, Length, ObjectKind, ObjectPatch, ParaAttrs, TextFramePatch,
+    self as core, Align as TextAlign, AlignEdge, AlignTo, Autofit, Axis, Baseline, Caps, CharAttrs, Color, Command,
+    Dash, Fit, Id, Insets, Length, LineSpacing, ListStyle, Object, ObjectKind, ObjectPatch, ParaAttrs, ShapePatch,
+    StyleRef, TextFramePatch, VAlign, ZOp,
 };
+use std::collections::HashMap;
+
+/// Text buffers of the inspector fields that are not geometry (owned by `Fields`, reset when the selection changes).
+#[derive(Default)]
+pub(crate) struct InspectorFields {
+    bufs: HashMap<&'static str, String>,
+}
+
+fn buf<'a>(f: &'a mut InspectorFields, key: &'static str) -> &'a mut String {
+    f.bufs.entry(key).or_default()
+}
+
+/// Width of the right-hand input column.
+const INPUT_W: f32 = 84.0;
+
+/// A labelled row: muted label left, the input right-aligned. `add` receives the label's id for `labelled_by`.
+fn row<R>(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui, egui::Id) -> R) -> R {
+    let p = widgets::pal(ui);
+    ui.horizontal(|ui| {
+        ui.set_min_height(22.0);
+        let l = ui.label(RichText::new(label).size(12.0).color(p.text_muted));
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| add(ui, l.id)).inner
+    })
+    .inner
+}
+
+/// A single-line text field row. Returns the text when the user edited it this frame; while not focused it
+/// shows `model`.
+fn field(ui: &mut egui::Ui, text: &mut String, label: &str, model: &str) -> Option<String> {
+    row(ui, label, |ui, id| {
+        let r = ui.add(egui::TextEdit::singleline(text).desired_width(INPUT_W)).labelled_by(id);
+        if r.changed() {
+            Some(text.clone())
+        } else {
+            if !r.has_focus() {
+                *text = model.to_string();
+            }
+            None
+        }
+    })
+}
+
+/// A drop-down row; returns the chosen index.
+fn choice(ui: &mut egui::Ui, label: &str, current: &str, items: &[&str]) -> Option<usize> {
+    row(ui, label, |ui, _| {
+        let mut picked = None;
+        let c = egui::ComboBox::from_id_salt(label).width(INPUT_W - 16.0).selected_text(current).show_ui(ui, |ui| {
+            for (i, it) in items.iter().enumerate() {
+                if ui.selectable_label(*it == current, *it).clicked() {
+                    picked = Some(i);
+                }
+            }
+        });
+        let l = label.to_string();
+        c.response.widget_info(move || egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, &l));
+        picked
+    })
+}
+
+fn rgba_of(doc: &core::Document, c: &Color) -> [u8; 4] {
+    doc.scheme_color(c).to_rgba8()
+}
+
+fn hex_of(doc: &core::Document, c: &Color) -> String {
+    let [r, g, b, _] = rgba_of(doc, c);
+    format!("#{r:02x}{g:02x}{b:02x}")
+}
+
+fn fmt_pt(v: f64) -> String {
+    format!("{}pt", fmt_num(v))
+}
+
+/// Colour presets: scheme colours first (they follow the publication's scheme), then fixed colours.
+fn presets() -> Vec<(&'static str, Color)> {
+    use core::schemes::SchemeSlot as S;
+    let s = |slot| Color::Scheme { slot, a: 1.0 };
+    vec![
+        ("Scheme text", s(S::Main)),
+        ("Scheme accent 1", s(S::Accent1)),
+        ("Scheme accent 2", s(S::Accent2)),
+        ("Scheme accent 3", s(S::Accent3)),
+        ("Black", Color::BLACK),
+        ("White", Color::WHITE),
+        ("Red", Color::rgb(0xcc, 0x00, 0x00)),
+        ("Orange", Color::rgb(0xff, 0x88, 0x00)),
+        ("Green", Color::rgb(0x2e, 0x9e, 0x4f)),
+        ("Blue", Color::rgb(0x1f, 0x6f, 0xd0)),
+    ]
+}
+
+/// A colour row (preview swatch + hex field) with a strip of preset swatches below. Returns a colour when the
+/// user typed a valid one or clicked a preset.
+fn color_field(
+    ui: &mut egui::Ui,
+    doc: &core::Document,
+    text: &mut String,
+    label: &str,
+    current: Option<&Color>,
+) -> Option<Color> {
+    let model = current.map(|c| hex_of(doc, c)).unwrap_or_default();
+    let mut out = None;
+    row(ui, label, |ui, id| {
+        let r = ui.add(egui::TextEdit::singleline(text).desired_width(INPUT_W).hint_text("none")).labelled_by(id);
+        if r.changed() {
+            out = Color::parse(text.trim());
+        } else if !r.has_focus() {
+            *text = model.clone();
+        }
+        let sw = widgets::swatch(ui, current.map(|c| rgba_of(doc, c)), 20.0, &format!("{label} presets"), false, true);
+        egui::Popup::menu(&sw).show(|ui| {
+            ui.set_min_width(150.0);
+            let cur_hex = (!model.is_empty()).then_some(model.as_str());
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = egui::vec2(5.0, 5.0);
+                ui.set_max_width(150.0);
+                for (name, c) in presets() {
+                    let hex = hex_of(doc, &c);
+                    let name = format!("{label} preset {name}");
+                    let sel = cur_hex == Some(hex.as_str());
+                    if widgets::swatch(ui, Some(rgba_of(doc, &c)), 22.0, &name, sel, true).clicked() {
+                        out = Some(c);
+                    }
+                }
+            });
+        });
+    });
+    out
+}
+
+/// A `widgets::section` card with the compact 4px row rhythm inside.
+fn card<R>(ui: &mut egui::Ui, icon: &str, title: &str, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    widgets::section(ui, icon, title, |ui| {
+        ui.spacing_mut().item_spacing.y = 4.0;
+        add(ui)
+    })
+}
+
+fn toggle_row(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
+        add(ui);
+    });
+}
 
 impl NewpubApp {
     pub(crate) fn format_panel(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Format");
         let first = self.selection.first().copied();
         if self.fields.owner != first {
-            self.fields = Fields { owner: first, ..Default::default() };
+            self.fields = crate::Fields { owner: first, ..Default::default() };
         }
-        let Some(frame) = self.selected_text_frame() else {
-            if first.is_none() {
-                widgets::hint(ui, "Select a text box to format text.");
+        let p = widgets::pal(ui);
+        let obj = first.and_then(|id| self.session.doc().objects.get(&id).cloned());
+        let obj_label = obj.as_ref().map(|o| {
+            let kind = match &o.kind {
+                ObjectKind::Text(_) => "Text box",
+                ObjectKind::Shape(_) => "Shape",
+                ObjectKind::Image(_) => "Picture",
+                ObjectKind::Group { .. } => "Group",
+                ObjectKind::Table(_) => "Table",
+                ObjectKind::WordArt(_) => "WordArt",
+            };
+            if self.selection.len() > 1 {
+                format!("{kind} + {} more", self.selection.len() - 1)
             } else {
-                widgets::section(ui, icons::RULER, "Position and size", |ui| self.object_panel(ui));
+                kind.to_string()
             }
-            return;
-        };
+        });
+        let obj_label = obj_label.unwrap_or_default();
+        let label = obj_label;
+        ui.horizontal(|ui| {
+            ui.heading("Format");
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                ui.label(RichText::new(label).size(12.0).color(p.text_muted));
+            });
+        });
+        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = 8.0;
+            let Some(obj) = obj else {
+                self.empty_state(ui);
+                return;
+            };
+            match &obj.kind {
+                ObjectKind::Text(_) => {
+                    card(ui, icons::TEXT_AA, "Text", |ui| self.text_section(ui, obj.id));
+                    card(ui, icons::TEXT_ALIGN_LEFT, "Paragraph", |ui| self.paragraph_section(ui, obj.id));
+                    card(ui, icons::TEXTBOX, "Text box", |ui| self.text_box_section(ui, &obj));
+                }
+                ObjectKind::Shape(_) => {
+                    card(ui, icons::PAINT_BUCKET, "Shape", |ui| self.shape_section(ui, &obj));
+                }
+                ObjectKind::Image(_) => {
+                    card(ui, icons::IMAGE, "Picture", |ui| self.picture_section(ui, &obj));
+                }
+                _ => {}
+            }
+            card(ui, icons::RULER, "Position and size", |ui| self.object_panel(ui));
+            card(ui, icons::STACK, "Arrange", |ui| self.arrange_section(ui));
+        });
+    }
+
+    fn empty_state(&mut self, ui: &mut egui::Ui) {
+        let p = widgets::pal(ui);
+        ui.add_space(24.0);
+        ui.vertical_centered(|ui| {
+            ui.label(RichText::new(icons::CURSOR_CLICK).font(crate::theme::icon_font(40.0)).color(p.primary));
+            ui.add_space(6.0);
+            ui.label(RichText::new("Select something on the page to see its properties").size(13.0).color(p.text));
+        });
+        ui.add_space(12.0);
+        card(ui, icons::LIGHTBULB, "Quick tips", |ui| {
+            for tip in [
+                "Click an object to select it; Shift-click adds to the selection.",
+                "Draw a Text Box, then type to fill it.",
+                "Arrow keys nudge the selection; hold Shift for bigger steps.",
+                "Drag a corner handle to resize.",
+            ] {
+                widgets::hint(ui, tip);
+            }
+        });
+    }
+
+    // ---- Text -----------------------------------------------------------------------------------------------
+
+    fn text_section(&mut self, ui: &mut egui::Ui, frame: Id) {
         let doc = self.session.doc();
         let Ok(sid) = doc.story_of(frame) else { return };
         let Ok(story) = doc.story(sid) else { return };
-        let rc = doc.resolve_char(&story.paras[0], &story.span_attrs_at(0));
+        let Some(para0) = story.paras.first() else { return };
+        let rc = doc.resolve_char(para0, &story.span_attrs_at(0));
+        let style_name = para0.style.and_then(|id| doc.styles.para.get(&id)).map(|s| s.name.clone());
+        let color_now = rc.color.clone();
+        let color_edit = {
+            let doc = self.session.doc();
+            let mut t = std::mem::take(buf(&mut self.fields.more, "text_color"));
+            let r = color_field(ui, doc, &mut t, "Text color", Some(&color_now));
+            *buf(&mut self.fields.more, "text_color") = t;
+            r
+        };
+        let styles: Vec<String> = self
+            .session
+            .query(&newpub_engine::Query::Styles)
+            .ok()
+            .and_then(|v| {
+                v.get("para")
+                    .and_then(|a| a.as_array())
+                    .map(|a| a.iter().filter_map(|s| s.as_str().map(str::to_string)).collect())
+            })
+            .unwrap_or_default();
+
         let mut font = rc.font.clone();
         let families = self.session.fonts().families();
-        let combo = egui::ComboBox::from_id_salt("font").selected_text(&font).show_ui(ui, |ui| {
-            for f in &families {
-                ui.selectable_value(&mut font, f.clone(), f);
-            }
-        });
+        let combo = egui::ComboBox::from_id_salt("font")
+            .width(ui.available_width() - 8.0)
+            .selected_text(&font)
+            .show_ui(ui, |ui| {
+                for f in &families {
+                    ui.selectable_value(&mut font, f.clone(), f);
+                }
+            });
         combo.response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, "Font"));
         let mut patch = CharAttrs::default();
         if font != rc.font {
             patch.font = Some(font);
         }
-        ui.horizontal(|ui| {
-            if ui.selectable_label(rc.bold, "Bold").clicked() {
+        if let Some(c) = color_edit.filter(|c| *c != color_now) {
+            let attrs = CharAttrs { color: Some(c), ..Default::default() };
+            self.act_run(
+                format!("tcolor:{frame}"),
+                Command::FormatChars { target: frame, start: None, end: None, attrs },
+            );
+        }
+        let size_edit = field(ui, &mut self.fields.size, "Font size", &fmt_num(rc.size));
+        toggle_row(ui, |ui| {
+            if widgets::icon_button(ui, icons::TEXT_B, "Bold", rc.bold, true).clicked() {
                 patch.bold = Some(!rc.bold);
             }
-            if ui.selectable_label(rc.italic, "Italic").clicked() {
+            if widgets::icon_button(ui, icons::TEXT_ITALIC, "Italic", rc.italic, true).clicked() {
                 patch.italic = Some(!rc.italic);
             }
-            if ui.selectable_label(rc.underline, "Underline").clicked() {
+            if widgets::icon_button(ui, icons::TEXT_UNDERLINE, "Underline", rc.underline, true).clicked() {
                 patch.underline = Some(!rc.underline);
+            }
+            if widgets::icon_button(ui, icons::TEXT_STRIKETHROUGH, "Strikethrough", rc.strike, true).clicked() {
+                patch.strike = Some(!rc.strike);
+            }
+            let sup = rc.baseline == Baseline::Superscript;
+            if widgets::icon_button(ui, icons::TEXT_SUPERSCRIPT, "Superscript", sup, true).clicked() {
+                patch.baseline = Some(if sup { Baseline::Normal } else { Baseline::Superscript });
+            }
+            let sub = rc.baseline == Baseline::Subscript;
+            if widgets::icon_button(ui, icons::TEXT_SUBSCRIPT, "Subscript", sub, true).clicked() {
+                patch.baseline = Some(if sub { Baseline::Normal } else { Baseline::Subscript });
+            }
+            let sc = rc.caps == Caps::SmallCaps;
+            if widgets::icon_button(ui, icons::TEXT_AA, "Small caps", sc, true).clicked() {
+                patch.caps = Some(if sc { Caps::Normal } else { Caps::SmallCaps });
             }
         });
         if !patch.is_empty() {
             self.act(Command::FormatChars { target: frame, start: None, end: None, attrs: patch });
         }
-        // Font size: typing applies.
-        let mut size_text = std::mem::take(&mut self.fields.size);
-        let (changed, focused) = labeled_field_state(ui, "Font size", &mut size_text);
-        if changed {
-            if let Some(v) = core::units::parse_length(&size_text).filter(|v| (1.0..=999.0).contains(v))
-                && (v - rc.size).abs() > 1e-9
-            {
-                let attrs = CharAttrs { size: Some(Length(v)), ..Default::default() };
-                self.act_run(
-                    format!("size:{frame}"),
-                    Command::FormatChars { target: frame, start: None, end: None, attrs },
-                );
-            }
-        } else if !focused {
-            size_text = fmt_num(rc.size);
+        if let Some(t) = size_edit
+            && let Some(v) = core::units::parse_length(&t).filter(|v| (1.0..=999.0).contains(v))
+            && (v - rc.size).abs() > 1e-9
+        {
+            let attrs = CharAttrs { size: Some(Length(v)), ..Default::default() };
+            self.act_run(
+                format!("size:{frame}"),
+                Command::FormatChars { target: frame, start: None, end: None, attrs },
+            );
         }
-        self.fields.size = size_text;
-        ui.label("Alignment");
-        let rp = self
-            .session
-            .doc()
-            .resolve_para(&self.session.doc().story(sid).map(|s| s.paras[0].clone()).unwrap_or_default());
-        ui.horizontal_wrapped(|ui| {
-            for (a, label) in [
-                (Align::Left, "Align Left"),
-                (Align::Center, "Center"),
-                (Align::Right, "Align Right"),
-                (Align::Justify, "Justify"),
+        if !styles.is_empty() {
+            let current = style_name.unwrap_or_else(|| "None".into());
+            let mut items: Vec<&str> = vec!["None"];
+            items.extend(styles.iter().map(String::as_str));
+            if let Some(i) = choice(ui, "Style", &current, &items) {
+                let style = (i > 0).then(|| StyleRef::Name(styles[i - 1].clone()));
+                self.act(Command::ApplyParaStyle {
+                    target: frame,
+                    start: None,
+                    end: None,
+                    style,
+                    clear_overrides: false,
+                });
+            }
+        }
+    }
+
+    // ---- Paragraph ------------------------------------------------------------------------------------------
+
+    fn paragraph_section(&mut self, ui: &mut egui::Ui, frame: Id) {
+        let doc = self.session.doc();
+        let Ok(sid) = doc.story_of(frame) else { return };
+        let Ok(story) = doc.story(sid) else { return };
+        let Some(para0) = story.paras.first() else { return };
+        let rp = doc.resolve_para(para0);
+        let mut patch = ParaAttrs::default();
+        toggle_row(ui, |ui| {
+            for (a, icon, label) in [
+                (TextAlign::Left, icons::TEXT_ALIGN_LEFT, "Align Left"),
+                (TextAlign::Center, icons::TEXT_ALIGN_CENTER, "Center"),
+                (TextAlign::Right, icons::TEXT_ALIGN_RIGHT, "Align Right"),
+                (TextAlign::Justify, icons::TEXT_ALIGN_JUSTIFY, "Justify"),
             ] {
-                if ui.selectable_label(rp.align == a, label).clicked() {
-                    self.act(Command::FormatParas {
-                        target: frame,
-                        start: None,
-                        end: None,
-                        attrs: ParaAttrs { align: Some(a), ..Default::default() },
-                    });
+                if widgets::icon_button(ui, icon, label, rp.align == a, true).clicked() {
+                    patch.align = Some(a);
+                }
+            }
+            ui.add_space(8.0);
+            let bullet = matches!(rp.list, ListStyle::Bullet { .. });
+            if widgets::icon_button(ui, icons::LIST_BULLETS, "Bulleted list", bullet, true).clicked() {
+                patch.list = Some(if bullet {
+                    ListStyle::None
+                } else {
+                    ListStyle::Bullet { bullet: '\u{2022}', indent: Length(18.0) }
+                });
+            }
+            let numbered = matches!(rp.list, ListStyle::Numbered { .. });
+            if widgets::icon_button(ui, icons::LIST_NUMBERS, "Numbered list", numbered, true).clicked() {
+                patch.list = Some(if numbered {
+                    ListStyle::None
+                } else {
+                    ListStyle::Numbered {
+                        format: core::NumberFormat::Decimal,
+                        start: 1,
+                        suffix: ".".into(),
+                        indent: Length(18.0),
+                    }
+                });
+            }
+        });
+        if patch != ParaAttrs::default() {
+            self.act(Command::FormatParas { target: frame, start: None, end: None, attrs: patch });
+        }
+        let ls_model = match rp.line_spacing {
+            LineSpacing::Multiple(m) => fmt_num(m),
+            LineSpacing::Exactly(l) | LineSpacing::AtLeast(l) => fmt_pt(l.0),
+        };
+        let ls = field(ui, buf(&mut self.fields.more, "line_spacing"), "Line spacing", &ls_model);
+        let before = field(ui, buf(&mut self.fields.more, "space_before"), "Space before", &fmt_pt(rp.space_before));
+        let after = field(ui, buf(&mut self.fields.more, "space_after"), "Space after", &fmt_pt(rp.space_after));
+        let left = field(ui, buf(&mut self.fields.more, "indent_left"), "Indent left", &fmt_pt(rp.indent_left));
+        let firstl = field(ui, buf(&mut self.fields.more, "indent_first"), "First line", &fmt_pt(rp.indent_first));
+        let mut attrs = ParaAttrs::default();
+        let mut key = "";
+        if let Some(t) = ls {
+            let t = t.trim();
+            let v = if let Ok(m) = t.parse::<f64>() {
+                (0.1..=10.0).contains(&m).then_some(LineSpacing::Multiple(m))
+            } else {
+                core::units::parse_length(t).filter(|v| *v > 0.0).map(|v| LineSpacing::Exactly(Length(v)))
+            };
+            if let Some(v) = v
+                && v != rp.line_spacing
+            {
+                attrs.line_spacing = Some(v);
+                key = "linespacing";
+            }
+        }
+        let len = |t: Option<String>, min: f64, cur: f64| {
+            t.and_then(|t| core::units::parse_length(&t)).filter(|v| *v >= min && (v - cur).abs() > 1e-9)
+        };
+        if let Some(v) = len(before, 0.0, rp.space_before) {
+            attrs.space_before = Some(Length(v));
+            key = "spacebefore";
+        }
+        if let Some(v) = len(after, 0.0, rp.space_after) {
+            attrs.space_after = Some(Length(v));
+            key = "spaceafter";
+        }
+        if let Some(v) = len(left, 0.0, rp.indent_left) {
+            attrs.indent_left = Some(Length(v));
+            key = "indentleft";
+        }
+        if let Some(v) = len(firstl, -1000.0, rp.indent_first) {
+            attrs.indent_first = Some(Length(v));
+            key = "indentfirst";
+        }
+        if attrs != ParaAttrs::default() {
+            self.act_run(
+                format!("{key}:{frame}"),
+                Command::FormatParas { target: frame, start: None, end: None, attrs },
+            );
+        }
+    }
+
+    // ---- Text box -------------------------------------------------------------------------------------------
+
+    fn text_box_section(&mut self, ui: &mut egui::Ui, obj: &Object) {
+        let ObjectKind::Text(t) = &obj.kind else { return };
+        let id = obj.id;
+        let cols = field(ui, &mut self.fields.columns, "Columns", &t.columns.to_string());
+        let gutter = field(ui, buf(&mut self.fields.more, "gutter"), "Gutter", &fmt_len(t.gutter.0));
+        let ins = t.insets;
+        let uniform = ins.left == ins.right && ins.left == ins.top && ins.left == ins.bottom;
+        let margins_model = if uniform { fmt_len(ins.left.0) } else { "mixed".into() };
+        let margins = field(ui, buf(&mut self.fields.more, "insets"), "Inner margins", &margins_model);
+        let mut patch = TextFramePatch::default();
+        let mut key = "";
+        if let Some(n) = cols.and_then(|t| t.trim().parse::<u32>().ok()).filter(|n| (1..=20).contains(n))
+            && n != t.columns
+        {
+            patch.columns = Some(n);
+            key = "columns";
+        }
+        if let Some(v) = gutter.and_then(|t| core::units::parse_length(&t)).filter(|v| *v >= 0.0)
+            && (v - t.gutter.0).abs() > 1e-9
+        {
+            patch.gutter = Some(Length(v));
+            key = "gutter";
+        }
+        if let Some(v) = margins.and_then(|t| core::units::parse_length(&t)).filter(|v| *v >= 0.0)
+            && !(uniform && (v - ins.left.0).abs() < 1e-9)
+        {
+            patch.insets = Some(Insets::uniform(v));
+            key = "insets";
+        }
+        row(ui, "Vertical align", |ui, _| {
+            ui.spacing_mut().item_spacing.x = 2.0;
+            for (v, icon, label) in [
+                (VAlign::Bottom, icons::ALIGN_BOTTOM, "Bottom"),
+                (VAlign::Middle, icons::ALIGN_CENTER_VERTICAL, "Middle"),
+                (VAlign::Top, icons::ALIGN_TOP, "Top"),
+            ] {
+                if widgets::icon_button(ui, icon, label, t.valign == v, true).clicked() && t.valign != v {
+                    patch.valign = Some(v);
+                    key = "valign";
                 }
             }
         });
-        ui.add_space(8.0);
-        widgets::section(ui, icons::RULER, "Position and size", |ui| self.object_panel(ui));
+        let fits = ["No autofit", "Shrink on overflow", "Best fit", "Grow frame"];
+        let cur = match t.autofit {
+            Autofit::None => 0,
+            Autofit::ShrinkOnOverflow => 1,
+            Autofit::BestFit => 2,
+            Autofit::GrowFrame => 3,
+        };
+        if let Some(i) = choice(ui, "Autofit", fits[cur], &fits)
+            && i != cur
+        {
+            patch.autofit = Some([Autofit::None, Autofit::ShrinkOnOverflow, Autofit::BestFit, Autofit::GrowFrame][i]);
+            key = "autofit";
+        }
+        if patch != TextFramePatch::default() {
+            self.act_run(format!("{key}:{id}"), Command::SetTextFrame { id, patch });
+        }
         let overflow = self
             .session
-            .query(&newpub_engine::Query::Overflow { target: frame })
+            .query(&newpub_engine::Query::Overflow { target: id })
             .ok()
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
         if overflow {
-            ui.colored_label(Color32::from_rgb(200, 60, 40), "Text overflow");
+            let p = widgets::pal(ui);
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(icons::WARNING).font(crate::theme::icon_font(14.0)).color(p.danger));
+                ui.label(RichText::new("Text overflow").size(12.0).color(p.danger));
+            });
         }
     }
 
-    /// Position, size and (for text frames) columns of the first selected object.
+    // ---- Shape ----------------------------------------------------------------------------------------------
+
+    fn shape_section(&mut self, ui: &mut egui::Ui, obj: &Object) {
+        let ObjectKind::Shape(s) = &obj.kind else { return };
+        let id = obj.id;
+        let doc = self.session.doc();
+        let mut ft = std::mem::take(buf(&mut self.fields.more, "fill"));
+        let fill = color_field(ui, doc, &mut ft, "Fill color", s.fill.as_ref());
+        *buf(&mut self.fields.more, "fill") = ft;
+        let mut no_fill = false;
+        ui.horizontal(|ui| {
+            if widgets::small_button(ui, icons::PROHIBIT, "No fill", s.fill.is_none(), true).clicked() {
+                no_fill = true;
+            }
+        });
+        let doc = self.session.doc();
+        let stroke = s.stroke.clone();
+        let mut lt = std::mem::take(buf(&mut self.fields.more, "line"));
+        let line = color_field(ui, doc, &mut lt, "Line color", stroke.as_ref().map(|s| &s.color));
+        *buf(&mut self.fields.more, "line") = lt;
+        let width_model = stroke.as_ref().map(|s| fmt_num(s.width.0)).unwrap_or_default();
+        let width = field(ui, buf(&mut self.fields.more, "line_width"), "Line width", &width_model);
+        let dashes = ["Solid", "Dash", "Dot", "Dash dot", "Long dash"];
+        let dash_all = [Dash::Solid, Dash::Dash, Dash::Dot, Dash::DashDot, Dash::LongDash];
+        let cur_dash = stroke.as_ref().map(|s| s.dash).unwrap_or_default();
+        let dash_i = dash_all.iter().position(|d| *d == cur_dash).unwrap_or(0);
+        let dash = choice(ui, "Line style", dashes[dash_i], &dashes);
+        let mut no_line = false;
+        ui.horizontal(|ui| {
+            if widgets::small_button(ui, icons::PROHIBIT, "No line", stroke.is_none(), true).clicked() {
+                no_line = true;
+            }
+        });
+
+        let mut patch = ShapePatch::default();
+        let mut key = "";
+        if let Some(c) = fill
+            && s.fill.as_ref() != Some(&c)
+        {
+            patch.fill = Some(c);
+            key = "fill";
+        }
+        if no_fill && s.fill.is_some() {
+            patch.no_fill = true;
+            key = "nofill";
+        }
+        let base = stroke.clone().unwrap_or(core::Stroke {
+            color: Color::BLACK,
+            width: Length(0.75),
+            dash: Dash::Solid,
+            cap: Default::default(),
+            join: Default::default(),
+        });
+        let mut new_stroke = base.clone();
+        if let Some(c) = line {
+            new_stroke.color = c;
+            key = "line";
+        }
+        if let Some(w) = width.and_then(|t| core::units::parse_length(&t)).filter(|v| (0.0..=500.0).contains(v)) {
+            new_stroke.width = Length(w);
+            key = "linewidth";
+        }
+        if let Some(i) = dash {
+            new_stroke.dash = dash_all[i];
+            key = "linedash";
+        }
+        if new_stroke != base || (stroke.is_none() && ["line", "linewidth", "linedash"].contains(&key)) {
+            patch.stroke = Some(new_stroke);
+        }
+        if no_line && stroke.is_some() {
+            patch.no_stroke = true;
+            key = "noline";
+        }
+        if patch != ShapePatch::default() {
+            self.act_run(format!("{key}:{id}"), Command::SetShape { id, patch });
+        }
+    }
+
+    // ---- Picture --------------------------------------------------------------------------------------------
+
+    fn picture_section(&mut self, ui: &mut egui::Ui, obj: &Object) {
+        let ObjectKind::Image(img) = &obj.kind else { return };
+        let id = obj.id;
+        let p = widgets::pal(ui);
+        let l = ui.label(RichText::new("Alt text").size(12.0).color(p.text_muted));
+        let model = obj.alt_text.clone().unwrap_or_default();
+        let text = buf(&mut self.fields.more, "alt");
+        let r = ui
+            .add(
+                egui::TextEdit::multiline(text)
+                    .desired_rows(2)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("Describe the picture"),
+            )
+            .labelled_by(l.id);
+        let alt = if r.changed() {
+            Some(text.clone())
+        } else {
+            if !r.has_focus() {
+                *text = model.clone();
+            }
+            None
+        };
+        let mut deco = obj.decorative;
+        let deco_changed = ui.checkbox(&mut deco, "Decorative").changed();
+        let fits = ["Stretch", "Fit", "Fill"];
+        let all = [Fit::Stretch, Fit::Fit, Fit::Fill];
+        let cur = all.iter().position(|f| *f == img.fit).unwrap_or(0);
+        let fit = choice(ui, "Picture fit", fits[cur], &fits);
+        if let Some(a) = alt
+            && a != model
+        {
+            let patch = ObjectPatch { alt_text: Some(a), ..Default::default() };
+            self.act_run(format!("alt:{id}"), Command::SetObject { id, patch });
+        }
+        if deco_changed {
+            self.act(Command::SetObject { id, patch: ObjectPatch { decorative: Some(deco), ..Default::default() } });
+        }
+        if let Some(i) = fit
+            && i != cur
+        {
+            let patch = core::ImagePatch { fit: Some(all[i]), ..Default::default() };
+            self.act(Command::SetImage { id, patch });
+        }
+    }
+
+    // ---- Position and size ----------------------------------------------------------------------------------
+
+    /// Position, size and rotation of the first selected object.
     fn object_panel(&mut self, ui: &mut egui::Ui) {
         let Some(id) = self.selection.first().copied() else { return };
         let Some(obj) = self.session.doc().objects.get(&id) else { return };
-        let (rect, columns) = (obj.rect, if let ObjectKind::Text(t) = &obj.kind { Some(t.columns) } else { None });
-        ui.label(format!("Object {id}"));
+        let (rect, rotation) = (obj.rect, obj.rotation);
         let mut new_rect = rect;
         let mut edited = false;
         let model = [rect.x, rect.y, rect.w, rect.h];
@@ -119,12 +652,9 @@ impl NewpubApp {
             std::mem::take(&mut self.fields.h),
         ];
         for (i, label) in ["X position", "Y position", "Width", "Height"].into_iter().enumerate() {
-            let (changed, focused) = labeled_field_state(ui, label, &mut bufs[i]);
-            if changed {
+            if let Some(t) = field(ui, &mut bufs[i], label, &fmt_len(model[i])) {
                 // Any unit is accepted; partial input such as "2i" is ignored until it parses.
-                if let Some(v) =
-                    core::units::parse_length(&bufs[i]).filter(|v| *v >= if i < 2 { f64::MIN } else { 0.1 })
-                {
+                if let Some(v) = core::units::parse_length(&t).filter(|v| *v >= if i < 2 { f64::MIN } else { 0.1 }) {
                     match i {
                         0 => new_rect.x = v,
                         1 => new_rect.y = v,
@@ -133,30 +663,92 @@ impl NewpubApp {
                     }
                     edited = true;
                 }
-            } else if !focused {
-                bufs[i] = fmt_len(model[i]);
             }
         }
         let [x, y, w, h] = bufs;
         (self.fields.x, self.fields.y, self.fields.w, self.fields.h) = (x, y, w, h);
+        let rot =
+            field(ui, buf(&mut self.fields.more, "rotation"), "Rotation", &format!("{}\u{b0}", fmt_num(rotation)));
         if edited && new_rect != rect {
             let patch = ObjectPatch { rect: Some(new_rect), ..Default::default() };
             self.act_run(format!("geometry:{id}"), Command::SetObject { id, patch });
         }
-        if let Some(cols) = columns {
-            let mut text = std::mem::take(&mut self.fields.columns);
-            let (changed, focused) = labeled_field_state(ui, "Columns", &mut text);
-            if changed {
-                if let Some(n) = text.trim().parse::<u32>().ok().filter(|n| (1..=20).contains(n))
-                    && n != cols
-                {
-                    let patch = TextFramePatch { columns: Some(n), ..Default::default() };
-                    self.act_run(format!("columns:{id}"), Command::SetTextFrame { id, patch });
+        if let Some(t) = rot
+            && let Ok(v) = t.trim().trim_end_matches('\u{b0}').trim().parse::<f64>()
+            && (v - rotation).abs() > 1e-9
+        {
+            let patch = ObjectPatch { rotation: Some(v), ..Default::default() };
+            self.act_run(format!("rotation:{id}"), Command::SetObject { id, patch });
+        }
+    }
+
+    // ---- Arrange --------------------------------------------------------------------------------------------
+
+    fn arrange_section(&mut self, ui: &mut egui::Ui) {
+        let ids = self.selection.clone();
+        let Some(&first) = ids.first() else { return };
+        let doc = self.session.doc();
+        let Some(obj) = doc.objects.get(&first) else { return };
+        let locked = obj.locked;
+        let is_group = matches!(obj.kind, ObjectKind::Group { .. });
+        let multi = ids.len() >= 2;
+        let mut cmds: Vec<Command> = vec![];
+        toggle_row(ui, |ui| {
+            for (op, icon, label) in [
+                (ZOp::Forward, icons::ARROW_FAT_UP, "Bring forward"),
+                (ZOp::Backward, icons::ARROW_FAT_DOWN, "Send backward"),
+                (ZOp::Front, icons::ARROW_FAT_LINES_UP, "Move to front"),
+                (ZOp::Back, icons::ARROW_FAT_LINES_DOWN, "Move to back"),
+            ] {
+                if widgets::icon_button(ui, icon, label, false, true).clicked() {
+                    cmds.push(Command::SetZ { id: first, op });
                 }
-            } else if !focused {
-                text = cols.to_string();
             }
-            self.fields.columns = text;
+        });
+        let relative = if multi { AlignTo::Selection } else { AlignTo::Page };
+        toggle_row(ui, |ui| {
+            for (edge, icon, label) in [
+                (AlignEdge::Left, icons::ALIGN_LEFT, "Align objects left"),
+                (AlignEdge::Center, icons::ALIGN_CENTER_HORIZONTAL, "Align objects center"),
+                (AlignEdge::Right, icons::ALIGN_RIGHT, "Align objects right"),
+                (AlignEdge::Top, icons::ALIGN_TOP, "Align objects top"),
+                (AlignEdge::Middle, icons::ALIGN_CENTER_VERTICAL, "Align objects middle"),
+                (AlignEdge::Bottom, icons::ALIGN_BOTTOM, "Align objects bottom"),
+            ] {
+                if widgets::icon_button(ui, icon, label, false, !locked).clicked() {
+                    cmds.push(Command::AlignObjects { ids: ids.clone(), edge, relative });
+                }
+            }
+        });
+        if !multi {
+            widgets::hint(ui, "Align to the page. Select several objects to align them to each other.");
+        }
+        toggle_row(ui, |ui| {
+            let dist = ids.len() >= 3;
+            if widgets::icon_button(ui, icons::ARROWS_HORIZONTAL, "Distribute horizontally", false, dist).clicked() {
+                cmds.push(Command::DistributeObjects { ids: ids.clone(), axis: Axis::Horizontal });
+            }
+            if widgets::icon_button(ui, icons::ARROWS_VERTICAL, "Distribute vertically", false, dist).clicked() {
+                cmds.push(Command::DistributeObjects { ids: ids.clone(), axis: Axis::Vertical });
+            }
+            ui.add_space(8.0);
+            if widgets::icon_button(ui, icons::SELECTION_PLUS, "Group selection", false, multi).clicked() {
+                cmds.push(Command::Group { ids: ids.clone() });
+            }
+            if widgets::icon_button(ui, icons::SELECTION_SLASH, "Ungroup selection", false, is_group).clicked() {
+                cmds.push(Command::Ungroup { id: first });
+            }
+            if widgets::icon_button(ui, icons::LOCK, "Lock object", locked, true).clicked() {
+                for id in &ids {
+                    cmds.push(Command::SetObject {
+                        id: *id,
+                        patch: ObjectPatch { locked: Some(!locked), ..Default::default() },
+                    });
+                }
+            }
+        });
+        for c in cmds {
+            self.act(c);
         }
     }
 }
