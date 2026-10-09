@@ -132,8 +132,11 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install poppler
-          sudo cupsctl FileDevice=Yes
-          sudo lpadmin -p FileOut -E -v file:///tmp/newpub-print.pdf -m raw
+          # FileDevice can only be enabled in cups-files.conf; cupsd restarts on demand through launchd.
+          echo "FileDevice Yes" | sudo tee -a /etc/cups/cups-files.conf
+          sudo launchctl kickstart -k system/org.cups.cupsd || sudo launchctl stop org.cups.cupsd || true
+          sleep 2
+          sudo lpadmin -p FileOut -E -v file:///private/tmp/newpub-print.pdf -m raw
           sudo lpadmin -d FileOut
           lpstat -t || true
       - name: real print
@@ -142,7 +145,7 @@ jobs:
           NEWPUB_REAL_PRINT: "1"
         run: |
           out="${RUNNER_TEMP}/newpub-print.pdf"
-          [ "$RUNNER_OS" = macOS ] && out=/tmp/newpub-print.pdf
+          [ "$RUNNER_OS" = macOS ] && out=/private/tmp/newpub-print.pdf
           export NEWPUB_PRINT_OUTPUT="$out"
           ./target/release/newpub-journeys --root journeys/conformance --out target/native-print --filter UI-PR-101
           for _ in $(seq 1 60); do [ -s "$out" ] && break; sleep 1; done
