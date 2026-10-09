@@ -157,6 +157,18 @@ pub(crate) fn parse_len(s: &str) -> Option<Length> {
     core::units::parse_length(s).filter(|v| *v > 0.0).map(Length)
 }
 
+/// Files the OS asked to open while the app runs (macOS sends double-clicked documents as events, not arguments).
+static OPEN_REQUESTS: std::sync::Mutex<Vec<std::path::PathBuf>> = std::sync::Mutex::new(Vec::new());
+static OPEN_CTX: std::sync::OnceLock<egui::Context> = std::sync::OnceLock::new();
+
+/// Queues `path` to open at the next frame. Callable from any thread.
+pub fn request_open(path: std::path::PathBuf) {
+    OPEN_REQUESTS.lock().unwrap_or_else(|e| e.into_inner()).push(path);
+    if let Some(ctx) = OPEN_CTX.get() {
+        ctx.request_repaint();
+    }
+}
+
 impl NewpubApp {
     pub fn new(session: Session) -> NewpubApp {
         NewpubApp {
@@ -203,7 +215,23 @@ impl NewpubApp {
     /// journeys stay in memory).
     pub fn with_persistent_recent(mut self) -> NewpubApp {
         self.recent = recent::Recent::persistent();
+        // A publication opened before the app started (a file on the command line) counts as recent too.
+        self.remember_recent();
         self
+    }
+
+    /// Opens a publication, closing the start screen; failures go to the status bar.
+    pub fn open_file(&mut self, path: &std::path::Path) {
+        let path = path.to_string_lossy().to_string();
+        if self.act(SessionAction::Open { path }).is_some() {
+            self.remember_recent();
+            self.page = 0;
+            self.selection.clear();
+            self.end_text_edit();
+            if matches!(self.dialog, Dialog::Picker(_)) {
+                self.dialog = Dialog::None;
+            }
+        }
     }
 
     /// Recent files, newest first.
@@ -353,6 +381,11 @@ impl NewpubApp {
         }
         if std::mem::take(&mut self.startup_picker) {
             self.open_picker();
+        }
+        let _ = OPEN_CTX.set(ctx.clone());
+        let requests = std::mem::take(&mut *OPEN_REQUESTS.lock().unwrap_or_else(|e| e.into_inner()));
+        for path in requests {
+            self.open_file(&path);
         }
         self.sync_units();
         self.shortcuts(&ctx);

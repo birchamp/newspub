@@ -2454,9 +2454,11 @@ dependencies = [
  "newpub-core",
  "newpub-engine",
  "newpub-io-pdf",
+ "objc2 0.5.3",
  "rfd",
  "serde_json",
  "windows-sys 0.61.2",
+ "winit",
 ]
 
 [[package]]

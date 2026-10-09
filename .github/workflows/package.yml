@@ -89,6 +89,18 @@ jobs:
           sleep 10
           kill -0 "$pid" && echo "still running after 10 s"
           kill "$pid"
+      - name: a document opened from Finder opens in newpub
+        run: |
+          # Finder sends the document as an Apple Event; newpub records it in its recent files once it has opened it.
+          doc="$RUNNER_TEMP/finder-test.npub"
+          cp journeys/fixtures/v1-sample.npub "$doc"
+          recent="$HOME/Library/Application Support/newpub/recent.json"
+          rm -f "$recent"
+          open -a /Applications/newpub.app "$doc"
+          for i in $(seq 1 30); do grep -q finder-test.npub "$recent" 2>/dev/null && break; sleep 1; done
+          cat "$recent"
+          grep -q finder-test.npub "$recent"
+          pkill -f /Applications/newpub.app/Contents/MacOS/newpub || true
       - name: check the .dmg
         run: |
           hdiutil attach "dist/newpub-${VERSION}-macos-universal.dmg" -mountpoint /Volumes/newpub

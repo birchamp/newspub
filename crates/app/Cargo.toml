@@ -13,6 +13,11 @@ egui.workspace = true
 serde_json.workspace = true
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# The same versions eframe uses: newpub owns the event loop on macOS to receive "open document" events.
+winit = { version = "=0.30.13", default-features = false }
+objc2 = "=0.5.3"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "=0.61.2", features = [
     "Win32_Foundation",
