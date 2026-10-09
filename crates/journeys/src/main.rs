@@ -23,6 +23,11 @@ struct Args {
 }
 
 fn main() {
+    // Date fields show a fixed day in journeys, so output is reproducible.
+    if std::env::var_os("NEWPUB_TODAY").is_none() {
+        // SAFETY: set before any other thread starts.
+        unsafe { std::env::set_var("NEWPUB_TODAY", "2026-05-01") };
+    }
     let args = Args::parse();
     let scripts_dir = args.root.join("scripts");
     let mut files: Vec<PathBuf> = std::fs::read_dir(&scripts_dir)

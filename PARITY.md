@@ -29,7 +29,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | PG-03 | P0 | Insert, delete, duplicate, and reorder pages | J-PG-002 | [x] |
 | PG-04 | P0 | Master pages: create, apply to page, objects on master appear on pages | J-PG-003 | [x] |
 | PG-05 | P1 | Two-page (facing) masters and spread view; inside/outside margins mirror | J-PG-004 | [x] |
-| PG-06 | P1 | Page numbers, page count, and section fields on masters (auto-updating) | J-PG-005 | [x] |
+| PG-06 | P1 | Page numbers, page count, date, and section fields on masters (auto-updating) | J-PG-005, J-PG-009 | [x] |
 | PG-07 | P1 | Ignore master on a page; multiple masters per publication | J-PG-003 | [x] |
 | PG-08 | P1 | Page background colour / fill | J-PG-006 | [x] |
 | PG-09 | P2 | Sections with restart numbering and number format (1, i, I, a, A) | J-PG-005 | [x] |

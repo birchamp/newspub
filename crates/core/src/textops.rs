@@ -140,6 +140,7 @@ impl Document {
                 None => format!("\u{AB}{key}\u{BB}"),
                 Some(info) => info.fields.get(key).cloned().unwrap_or_default(),
             },
+            Field::Date(f) => crate::field::format_date(crate::field::today(), *f),
         }
     }
 
