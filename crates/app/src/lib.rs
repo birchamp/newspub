@@ -126,6 +126,8 @@ pub struct NewpubApp {
     ribbon_tab: shell::RibbonTab,
     /// Caret and text selection while editing a story (text_edit.rs).
     pub(crate) caret: Option<text_edit::Caret>,
+    /// Rendered first pages of the built-in templates (start screen), by template id.
+    template_previews: std::collections::HashMap<String, TextureHandle>,
     /// Page thumbnails: texture and the revision it shows, per page index.
     thumbs: std::collections::HashMap<usize, (TextureHandle, u64)>,
     /// Marker text put on the OS clipboard by the last object copy (None after a text copy).
@@ -191,6 +193,7 @@ impl NewpubApp {
             caret: None,
             clip_objects: None,
             thumbs: Default::default(),
+            template_previews: Default::default(),
             themed: false,
             insert_ui: Default::default(),
             design_ui: Default::default(),
