@@ -139,6 +139,7 @@ pub(crate) struct Fields {
     w: String,
     h: String,
     columns: String,
+    pub(crate) more: inspector::InspectorFields,
 }
 
 pub(crate) fn parse_len(s: &str) -> Option<Length> {
