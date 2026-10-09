@@ -10,6 +10,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
   from CI run 37842573100 (commit bb529dc): 100/100 journeys pass on macOS, Windows, and Linux. The P3 items were
   checked from CI run 37854377656 (commit 6c64ad8): 116/116 journeys pass on all three OSes.
   PF-01 and the widened SH-08 were checked from CI run 37859050166 (commit 41e16cb): 119/119 journeys pass on all three OSes.
+  UI-09..UI-15 (the redesigned UI) were checked from CI run 37978026939 (commit 6755f2f): 131/131 journeys pass on all three OSes.
   SH-08, AX-03 and PF-01 with their widened journey lists were re-checked from CI run 37864129775 (commit 1d082f4): 122/122 journeys pass on all three OSes.
 - Journeys are written by the lead **before** an item is dispatched. The implementing agent never edits them.
 - Priorities: **P0** means newpub is unusable without it. **P1** means everyday work needs it.
@@ -249,10 +250,10 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | UI-06 | P2 | Zoom, scroll, two-page spread view, rulers | UI-GD-001 | [x] |
 | UI-07 | P1 | Keyboard shortcuts carried over from NewsPub (duplicate, z-order, zoom stops, fit, nudge, Tab through story frames) | UI-SH-006 | [x] |
 | UI-08 | P2 | Template picker at startup; new publication from a built-in or saved template | UI-SH-007 | [x] |
-| UI-09 | P1 | Insert tab: tables, WordArt, shape gallery, fields, building blocks from the ribbon | UI-IN-001 | [ ] |
-| UI-10 | P1 | Page Design tab: page setup, colour and font schemes, background, master pages, grid guides | UI-PD-001 | [ ] |
-| UI-11 | P1 | Mailings and Review tabs: recipients, merge fields, preview, merge to PDF; spelling, find and replace, accessibility checker | UI-ML-001, UI-RV-001 | [ ] |
-| UI-12 | P0 | Inspector: fill, line, text colour, spacing, lists, frame margins and alignment, rotation, alt text | UI-IS-001 | [ ] |
-| UI-13 | P1 | One export dialog for PDF/X-4, PNG, HTML, EPUB, XPS and Pack and Go | UI-EX-001 | [ ] |
-| UI-14 | P0 | Text editing with a caret: click to place, arrows, selection, typing and deleting at the caret, formatting the selection | UI-TE-001 | [ ] |
-| UI-15 | P1 | Clipboard and context menu: cut, copy, paste objects and text; right-click menu | UI-CB-001 | [ ] |
+| UI-09 | P1 | Insert tab: tables, WordArt, shape gallery, fields, building blocks from the ribbon | UI-IN-001 | [x] |
+| UI-10 | P1 | Page Design tab: page setup, colour and font schemes, background, master pages, grid guides | UI-PD-001 | [x] |
+| UI-11 | P1 | Mailings and Review tabs: recipients, merge fields, preview, merge to PDF; spelling, find and replace, accessibility checker | UI-ML-001, UI-RV-001 | [x] |
+| UI-12 | P0 | Inspector: fill, line, text colour, spacing, lists, frame margins and alignment, rotation, alt text | UI-IS-001 | [x] |
+| UI-13 | P1 | One export dialog for PDF/X-4, PNG, HTML, EPUB, XPS and Pack and Go | UI-EX-001 | [x] |
+| UI-14 | P0 | Text editing with a caret: click to place, arrows, selection, typing and deleting at the caret, formatting the selection | UI-TE-001 | [x] |
+| UI-15 | P1 | Clipboard and context menu: cut, copy, paste objects and text; right-click menu | UI-CB-001 | [x] |

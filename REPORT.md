@@ -1,10 +1,11 @@
 # newpub-rs: status report
 
 **Date:** 2026-10-09.
-**Commit:** 6c25bc8, branch `claude/happy-davinci-r0kfpv`.
-**CI:** run 37870194049 is fully green: clippy, build and 122/122 journeys on Linux, macOS and Windows, the Linux conformance job, and the native-print jobs on Windows and macOS.
+**Commit:** 6755f2f, branch `claude/happy-davinci-r0kfpv`.
+**CI:** run 37978026939 is fully green: clippy, build and 131/131 journeys on Linux, macOS and Windows, the Linux conformance job, and the native-print jobs on Windows and macOS.
 
-**All 130 PARITY items, P0–P3 plus PF-01, pass their journeys on all three OSes.** IM-11 (EMF/WMF) was split out of IM-09 so that each could be checked honestly.
+**All 137 PARITY items, P0–P3 plus PF-01, pass their journeys on all three OSes.** The seven newest (UI-09..UI-15) cover the
+redesigned interface: the ribbon tabs, the Format panel, the Export As dialog, caret text editing and the clipboard. IM-11 (EMF/WMF) was split out of IM-09 so that each could be checked honestly.
 
 ## External conformance (CI jobs `conformance` on Linux, `native-print` on Windows and macOS)
 
@@ -37,7 +38,7 @@
 | EX export | 6/6 | PDF, PDF/X-4, PDF/UA-1, PNG/JPEG, HTML, EPUB 3 (fixed layout), XPS |
 | FI files | 5/5 | |
 | PI .pub import | 4/4 | |
-| UR, SP, AX, FR, UI | 2/2, 3/3, 4/4, 3/3, 8/8 | |
+| UR, SP, AX, FR, UI | 2/2, 3/3, 4/4, 3/3, 15/15 | UI: Venice Blue design system, light and dark themes, six-tab ribbon, Format panel, caret editing, clipboard |
 | PF performance | 1/1 | Incremental layout: ~10 ms per keystroke on a 60-page story |
 
 ## Known gaps
@@ -54,14 +55,14 @@ Each of these is real behaviour that a journey does not cover, or that is only p
 8. **Incremental layout** does not apply to stories with fields (page numbers, dates, merge fields) or to table cells. These are always laid out in full.
 
 Fixed since the previous report:
-- Legacy polyline point editing: the shape converts to Bézier on its first edit.
-- TH with column scope in tagged tables; veraPDF runs over every built-in template.
-- Truly incremental layout: a story reflows from its first changed paragraph and stops when it rejoins its previous flow.
-- Native Windows printing through GDI, checked in CI; XPS checked by Windows' own reader.
+- The UI redesign: a Venice Blue design system with light and dark themes, a gradient header, a six-tab ribbon, page thumbnails, a sectioned Format panel and a template start screen with previews.
+- Engine features the old UI could not reach are on the ribbon: tables, WordArt, building blocks, fields, schemes, masters, mail merge, spelling, find and replace, the accessibility checker and every export format.
+- Real text editing with a caret and selection, a clipboard for text and objects, and a right-click menu.
+- Installers for all three OSes (v0.1.0). On macOS, documents opened from Finder now open in newpub.
 
 ## Top risks
 
-1. **UI depth.** Every workflow exists, but the panels are simpler than Publisher's ribbon and galleries, and nobody from the target audience has used the app yet.
+1. **UI depth.** Every workflow is on the ribbon now, but galleries are simpler than Publisher's (no live preview on hover), the Format panel shows the first character's attributes for a mixed selection, and nobody from the target audience has used the app yet.
 2. **Performance.** Layout is incremental per story, but the display copy of the document is still rebuilt on every change. Large merges are untested.
 3. **Core complexity.** The layout engine and the display list (effects, WordArt, tagging, separations) are dense, and only journeys pin them down.
 4. **Dependencies.** egui, krilla, krilla-svg, resvg/usvg and calamine are pinned and move quickly; so is the toolchain (1.97.0).
