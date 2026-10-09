@@ -60,6 +60,32 @@ fn find<'a>(h: &'a Harness<'_, NewpubApp>, label: &'a str) -> Result<egui_kittes
     Ok(all.into_iter().nth(pick).expect("index in range"))
 }
 
+/// Scrolls the widget labelled `label` into view the way a person would: with the mouse wheel over the scrolled
+/// area. Widgets already on screen are left alone.
+fn ensure_visible(h: &mut Harness<'_, NewpubApp>, label: &str) -> Result<()> {
+    let screen = h.ctx.content_rect();
+    for _ in 0..40 {
+        let r = find(h, label)?.rect();
+        // The status bar covers the bottom 30 points of the window.
+        let (below, above) = (r.max.y > screen.max.y - 40.0, r.min.y < screen.min.y);
+        if !below && !above {
+            return Ok(());
+        }
+        let at = egui::pos2(r.center().x, if below { screen.max.y - 80.0 } else { screen.min.y + 80.0 });
+        h.hover_at(at);
+        h.run_steps(1);
+        h.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, if below { -60.0 } else { 60.0 }),
+            modifiers: egui::Modifiers::NONE,
+            phase: egui::TouchPhase::Move,
+        });
+        // Wheel scrolling animates; wait for it to finish so the widget is where the next lookup finds it.
+        h.run_steps(12);
+    }
+    Ok(())
+}
+
 fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Result<()> {
     let m = step.as_object().ok_or_else(|| anyhow!("step must be a map"))?;
     let (name, raw) = m.iter().find(|(k, _)| *k != "as").ok_or_else(|| anyhow!("empty step"))?;
@@ -82,6 +108,7 @@ fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Resul
                     h.run_steps(1);
                 }
             } else {
+                ensure_visible(h, label)?;
                 find(h, label)?.click();
             }
             settle(h);
@@ -89,6 +116,7 @@ fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Resul
         "fill" => {
             let label = args.get("label").and_then(|v| v.as_str()).ok_or_else(|| anyhow!("fill needs label"))?;
             let text = args.get("text").and_then(|v| v.as_str()).ok_or_else(|| anyhow!("fill needs text"))?;
+            ensure_visible(h, label)?;
             find(h, label)?.focus();
             settle(h);
             h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
@@ -196,6 +224,11 @@ fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Resul
             let modifiers = if flag("shift") { egui::Modifiers::SHIFT } else { egui::Modifiers::NONE };
             h.hover_at(p);
             h.run_steps(1);
+            if flag("double") {
+                // A pause first, as a person makes: an earlier click within egui's triple-click window (0.6 s)
+                // would turn this double-click into a triple-click.
+                h.run_steps(24);
+            }
             if secondary || flag("shift") || flag("double") {
                 let button = if secondary { egui::PointerButton::Secondary } else { egui::PointerButton::Primary };
                 let clicks = if flag("double") { 2 } else { 1 };
@@ -282,8 +315,10 @@ fn start_app(script: &Value, ctx: &Ctx) -> Harness<'static, NewpubApp> {
     if script.get("recovery").and_then(|v| v.as_bool()).unwrap_or(false) {
         app = app.with_recovery(ctx.out.join("recovery"), 1);
     }
+    // Frames 1/30 s apart, like a running app: double-clicks (two frames apart) fall inside egui's 0.3 s window.
     let mut h = Harness::builder()
         .with_size(egui::Vec2::new(1280.0, 860.0))
+        .with_step_dt(1.0 / 30.0)
         .with_max_steps(64)
         .build_ui_state(|ui, app: &mut NewpubApp| app.ui(ui), app);
     settle(&mut h);

@@ -8,7 +8,7 @@ use newpub_engine::core::{CharAttrs, Command, Rect};
 impl NewpubApp {
     /// Copy (or cut) the selected text while editing, else the selected objects.
     pub(crate) fn copy(&mut self, ctx: &egui::Context, cut: bool) {
-        if let Some(frame) = self.selected_text_frame().filter(|f| self.caret_in(*f).is_some()) {
+        if let Some(frame) = self.edit_target().filter(|f| self.caret_in(*f).is_some()) {
             if let Some(text) = self.selected_text() {
                 ctx.copy_text(text);
                 self.clip_objects = None;
@@ -43,7 +43,7 @@ impl NewpubApp {
     /// Paste: text into the edited story at the caret; objects from the session clipboard; otherwise plain text
     /// from the OS clipboard becomes a new text box. `os_text` is the OS clipboard text when the platform sent it.
     pub(crate) fn paste(&mut self, os_text: Option<&str>) {
-        if let Some(frame) = self.selected_text_frame().filter(|f| self.caret_in(*f).is_some()) {
+        if let Some(frame) = self.edit_target().filter(|f| self.caret_in(*f).is_some()) {
             if let Some(t) = os_text.filter(|t| !t.is_empty()) {
                 let t = t.replace("\r\n", "\n");
                 self.type_at_caret(frame, &t);
@@ -81,9 +81,8 @@ impl NewpubApp {
 
     /// Select all: the whole story while editing, else every object on the page.
     pub(crate) fn select_all(&mut self) {
-        if let Some(frame) = self.selected_text_frame().filter(|f| self.caret_in(*f).is_some()) {
-            let len =
-                self.session.doc().story_of(frame).ok().and_then(|s| self.session.doc().story(s).ok()).map(|s| s.len());
+        if let Some(frame) = self.edit_target().filter(|f| self.caret_in(*f).is_some()) {
+            let len = self.story_id(frame).and_then(|s| self.session.doc().story(s).ok()).map(|s| s.len());
             if let (Some(len), Some(c)) = (len, self.caret.as_mut()) {
                 c.anchor = 0;
                 c.pos = len;
@@ -113,10 +112,11 @@ impl NewpubApp {
 
     /// Cmd+B / Cmd+I / Cmd+U while editing: toggles bold, italic or underline on the selection (or the story).
     pub(crate) fn toggle_char_style(&mut self, key: egui::Key) {
-        let Some(frame) = self.selected_text_frame() else { return };
+        let Some(frame) = self.edit_target() else { return };
+        let Some(target) = self.story_id(frame) else { return };
         let (start, end) = self.text_target_range(frame);
         let at = start.unwrap_or(0);
-        let Ok(v) = self.session.query(&newpub_engine::Query::CharAttrs { target: frame, at }) else { return };
+        let Ok(v) = self.session.query(&newpub_engine::Query::CharAttrs { target, at }) else { return };
         let on = |k: &str| v.get(k).and_then(|b| b.as_bool()).unwrap_or(false);
         let mut attrs = CharAttrs::default();
         match key {
@@ -124,7 +124,7 @@ impl NewpubApp {
             egui::Key::I => attrs.italic = Some(!on("italic")),
             _ => attrs.underline = Some(!on("underline")),
         }
-        self.act(Command::FormatChars { target: frame, start, end, attrs });
+        self.act(Command::FormatChars { target, start, end, attrs });
     }
 }
 
@@ -134,7 +134,7 @@ impl NewpubApp {
         use crate::{icons as ic, widgets::small_button};
         let ctx = ui.ctx().clone();
         let has = !self.selection.is_empty();
-        let editing = self.selected_text_frame().filter(|f| self.caret_in(*f).is_some()).is_some();
+        let editing = self.edit_target().filter(|f| self.caret_in(*f).is_some()).is_some();
         let mut close = false;
         if small_button(ui, ic::SCISSORS, "Cut", false, has).clicked() {
             self.copy(&ctx, true);

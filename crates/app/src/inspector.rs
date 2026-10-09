@@ -195,7 +195,12 @@ impl NewpubApp {
                     card(ui, icons::TEXT_ALIGN_LEFT, "Paragraph", |ui| self.paragraph_section(ui, obj.id));
                     card(ui, icons::TEXTBOX, "Text box", |ui| self.text_box_section(ui, &obj));
                 }
-                ObjectKind::Shape(_) => {
+                ObjectKind::Shape(sh) => {
+                    // A shape that holds text gets the text cards too (they act on its story).
+                    if let Some(story) = sh.story {
+                        card(ui, icons::TEXT_AA, "Text", |ui| self.text_section(ui, story));
+                        card(ui, icons::TEXT_ALIGN_LEFT, "Paragraph", |ui| self.paragraph_section(ui, story));
+                    }
                     card(ui, icons::PAINT_BUCKET, "Shape", |ui| self.shape_section(ui, &obj));
                 }
                 ObjectKind::Image(_) => {
@@ -308,6 +313,12 @@ impl NewpubApp {
         });
         if !patch.is_empty() {
             self.act(Command::FormatChars { target: frame, start, end, attrs: patch });
+        }
+        if widgets::small_button(ui, icons::ERASER, "Clear Formatting", false, true)
+            .on_hover_text("Remove character formatting from the selected text (or the whole story)")
+            .clicked()
+        {
+            self.act(Command::ClearCharFormat { target: frame, start, end });
         }
         if let Some(t) = size_edit
             && let Some(v) = core::units::parse_length(&t).filter(|v| (1.0..=999.0).contains(v))

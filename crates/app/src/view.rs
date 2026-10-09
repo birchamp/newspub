@@ -209,7 +209,7 @@ impl NewpubApp {
         {
             return Some(t.clone());
         }
-        let pm = self.session.render_page(page, 72.0 * (self.zoom * ppp) as f64).ok()?;
+        let pm = self.session.render_page(page, self.render_dpi(ctx, ppp)).ok()?;
         let img = egui::ColorImage::from_rgba_premultiplied([pm.width() as usize, pm.height() as usize], pm.data());
         let tex = ctx.load_texture("page-other", img, egui::TextureOptions::LINEAR);
         self.view.other_tex = Some((tex.clone(), rev, page, scale_key));

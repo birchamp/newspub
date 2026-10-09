@@ -496,7 +496,7 @@ impl NewpubApp {
         if typing_in_widget {
             return;
         }
-        let editing = self.selected_text_frame().filter(|f| self.caret_in(*f).is_some());
+        let editing = self.edit_target().filter(|f| self.caret_in(*f).is_some());
         for e in &events {
             match e {
                 egui::Event::Copy => self.copy(ctx, false),
@@ -589,7 +589,7 @@ impl NewpubApp {
         if dialog_open {
             return;
         }
-        let Some(frame) = self.selected_text_frame() else { return };
+        let Some(frame) = self.edit_target() else { return };
         for e in events {
             match e {
                 egui::Event::Text(t) => self.type_at_caret(frame, &t),
@@ -605,7 +605,7 @@ impl NewpubApp {
     /// Backspace: removes the last character of the selected text frame's story, or deletes the selection
     /// when it is not a text frame (or the frame is empty).
     fn backspace(&mut self) {
-        if let Some(frame) = self.selected_text_frame()
+        if let Some(frame) = self.edit_target()
             && self.story_len(frame) > 0
         {
             self.delete_at_caret(frame, false);
@@ -619,7 +619,7 @@ impl NewpubApp {
 
     fn story_len(&self, frame: Id) -> usize {
         let d = self.session.doc();
-        d.story_of(frame).ok().and_then(|s| d.story(s).ok()).map(|s| s.len()).unwrap_or(0)
+        self.story_id(frame).and_then(|s| d.story(s).ok()).map(|s| s.len()).unwrap_or(0)
     }
 
     pub(crate) fn reorder(&mut self, op: ZOp) {
@@ -650,6 +650,16 @@ impl NewpubApp {
         self.selection = vec![next];
     }
 
+    /// Resolution for rendering the current page at this zoom, capped so the image fits in one GPU texture
+    /// (beyond that the page is drawn scaled up).
+    pub(crate) fn render_dpi(&self, ctx: &egui::Context, ppp: f32) -> f64 {
+        let want = 72.0 * (self.zoom * ppp) as f64;
+        let setup = &self.session.doc().setup;
+        let longest = setup.width.0.max(setup.height.0);
+        let max_side = ctx.input(|i| i.max_texture_side) as f64;
+        if longest > 0.0 { want.min((max_side - 2.0) * 72.0 / longest) } else { want }
+    }
+
     fn page_texture(&mut self, ctx: &egui::Context, ppp: f32) -> Option<TextureHandle> {
         let rev = self.session.revision();
         let scale_key = (self.zoom * ppp * 100.0) as u32;
@@ -662,7 +672,7 @@ impl NewpubApp {
             {
                 return Some(t.clone());
             }
-            let dpi = 72.0 * (self.zoom * ppp) as f64;
+            let dpi = self.render_dpi(ctx, ppp);
             if let Ok(pm) = self.session.render_page_preview(self.page, dpi, &cmd) {
                 let img =
                     egui::ColorImage::from_rgba_premultiplied([pm.width() as usize, pm.height() as usize], pm.data());
@@ -678,7 +688,7 @@ impl NewpubApp {
         {
             return Some(t.clone());
         }
-        let dpi = 72.0 * (self.zoom * ppp) as f64;
+        let dpi = self.render_dpi(ctx, ppp);
         let pm = self.session.render_page(self.page, dpi).ok()?;
         let img = egui::ColorImage::from_rgba_premultiplied([pm.width() as usize, pm.height() as usize], pm.data());
         let tex = ctx.load_texture("page", img, egui::TextureOptions::LINEAR);
@@ -854,18 +864,36 @@ impl NewpubApp {
         {
             return;
         }
-        // Double-click on a text frame starts editing at the word under the pointer.
+        // Double-click on a text frame starts editing at the word under the pointer; on a shape, typing in it
+        // (it gets a story the first time); on a table, in the cell under the pointer.
         if self.tool == Tool::Select
             && resp.double_clicked()
             && let Some(p) = resp.interact_pointer_pos()
         {
             let (x, y) = self.screen_to_page(p);
-            if let Some(id) = self.hit(x, y)
-                && matches!(self.session.doc().objects.get(&id).map(|o| &o.kind), Some(ObjectKind::Text(_)))
-            {
-                let pos = self.hit_text(id, x, y);
-                self.select_word(id, pos);
-                return;
+            let kind = self.hit(x, y).and_then(|id| self.session.doc().objects.get(&id).map(|o| (id, o.kind.clone())));
+            match kind {
+                Some((id, ObjectKind::Text(_))) => {
+                    let pos = self.hit_text(id, x, y);
+                    self.select_word(id, pos);
+                    return;
+                }
+                Some((id, ObjectKind::Shape(sh))) => {
+                    if sh.story.is_none() && self.act(Command::AddShapeText { id }).is_none() {
+                        return;
+                    }
+                    let pos = self.hit_text(id, x, y);
+                    self.place_caret(id, pos, false);
+                    return;
+                }
+                Some((id, ObjectKind::Table(_))) => {
+                    if let Some((cell, _, _)) = self.cell_at(id, x, y) {
+                        let pos = self.hit_text(cell, x, y);
+                        self.select_word(cell, pos);
+                    }
+                    return;
+                }
+                _ => {}
             }
         }
         if resp.drag_started() {
@@ -924,14 +952,12 @@ impl NewpubApp {
             let (x, y) = self.screen_to_page(p);
             if self.tool == Tool::Select {
                 let hit = self.hit(x, y);
-                let text = hit.filter(|id| {
-                    matches!(self.session.doc().objects.get(id).map(|o| &o.kind), Some(ObjectKind::Text(_)))
-                });
-                match text {
-                    // A click in an already selected text box places the caret there.
-                    Some(id) if self.selection == [id] => {
-                        let pos = self.hit_text(id, x, y);
-                        self.place_caret(id, pos, false);
+                // A click in an already selected text box, shape with text or table places the caret there.
+                let editable = hit.filter(|id| self.selection == [*id]).and_then(|id| self.editable_at(id, x, y));
+                match editable {
+                    Some(ed) => {
+                        let pos = self.hit_text(ed, x, y);
+                        self.place_caret(ed, pos, false);
                     }
                     _ => {
                         self.end_text_edit();

@@ -1,5 +1,8 @@
 //! Text editing on the canvas (UI-14): a caret and a selection inside a story, placed with the mouse, moved with
 //! the keyboard, and drawn from the layout's glyph positions. Typing, deleting and formatting work at the caret.
+//!
+//! The caret lives in an *editable*: a text frame, a shape that holds text (UI-19), or a table cell, named by its
+//! story id. Commands go to the story; the selection holds the object on the page (frame, shape or table).
 
 use crate::NewpubApp;
 use egui::{Color32, Pos2, Rect as ERect, Stroke};
@@ -8,10 +11,10 @@ use newpub_engine::core::{Command, Id, ObjectKind};
 use newpub_engine::layout::Line;
 use std::ops::Range;
 
-/// A caret in the story of a text frame. `anchor` is the other end of the selection (equal to `pos` when none).
+/// A caret in a story. `anchor` is the other end of the selection (equal to `pos` when none).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Caret {
-    /// The frame the caret was placed in (any frame of the story).
+    /// The editable the caret was placed in: a frame of the story, a shape, or a table cell's story id.
     pub frame: Id,
     pub pos: usize,
     pub anchor: usize,
@@ -33,29 +36,69 @@ impl Caret {
     }
 }
 
-/// One laid-out line of a story with the frame it sits in and the frame's page position.
+/// One laid-out line of a story: the layout entry it belongs to (`key`), the object on the page that shows it
+/// (`object`), and the page position line coordinates are relative to.
 struct StoryLine {
-    frame: Id,
+    key: Id,
+    object: Id,
     origin: (f64, f64),
     line: Line,
 }
 
 impl NewpubApp {
+    /// The story of an editable (text frame, shape with text, or a story id itself).
+    pub(crate) fn story_id(&self, id: Id) -> Option<Id> {
+        let d = self.session.doc();
+        if d.stories.contains_key(&id) {
+            return Some(id);
+        }
+        match &d.objects.get(&id)?.kind {
+            ObjectKind::Text(t) => Some(t.story),
+            ObjectKind::Shape(s) => s.story,
+            _ => None,
+        }
+    }
+
+    /// The table holding a cell story, with the table's id.
+    pub(crate) fn cell_table(&self, story: Id) -> Option<(Id, usize, usize)> {
+        let d = self.session.doc();
+        d.objects.values().find_map(|o| match &o.kind {
+            ObjectKind::Table(t) => (0..t.rows()).find_map(|r| {
+                (0..t.cols()).find_map(|c| {
+                    t.cell(r, c).filter(|cell| cell.story == story && !cell.covered).map(|_| (o.id, r, c))
+                })
+            }),
+            _ => None,
+        })
+    }
+
+    /// The object on the page that shows an editable: the frame or shape itself, or a cell's table.
+    pub(crate) fn holder(&self, id: Id) -> Id {
+        if self.session.doc().objects.contains_key(&id) { id } else { self.cell_table(id).map_or(id, |t| t.0) }
+    }
+
     fn story_len_of(&self, frame: Id) -> usize {
         let d = self.session.doc();
-        d.story_of(frame).ok().and_then(|s| d.story(s).ok()).map(|s| s.len()).unwrap_or(0)
+        self.story_id(frame).and_then(|s| d.story(s).ok()).map(|s| s.len()).unwrap_or(0)
     }
 
     fn story_text_of(&self, frame: Id) -> String {
         let d = self.session.doc();
-        d.story_of(frame).ok().and_then(|s| d.story(s).ok()).map(|s| s.text.clone()).unwrap_or_default()
+        self.story_id(frame).and_then(|s| d.story(s).ok()).map(|s| s.text.clone()).unwrap_or_default()
     }
 
     /// The caret, if it belongs to `frame`'s story.
     pub(crate) fn caret_in(&self, frame: Id) -> Option<Caret> {
         let c = self.caret?;
-        let d = self.session.doc();
-        (d.story_of(c.frame).ok()? == d.story_of(frame).ok()?).then_some(c)
+        (self.story_id(c.frame)? == self.story_id(frame)?).then_some(c)
+    }
+
+    /// What typing and text commands act on: the caret's editable while editing, else the selected text frame.
+    pub(crate) fn edit_target(&self) -> Option<Id> {
+        match self.caret {
+            Some(c) if self.selection.contains(&self.holder(c.frame)) => Some(c.frame),
+            _ => self.selected_text_frame(),
+        }
     }
 
     /// Range of the selected text in the edited story, for formatting commands: `(Some(a), Some(b))` with a
@@ -84,15 +127,25 @@ impl NewpubApp {
     /// Lines of the story of `frame`, in story order across its frames.
     fn story_lines(&mut self, frame: Id) -> Vec<StoryLine> {
         let layout = self.session.layout();
+        let Some(sid) = self.story_id(frame) else { return vec![] };
         let d = self.session.doc();
-        let Some(frames) = d.story_of(frame).ok().and_then(|s| d.story(s).ok()).map(|s| s.frames.clone()) else {
-            return vec![];
-        };
+        let Some(frames) = d.story(sid).ok().map(|s| s.frames.clone()) else { return vec![] };
         let mut out = vec![];
+        if frames.is_empty() {
+            // A table cell: laid out under its story id, in coordinates relative to the table.
+            if let Some((table, _, _)) = self.cell_table(sid)
+                && let (Some(fl), Some(o)) = (layout.frames.get(&sid), d.objects.get(&table))
+            {
+                for l in &fl.lines {
+                    out.push(StoryLine { key: sid, object: table, origin: (o.rect.x, o.rect.y), line: l.clone() });
+                }
+            }
+            return out;
+        }
         for f in frames {
             let (Some(fl), Some(o)) = (layout.frames.get(&f), d.objects.get(&f)) else { continue };
             for l in &fl.lines {
-                out.push(StoryLine { frame: f, origin: (o.rect.x, o.rect.y), line: l.clone() });
+                out.push(StoryLine { key: f, object: f, origin: (o.rect.x, o.rect.y), line: l.clone() });
             }
         }
         out
@@ -129,7 +182,7 @@ impl NewpubApp {
         let i = Self::line_of(&lines, pos)?;
         let l = &lines[i];
         let x = Self::x_in_line(&l.line, pos);
-        Some((l.frame, l.origin.0 + x, l.origin.1 + l.line.top, l.line.height))
+        Some((l.object, l.origin.0 + x, l.origin.1 + l.line.top, l.line.height))
     }
 
     /// Story position nearest to a frame-local point on one line.
@@ -151,9 +204,9 @@ impl NewpubApp {
         line.char_range.end
     }
 
-    /// Story position under a page point inside `frame`.
+    /// Story position under a page point inside `frame` (a text frame, a shape, or a cell's story).
     pub(crate) fn hit_text(&mut self, frame: Id, x: f64, y: f64) -> usize {
-        let lines: Vec<StoryLine> = self.story_lines(frame).into_iter().filter(|l| l.frame == frame).collect();
+        let lines: Vec<StoryLine> = self.story_lines(frame).into_iter().filter(|l| l.key == frame).collect();
         if lines.is_empty() {
             return self.story_len_of(frame);
         }
@@ -191,8 +244,9 @@ impl NewpubApp {
             _ => pos,
         };
         self.caret = Some(Caret { frame, pos, anchor, goal_x: None });
-        self.selection = vec![frame];
-        self.view.editing = Some(frame);
+        let holder = self.holder(frame);
+        self.selection = vec![holder];
+        self.view.editing = Some(holder);
     }
 
     /// Ends text editing (the frame stays selected).
@@ -204,7 +258,7 @@ impl NewpubApp {
     /// Drops a caret that no longer fits its story or whose frame is gone.
     pub(crate) fn validate_caret(&mut self) {
         let Some(c) = self.caret else { return };
-        if !self.selection.contains(&c.frame) || !self.session.doc().objects.contains_key(&c.frame) {
+        if !self.selection.contains(&self.holder(c.frame)) || self.story_id(c.frame).is_none() {
             self.caret = None;
             return;
         }
@@ -227,23 +281,25 @@ impl NewpubApp {
             b += 1;
         }
         self.caret = Some(Caret { frame, pos: b, anchor: a, goal_x: None });
-        self.selection = vec![frame];
-        self.view.editing = Some(frame);
+        let holder = self.holder(frame);
+        self.selection = vec![holder];
+        self.view.editing = Some(holder);
     }
 
     /// Types `text` at the caret of `frame`, replacing the selection. Without a caret the text goes at the end.
     pub(crate) fn type_at_caret(&mut self, frame: Id, text: &str) {
         let c = self.caret_in(frame).unwrap_or_else(|| Caret::at(frame, self.story_len_of(frame)));
+        let Some(target) = self.story_id(frame) else { return };
         let n = text.chars().count();
         let r = c.range();
         let ok = if c.has_selection() {
-            self.act(Command::ReplaceText { target: frame, start: r.start, end: r.end, text: text.to_string() })
+            self.act(Command::ReplaceText { target, start: r.start, end: r.end, text: text.to_string() })
         } else {
-            self.act(SessionAction::TypeText { target: frame, at: Some(r.start), text: text.to_string() })
+            self.act(SessionAction::TypeText { target, at: Some(r.start), text: text.to_string() })
         };
         if ok.is_some() {
             self.caret = Some(Caret::at(c.frame, r.start + n));
-            self.view.editing = Some(frame);
+            self.view.editing = Some(self.holder(frame));
         }
     }
 
@@ -261,7 +317,8 @@ impl NewpubApp {
         if r.is_empty() {
             return;
         }
-        if self.act(Command::DeleteText { target: frame, start: r.start, end: r.end }).is_some() {
+        let Some(target) = self.story_id(frame) else { return };
+        if self.act(Command::DeleteText { target, start: r.start, end: r.end }).is_some() {
             self.caret = Some(Caret::at(c.frame, r.start));
         }
     }
@@ -357,9 +414,9 @@ impl NewpubApp {
         let goal = c.goal_x.unwrap_or(cur.origin.0 + Self::x_in_line(&cur.line, c.pos));
         // The next row: the nearest line whose top differs (wrap pieces share a row).
         let target = if down {
-            lines[i + 1..].iter().find(|l| (l.line.top - cur.line.top).abs() > 0.5 || l.frame != cur.frame)
+            lines[i + 1..].iter().find(|l| (l.line.top - cur.line.top).abs() > 0.5 || l.key != cur.key)
         } else {
-            lines[..i].iter().rev().find(|l| (l.line.top - cur.line.top).abs() > 0.5 || l.frame != cur.frame)
+            lines[..i].iter().rev().find(|l| (l.line.top - cur.line.top).abs() > 0.5 || l.key != cur.key)
         };
         match target {
             Some(t) => (
@@ -380,7 +437,7 @@ impl NewpubApp {
         let accent = crate::theme::VENICE;
         if c.has_selection() {
             let r = c.range();
-            for l in lines.iter().filter(|l| page_objects.contains(&l.frame)) {
+            for l in lines.iter().filter(|l| page_objects.contains(&l.object)) {
                 let cr = &l.line.char_range;
                 let (a, b) = (r.start.max(cr.start), r.end.min(cr.end));
                 if a >= b && !(cr.start == cr.end && r.contains(&cr.start)) {
@@ -411,50 +468,70 @@ impl NewpubApp {
         }
     }
 
-    /// Mouse handling inside a text frame being edited: press places the caret (Shift extends), drag selects,
+    /// The cell of `table` under a page point: (cell story, row, column).
+    pub(crate) fn cell_at(&self, table: Id, x: f64, y: f64) -> Option<(Id, usize, usize)> {
+        let o = self.session.doc().objects.get(&table)?;
+        let ObjectKind::Table(t) = &o.kind else { return None };
+        let (lx, ly) = (x - o.rect.x, y - o.rect.y);
+        for r in 0..t.rows() {
+            for c in 0..t.cols() {
+                let (Some(cell), Some(rect)) = (t.cell(r, c), t.cell_rect(r, c)) else { continue };
+                if !cell.covered && rect.contains(lx, ly) {
+                    return Some((cell.story, r, c));
+                }
+            }
+        }
+        None
+    }
+
+    /// The editable under a page point inside an edited object: the frame or shape itself, or a table's cell.
+    pub(crate) fn editable_at(&self, holder: Id, x: f64, y: f64) -> Option<Id> {
+        let o = self.session.doc().objects.get(&holder)?;
+        match &o.kind {
+            ObjectKind::Text(_) => o.rect.contains(x, y).then_some(holder),
+            ObjectKind::Shape(s) => (s.story.is_some() && o.rect.contains(x, y)).then_some(holder),
+            ObjectKind::Table(_) => self.cell_at(holder, x, y).map(|c| c.0),
+            _ => None,
+        }
+    }
+
+    /// Mouse handling inside the object being edited: press places the caret (Shift extends), drag selects,
     /// double-click selects a word. Returns true when the pointer interaction was a text interaction.
     pub(crate) fn text_pointer(&mut self, resp: &egui::Response, press: Option<Pos2>) -> bool {
-        let Some(frame) = self.view.editing.filter(|f| self.selection.contains(f)) else { return false };
-        let Some(o) = self.session.doc().objects.get(&frame) else { return false };
-        if !matches!(o.kind, ObjectKind::Text(_)) {
-            return false;
-        }
-        let rect = o.rect;
-        let inside = |p: Pos2, app: &NewpubApp| {
-            let (x, y) = app.screen_to_page(p);
-            rect.contains(x, y)
-        };
+        let Some(holder) = self.view.editing.filter(|f| self.selection.contains(f)) else { return false };
         let shift = resp.ctx.input(|i| i.modifiers.shift);
         if resp.double_clicked()
             && let Some(p) = resp.interact_pointer_pos()
-            && inside(p, self)
         {
             let (x, y) = self.screen_to_page(p);
-            let pos = self.hit_text(frame, x, y);
-            self.select_word(frame, pos);
-            return true;
-        }
-        if let Some(p) = press
-            && inside(p, self)
-        {
-            if resp.drag_started() || resp.clicked() || resp.is_pointer_button_down_on() {
-                let (x, y) = self.screen_to_page(p);
-                let pos = self.hit_text(frame, x, y);
-                if resp.drag_started() || resp.clicked() {
-                    self.place_caret(frame, pos, shift);
-                }
+            if let Some(ed) = self.editable_at(holder, x, y) {
+                let pos = self.hit_text(ed, x, y);
+                self.select_word(ed, pos);
+                return true;
             }
-            if resp.dragged()
-                && let Some(now) = resp.interact_pointer_pos()
-            {
-                let (x, y) = self.screen_to_page(now);
-                let pos = self.hit_text(frame, x, y);
+        }
+        let Some(p) = press else { return false };
+        let (px, py) = self.screen_to_page(p);
+        let Some(ed) = self.editable_at(holder, px, py) else { return false };
+        if resp.drag_started() || resp.clicked() || resp.is_pointer_button_down_on() {
+            let pos = self.hit_text(ed, px, py);
+            if resp.drag_started() || resp.clicked() {
+                // Shift extends only within the same story.
+                let extend = shift && self.caret_in(ed).is_some();
+                self.place_caret(ed, pos, extend);
+            }
+        }
+        if resp.dragged()
+            && let Some(now) = resp.interact_pointer_pos()
+        {
+            let (x, y) = self.screen_to_page(now);
+            if self.editable_at(holder, x, y) == Some(ed) {
+                let pos = self.hit_text(ed, x, y);
                 if let Some(c) = self.caret.as_mut() {
                     c.pos = pos;
                 }
             }
-            return true;
         }
-        false
+        true
     }
 }
