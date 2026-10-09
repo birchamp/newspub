@@ -34,7 +34,7 @@ Section: graphics
 Priority: optional
 Architecture: amd64
 Installed-Size: $SIZE
-Depends: libc6, libgcc-s1, libxkbcommon0, libgl1, libegl1, libx11-6, libxcursor1, libxi6, libxrandr2, libwayland-client0, libwayland-cursor0, libwayland-egl1
+Depends: libc6, libgcc-s1, libxkbcommon0, libxkbcommon-x11-0, libgl1, libegl1, libx11-6, libxcursor1, libxi6, libxrandr2, libwayland-client0, libwayland-cursor0, libwayland-egl1
 Maintainer: newpub contributors <noreply@users.noreply.github.com>
 Description: Desktop publishing for newsletters, bulletins, flyers and booklets
  newpub lays out text and pictures on pages, prints booklets and exports PDF.

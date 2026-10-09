@@ -212,3 +212,6 @@ The dashboard parses this file:
 - The app has an original icon (tools/package/make_icon.py), shown as its window icon. Release builds on Windows no longer open a console window. A file passed on the command line (a double-clicked `.npub`) opens instead of the template picker.
 - INSTALL.md explains installing, and the one-time "unidentified developer" prompts on Windows and macOS. Signing needs a Windows code-signing certificate and an Apple Developer ID.
 - Known gap: on macOS, double-clicking a `.npub` file starts newpub but does not open that file yet, because macOS passes it as an Apple Event, not as an argument.
+- First Package run: macOS was green. Linux and Windows failed the launch check:
+  - **Linux** (a real packaging bug): the `.deb` lacked `libxkbcommon-x11-0`, so newpub panicked at start on systems without it. Reproduced locally and fixed in the dependency list.
+  - **Windows:** newpub exited at once on the runner, which has no OpenGL 2. Startup now tries OpenGL first, then wgpu (Direct3D 12 with WARP on Windows), and shows an error box if both fail. The CI check now requires a window titled "newpub", so an error box cannot pass.

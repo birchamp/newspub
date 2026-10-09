@@ -46,5 +46,5 @@ After that, newpub opens normally.
 
 ## Requirements
 
-- **Graphics:** OpenGL 2.0 or later, which every current computer has. Some virtual machines without 3D acceleration do not, and newpub cannot start there.
+- **Graphics:** newpub draws with OpenGL. Where OpenGL 2 is missing (some virtual machines, old drivers), it uses Direct3D 12 on Windows (including Windows' built-in software renderer), Metal on macOS, or Vulkan on Linux. If neither works, it shows a message saying why.
 - **Fonts:** none to install. newpub carries its own fonts and spelling dictionary.

@@ -6,6 +6,6 @@ Comment=Make newsletters, bulletins, flyers and booklets
 Exec=newpub %f
 Icon=newpub
 Terminal=false
-Categories=Office;Publishing;Graphics;
+Categories=Office;Publishing;
 MimeType=application/x-newpub;
 StartupWMClass=newpub

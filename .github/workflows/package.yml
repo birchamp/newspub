@@ -129,10 +129,15 @@ jobs:
           if (-not (Test-Path $exe)) { Write-Error "not installed at $exe"; exit 1 }
           $assoc = (Get-ItemProperty "HKCU:\Software\Classes\.npub")."(default)"
           if ($assoc -ne "newpub.Publication") { Write-Error ".npub is not associated ($assoc)"; exit 1 }
-          $p = Start-Process -FilePath $exe -PassThru
-          Start-Sleep -Seconds 10
+          $p = Start-Process -FilePath $exe -PassThru -RedirectStandardError "$env:RUNNER_TEMP\newpub-stderr.txt"
+          Start-Sleep -Seconds 15
+          Get-Content "$env:RUNNER_TEMP\newpub-stderr.txt" -ErrorAction SilentlyContinue
           if ($p.HasExited) { Write-Error "newpub exited with $($p.ExitCode)"; exit 1 }
-          Write-Output "still running after 10 s"
+          $p.Refresh()
+          # The main window, not the "newpub cannot start" error box.
+          Write-Output "main window: '$($p.MainWindowTitle)'"
+          if ($p.MainWindowTitle -ne "newpub") { Stop-Process -Id $p.Id; Write-Error "no newpub window"; exit 1 }
+          Write-Output "newpub window open after 15 s"
           Stop-Process -Id $p.Id
       - uses: actions/upload-artifact@v4
         with:
