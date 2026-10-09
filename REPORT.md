@@ -4,8 +4,23 @@
 **Commit:** 6755f2f, branch `claude/happy-davinci-r0kfpv`.
 **CI:** run 37978026939 is fully green: clippy, build and 131/131 journeys on Linux, macOS and Windows, the Linux conformance job, and the native-print jobs on Windows and macOS.
 
-**All 137 PARITY items, P0–P3 plus PF-01, pass their journeys on all three OSes.** The seven newest (UI-09..UI-15) cover the
-redesigned interface: the ribbon tabs, the Format panel, the Export As dialog, caret text editing and the clipboard. IM-11 (EMF/WMF) was split out of IM-09 so that each could be checked honestly.
+**Correction (later the same day).** Most PARITY items are proven by engine journeys, which drive the engine
+directly. An audit of which engine actions the app actually calls found that many checked features could not be
+reached from the UI at all:
+- text box linking, autoflow and text in shapes;
+- table editing (cells could not even be typed in);
+- page reordering and duplication, and ruler guides;
+- style management, templates, document properties and the Design Checker queries.
+
+The `.pub` importer was also much shallower than its rows claimed: one text box on one page, with no formatting.
+The response:
+- PI-01..PI-04 are unchecked and rewritten against real Publisher files (Apache POI samples, positions measured from
+  LibreOffice's independent rendering), and PI-05..PI-08 are added.
+- New UI journeys UI-16..UI-23 cover the missing UI paths. Each row is checked only when its journey passes on all
+  three OSes.
+
+The UI-09..UI-15 rows (ribbon tabs, Format panel, Export As, caret editing, clipboard) were checked from CI run
+37978026939. IM-11 (EMF/WMF) was split out of IM-09 so that each could be checked honestly.
 
 ## External conformance (CI jobs `conformance` on Linux, `native-print` on Windows and macOS)
 
