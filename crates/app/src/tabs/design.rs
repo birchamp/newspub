@@ -334,13 +334,15 @@ impl NewpubApp {
             for s in &schemes {
                 let on = current.as_deref() == Some(s.name.as_str());
                 let colors = [&s.main, &s.accent1, &s.accent2, &s.accent3, &s.accent4, &s.accent5];
-                if scheme_row(ui, &s.name, on, |painter, rects| {
+                let row = scheme_row(ui, &s.name, on, |painter, rects| {
                     for (c, r) in colors.iter().zip(rects) {
                         painter.rect_filled(*r, 3.0, to_color32(c));
                     }
-                })
-                .clicked()
-                {
+                });
+                if row.hovered() && !on {
+                    self.preview_next = Some((s.name.clone(), Command::ApplyColorScheme { name: s.name.clone() }));
+                }
+                if row.clicked() {
                     cmds.push(Command::ApplyColorScheme { name: s.name.clone() });
                 }
             }
@@ -358,7 +360,11 @@ impl NewpubApp {
         egui::Window::new("Font Schemes").open(open).collapsible(false).default_pos(WIN_POS).show(ctx, |ui| {
             for s in &schemes {
                 let on = current.as_deref() == Some(s.name.as_str());
-                if scheme_row(ui, &s.name, on, |_, _| {}).clicked() {
+                let row = scheme_row(ui, &s.name, on, |_, _| {});
+                if row.hovered() && !on {
+                    self.preview_next = Some((s.name.clone(), Command::ApplyFontScheme { name: s.name.clone() }));
+                }
+                if row.clicked() {
                     cmds.push(Command::ApplyFontScheme { name: s.name.clone() });
                 }
                 widgets::hint(ui, &format!("{} / {}", s.major, s.minor));

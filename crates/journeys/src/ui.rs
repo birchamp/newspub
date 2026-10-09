@@ -3,7 +3,7 @@
 //! UI steps: `click: {label, button}`, `fill: {label, text}`, `type: {text}`, `key: {key, command, shift}`,
 //! `drag: {from: [x, y], to: [x, y]}` (or `from_ruler`/`to_ruler: top | left` for one end) and `click_at: [x, y]` (page points on the canvas),
 //! `expect_ui: {label, exists}`, `focus: {label}` (keyboard focus), `scroll: {dx, dy}` (mouse wheel over
-//! the canvas, screen points), `close_window: {}` (the window's close button), `drop_file: {path, at}` (a file
+//! the canvas, screen points), `hover: {label}`, `close_window: {}` (the window's close button), `drop_file: {path, at}` (a file
 //! dragged from the desktop and dropped, optionally over a page point), `restart_app: {}` (the app goes away
 //! without a clean exit and starts again), `run: {}`.
 //! Journey options: `startup_template_picker: true` starts the app as the desktop binary does;
@@ -94,6 +94,13 @@ fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Resul
             h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
             h.run_steps(1);
             find(h, label)?.type_text(text);
+            settle(h);
+        }
+        "hover" => {
+            // hover: {label} — the pointer rests over a widget (e.g. a gallery item).
+            let label = args.get("label").and_then(|v| v.as_str()).ok_or_else(|| anyhow!("hover needs label"))?;
+            let at = find(h, label)?.rect().center();
+            h.hover_at(at);
             settle(h);
         }
         "close_window" => {

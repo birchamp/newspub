@@ -215,6 +215,7 @@ images) → PI-04 (formatting). Stop and ask a human if the approach needs code 
 | 2026-10-09 | Engine object clipboard: `SessionAction::CopyObjects`, `CutObjects`, `PasteObjects{page,x,y}` over `core::fragment` (session clipboard; paste cascades 12 pt). App: design system (`theme.rs`, `widgets.rs`, `icons.rs`), shell (`shell.rs`), per-area modules (`inspector.rs`, `files.rs`, `tabs/`), caret text editing (`text_edit.rs`), clipboard and context menu (`clipboard.rs`); runner `click_at` with button/double/shift and a `paste` step | UI redesign, UI-14, UI-15 |
 | 2026-10-09 | `Field::Date(DateFormat)` (`NEWPUB_TODAY` pins the date in journeys); app `view` query reports `text_selection`; runner allows `expect_files`/`expect_zip` in UI journeys | Insert tab date field, Find Next selecting text, UI-EX-001 |
 | 2026-10-09 | Query `PageObjectKinds{page}` (kinds of every object on a page, group members included) | .pub import journeys (J-PI-005, J-PI-006) |
+| 2026-10-09 | `Session::render_page_preview(page, dpi, cmd)` (renders a copy with one command applied); colour scheme "Navy"; built-in templates use scheme colours and fonts ("+major"/"+minor") with the Navy and Editorial schemes | Gallery live preview (UI-PD-002); schemes restyle templates |
 
 ## 12. Predecessor survey (NewsPub, Electron + React + TS) and what we adopt
 

@@ -406,6 +406,28 @@ impl Session {
             .ok_or_else(|| EngineError::Other("render failed".into()))
     }
 
+    /// Renders a page as it would look after `cmd` (a gallery preview), without changing the publication, its
+    /// history or its layout cache.
+    pub fn render_page_preview(
+        &mut self,
+        page: usize,
+        dpi: f64,
+        cmd: &Command,
+    ) -> Result<newpub_render::Pixmap, EngineError> {
+        if page >= self.doc.pages.len() {
+            return Err(CoreError::NoSuchPage(page).into());
+        }
+        let mut d = self.doc.clone();
+        d.apply(cmd)?;
+        if d.uses_object_scheme_colors() {
+            d.resolve_object_colors();
+        }
+        let layout = newpub_layout::layout_document(&d, &self.fonts);
+        let disp = newpub_render::page_display_for(&d, &layout, &self.fonts, page, true);
+        newpub_render::render_page(&mut self.raster, &d, &self.fonts, &disp, dpi)
+            .ok_or_else(|| EngineError::Other("render failed".into()))
+    }
+
     pub fn page_png(&mut self, page: usize, dpi: f64) -> Result<Vec<u8>, EngineError> {
         let pm = self.render_page(page, dpi)?;
         pm.encode_png().map_err(|e| EngineError::Image(e.to_string()))

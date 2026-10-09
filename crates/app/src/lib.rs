@@ -104,6 +104,12 @@ pub struct NewpubApp {
     window_closes: u32,
     /// AutoRecover copies (the desktop app and recovery journeys).
     recovery: Option<recovery::Recovery>,
+    /// Gallery item under the pointer last frame (name, the command it would apply): the canvas previews it.
+    preview: Option<(String, Command)>,
+    /// Set by galleries during this frame; becomes `preview` next frame.
+    pub(crate) preview_next: Option<(String, Command)>,
+    /// The page texture shown for the current preview: (texture, preview name, revision, page, scale key).
+    preview_texture: Option<(TextureHandle, String, u64, usize, u32)>,
     /// Folder of the user's own templates ("My templates"); none means the feature is off.
     pub(crate) user_templates: Option<std::path::PathBuf>,
     /// Screen rect of the canvas, for drops.
@@ -205,6 +211,9 @@ impl NewpubApp {
             canvas_rect: egui::Rect::NOTHING,
             recovery: None,
             user_templates: None,
+            preview: None,
+            preview_next: None,
+            preview_texture: None,
             status: String::new(),
             texture: None,
             page_origin: Pos2::ZERO,
@@ -432,6 +441,15 @@ impl NewpubApp {
             }
         }
         let _ = OPEN_CTX.set(ctx.clone());
+        // A gallery hovered last frame previews on the canvas this frame.
+        let next = self.preview_next.take();
+        if next.as_ref().map(|p| &p.0) != self.preview.as_ref().map(|p| &p.0) {
+            ctx.request_repaint();
+        }
+        self.preview = next;
+        if self.preview.is_none() {
+            self.preview_texture = None;
+        }
         let requests = std::mem::take(&mut *OPEN_REQUESTS.lock().unwrap_or_else(|e| e.into_inner()));
         for path in requests {
             self.guard(guard::Pending::OpenFile(path));
@@ -635,6 +653,24 @@ impl NewpubApp {
     fn page_texture(&mut self, ctx: &egui::Context, ppp: f32) -> Option<TextureHandle> {
         let rev = self.session.revision();
         let scale_key = (self.zoom * ppp * 100.0) as u32;
+        if let Some((name, cmd)) = self.preview.clone() {
+            if let Some((t, n, r, p, s)) = &self.preview_texture
+                && *n == name
+                && *r == rev
+                && *p == self.page
+                && *s == scale_key
+            {
+                return Some(t.clone());
+            }
+            let dpi = 72.0 * (self.zoom * ppp) as f64;
+            if let Ok(pm) = self.session.render_page_preview(self.page, dpi, &cmd) {
+                let img =
+                    egui::ColorImage::from_rgba_premultiplied([pm.width() as usize, pm.height() as usize], pm.data());
+                let tex = ctx.load_texture("page-preview", img, egui::TextureOptions::LINEAR);
+                self.preview_texture = Some((tex.clone(), name, rev, self.page, scale_key));
+                return Some(tex);
+            }
+        }
         if let Some((t, r, p, s)) = &self.texture
             && *r == rev
             && *p == self.page

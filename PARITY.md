@@ -269,3 +269,4 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | UI-21 | P1 | Pages and guides in the UI: reorder and duplicate pages from the page list; drag ruler guides out, move them, drag them back to remove | UI-PG-101 | [ ] |
 | UI-22 | P1 | Styles in the UI: paragraph and character styles from formatted text, apply, delete | UI-ST-001 | [ ] |
 | UI-23 | P1 | Publication properties, Design Checker (overflow, empty boxes, off-page objects), Save as Template and My Templates | UI-DC-001 | [ ] |
+| UI-24 | P2 | Gallery live preview: hovering a colour or font scheme shows it on the page before it is applied; built-in templates follow the schemes | UI-PD-002 | [ ] |

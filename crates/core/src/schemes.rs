@@ -86,6 +86,8 @@ fn scheme(name: &str, c: [&str; 8]) -> ColorScheme {
 pub fn color_schemes() -> Vec<ColorScheme> {
     vec![
         scheme("Default", ["#000000", "#1f4e79", "#c55a11", "#548235", "#7f6000", "#7030a0", "#0563c1", "#954f72"]),
+        // The built-in templates' own colours: ink text, navy headings and rules, a pale blue panel.
+        scheme("Navy", ["#222222", "#1f3864", "#2e75b6", "#c55a11", "#7f7f7f", "#e8eef7", "#0563c1", "#954f72"]),
         scheme("Harvest", ["#3b2a1a", "#b5651d", "#d9a441", "#8a9a3b", "#7b3f00", "#e8d8b0", "#8a4b08", "#6b4e2e"]),
         scheme("Ocean", ["#0b2233", "#1b6ca8", "#2fa4c7", "#0f8b8d", "#a3d5e0", "#163e64", "#1565c0", "#4a6a8a"]),
         scheme("Meadow", ["#1d2b1a", "#4c8c2b", "#9cc65a", "#f2c14e", "#2e5e4e", "#e6f0d6", "#2e7d32", "#55704a"]),

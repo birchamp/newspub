@@ -2,6 +2,7 @@
 
 use crate::EngineError;
 use newpub_core::attrs::{Align, CharAttrs, LineSpacing, ParaAttrs};
+use newpub_core::schemes::SchemeSlot;
 use newpub_core::{
     Color, Command, CoreError, Document, Id, Insets, Length, ObjectPatch, PageSetup, Rect, ShapeKind, StyleRef,
     TextFramePatch,
@@ -27,15 +28,25 @@ pub(super) fn build(id: &str) -> Result<Document, EngineError> {
 
 type R<T> = Result<T, CoreError>;
 
-const SERIF: &str = "Liberation Serif";
-const SANS: &str = "Carlito";
+// Templates are built on the colour and font schemes, so Page Design's schemes restyle them. They start with the
+// "Navy" colour scheme and the "Editorial" font scheme (Liberation Serif headings, Carlito text).
+const SERIF: &str = "+major";
+const SANS: &str = "+minor";
+
+fn scheme(slot: SchemeSlot) -> Color {
+    Color::Scheme { slot, a: 1.0 }
+}
 
 fn navy() -> Color {
-    Color::rgb(31, 56, 100)
+    scheme(SchemeSlot::Accent1)
 }
 
 fn ink() -> Color {
-    Color::rgb(34, 34, 34)
+    scheme(SchemeSlot::Main)
+}
+
+fn panel_fill() -> Color {
+    scheme(SchemeSlot::Accent5)
 }
 
 fn pt(v: f64) -> Option<Length> {
@@ -51,6 +62,8 @@ impl B {
     fn new(setup: PageSetup, pages: usize) -> B {
         let mut b = B { d: Document::new(setup, pages) };
         b.d.meta.lang = "en-US".into();
+        b.d.color_scheme = newpub_core::schemes::color_schemes().into_iter().find(|c| c.name == "Navy");
+        b.d.font_scheme = newpub_core::schemes::font_schemes().into_iter().find(|f| f.name == "Editorial");
         b
     }
 
@@ -261,7 +274,7 @@ fn newsletter() -> R<Document> {
             ("Contact", "Email: newsletter@example.org"),
         ],
     )?;
-    b.panel(contact, Color::rgb(232, 238, 247), 12.0)?;
+    b.panel(contact, panel_fill(), 12.0)?;
     Ok(b.d)
 }
 
@@ -377,7 +390,7 @@ fn bulletin() -> R<Document> {
             ("Contact", "Office hours: weekdays, 9 a.m. to noon"),
         ],
     )?;
-    b.panel(contact, Color::rgb(232, 238, 247), 12.0)?;
+    b.panel(contact, panel_fill(), 12.0)?;
     Ok(b.d)
 }
 
@@ -432,7 +445,7 @@ fn booklet() -> R<Document> {
             ("Contact", "Email: info@example.org"),
         ],
     )?;
-    b.panel(contact, Color::rgb(232, 238, 247), 12.0)?;
+    b.panel(contact, panel_fill(), 12.0)?;
 
     // Running footer rule on the inside pages' master.
     let m = b.cmd(Command::AddMaster { name: "Booklet Master".into() })?[0];

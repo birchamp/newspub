@@ -1,0 +1,29 @@
+id: UI-PD-002
+title: Scheme galleries preview on hover — the page shows a colour or font scheme before it is applied, without changing the publication
+covers: [UI-24]
+ui: true
+steps:
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 1in], to: [5in, 2in]}
+  - type: {text: "Preview me"}
+  - key: {key: "Escape"}
+  - expect: {query: {q: history}, path: /undo, gt: 0, as: undo0}
+  - click: {label: "Page Design"}
+  - click: {label: "Color Scheme"}
+  # hovering a scheme previews it on the page; the publication itself is untouched
+  - hover: {label: "Ocean"}
+  - expect: {query: {q: view}, path: /preview, equals: "Ocean"}
+  - expect: {query: {q: view}, path: /preview_rendered, equals: true}
+  - expect: {query: {q: document}, path: /color_scheme, is_null: true}
+  - expect: {query: {q: history}, path: /undo, equals: $undo0}
+  # moving away ends the preview
+  - hover: {label: "Page Design"}
+  - expect: {query: {q: view}, path: /preview, is_null: true}
+  # clicking applies it
+  - click: {label: "Ocean"}
+  - expect: {query: {q: document}, path: /color_scheme/name, equals: "Ocean"}
+  # font schemes preview the same way
+  - click: {label: "Font Scheme"}
+  - hover: {label: "Modern"}
+  - expect: {query: {q: view}, path: /preview, equals: "Modern"}
+  - expect: {query: {q: document}, path: /font_scheme, is_null: true}
