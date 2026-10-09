@@ -64,6 +64,12 @@ fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Resul
             find(h, label)?.type_text(text);
             settle(h);
         }
+        "paste" => {
+            // The OS clipboard delivering text (Cmd+V with text on the system clipboard).
+            let text = args.get("text").and_then(|v| v.as_str()).ok_or_else(|| anyhow!("paste needs text"))?;
+            h.event(egui::Event::Paste(text.to_string()));
+            settle(h);
+        }
         "type" => {
             let text = args.get("text").and_then(|v| v.as_str()).ok_or_else(|| anyhow!("type needs text"))?;
             h.event(egui::Event::Text(text.to_string()));

@@ -1,0 +1,49 @@
+id: UI-CB-001
+title: Clipboard and context menu — copy and paste objects, cut and paste from the right-click menu, paste text at the caret, group
+covers: [UI-15]
+ui: true
+steps:
+  - click: {label: "Rectangle"}
+  - drag: {from: [1in, 1in], to: [2in, 2in]}
+  # Cmd+C, Cmd+V pastes a copy offset by 12 pt and selects it
+  - key: {key: "C", command: true}
+  - key: {key: "V", command: true}
+  - expect: {query: {q: page_objects, page: 0}, len: 2}
+  - expect: {query: {q: page_objects, page: 0}, path: /1, gt: 0, as: copy}
+  - expect: {query: {q: object, id: $copy}, path: /rect/x, approx: [84, 0.5]}
+  - expect: {query: {q: view}, path: /selection, equals: [$copy]}
+  # right-click → Cut removes the object; right-click elsewhere → Paste brings it back
+  - click_at: {at: [1.5in, 1.5in], button: secondary}
+  - click: {label: "Cut"}
+  - expect: {query: {q: page_objects, page: 0}, len: 1}
+  - click_at: {at: [5in, 8in], button: secondary}
+  - click: {label: "Paste"}
+  - expect: {query: {q: page_objects, page: 0}, len: 2}
+  # Cmd+Z undoes the paste
+  - key: {key: "Z", command: true}
+  - expect: {query: {q: page_objects, page: 0}, len: 1}
+  # text pasted from the OS clipboard goes in at the caret
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 4in], to: [5in, 5in]}
+  - type: {text: "Hello world"}
+  - expect: {query: {q: page_objects, page: 0}, path: /1, gt: 0, as: f}
+  - key: {key: "ArrowLeft"}
+  - key: {key: "ArrowLeft"}
+  - key: {key: "ArrowLeft"}
+  - key: {key: "ArrowLeft"}
+  - key: {key: "ArrowLeft"}
+  - paste: {text: "big "}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "Hello big world"}
+  # pasting text with nothing being edited creates a new text box with it
+  - key: {key: "Escape"}
+  - key: {key: "Escape"}
+  - paste: {text: "From another app"}
+  - expect: {query: {q: page_objects, page: 0}, len: 3}
+  - expect: {query: {q: page_objects, page: 0}, path: /2, gt: 0, as: g}
+  - expect: {query: {q: frame_text, frame: $g}, equals: "From another app"}
+  # select everything on the page and group it from the context menu
+  - key: {key: "A", command: true}
+  - expect: {query: {q: view}, path: /selection, len: 3}
+  - click_at: {at: [1.5in, 1.5in], button: secondary}
+  - click: {label: "Group"}
+  - expect: {query: {q: page_objects, page: 0}, len: 1}

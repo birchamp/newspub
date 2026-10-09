@@ -288,6 +288,7 @@ impl NewpubApp {
         }
         self.draw_guides(&painter);
         self.draw_selection(&painter);
+        self.draw_text_edit(&painter);
         if resp.has_focus() {
             painter.rect_stroke(
                 cv.shrink(1.0),
@@ -297,6 +298,24 @@ impl NewpubApp {
             );
         }
         self.handle_canvas_input(&resp);
+        // Right-click selects what is under the pointer, then opens the context menu.
+        if resp.secondary_clicked()
+            && let Some(p) = resp.interact_pointer_pos()
+        {
+            let (x, y) = self.screen_to_page(p);
+            match self.hit(x, y) {
+                Some(id) if self.selection.contains(&id) => {}
+                Some(id) => {
+                    self.end_text_edit();
+                    self.selection = vec![id];
+                }
+                None => {
+                    self.end_text_edit();
+                    self.selection.clear();
+                }
+            }
+        }
+        resp.context_menu(|ui| self.canvas_menu(ui));
         self.canvas_keys(&ctx, &resp);
         if let (Some(a), Some(b)) = (self.drag_start, self.drag_now)
             && self.tool != Tool::Select

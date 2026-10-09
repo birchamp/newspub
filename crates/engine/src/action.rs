@@ -268,6 +268,26 @@ pub enum SessionAction {
         #[serde(default)]
         category: String,
     },
+    /// Copy objects (with their stories, pictures and styles) to the session clipboard. Not undoable (the
+    /// document does not change).
+    CopyObjects {
+        ids: Vec<Id>,
+    },
+    /// Copy objects to the session clipboard, then delete them. Undoable.
+    CutObjects {
+        ids: Vec<Id>,
+    },
+    /// Paste the session clipboard on `page` (default: the page copied from) with its top-left at (x, y);
+    /// without a position the objects keep theirs, offset by 12 pt for each repeated paste. Undoable;
+    /// created = the new top-level object ids.
+    PasteObjects {
+        #[serde(default)]
+        page: Option<usize>,
+        #[serde(default)]
+        x: Option<Length>,
+        #[serde(default)]
+        y: Option<Length>,
+    },
     /// Insert a building block (user or built-in) with its top-left at (x, y) on `page`. Undoable;
     /// created = the new top-level object ids.
     InsertBuildingBlock {
@@ -412,6 +432,9 @@ impl SessionAction {
         "merge_to_publication",
         "save_building_block",
         "insert_building_block",
+        "copy_objects",
+        "cut_objects",
+        "paste_objects",
         "set_catalog_area",
         "clear_catalog_area",
         "save_business_info_set",

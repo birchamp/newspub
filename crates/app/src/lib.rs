@@ -2,6 +2,7 @@
 //! becomes an [`Action`], every displayed fact comes from the session.
 
 mod a11y;
+mod clipboard;
 mod dup;
 mod files;
 mod freeform;
@@ -13,6 +14,7 @@ mod print;
 mod recent;
 mod shell;
 mod tabs;
+mod text_edit;
 pub mod theme;
 mod view;
 mod widgets;
@@ -121,11 +123,19 @@ pub struct NewpubApp {
     freeform: freeform::FreeformState,
     /// Active ribbon tab.
     ribbon_tab: shell::RibbonTab,
+    /// Caret and text selection while editing a story (text_edit.rs).
+    pub(crate) caret: Option<text_edit::Caret>,
+    /// Marker text put on the OS clipboard by the last object copy (None after a text copy).
+    clip_objects: Option<String>,
     /// Fonts and styles installed into the egui context.
     themed: bool,
+    #[allow(dead_code)] // read by the tab modules as they land
     pub(crate) insert_ui: tabs::insert::InsertState,
+    #[allow(dead_code)]
     pub(crate) design_ui: tabs::design::DesignState,
+    #[allow(dead_code)]
     pub(crate) mailings_ui: tabs::mailings::MailingsState,
+    #[allow(dead_code)]
     pub(crate) review_ui: tabs::review::ReviewState,
 }
 
@@ -175,6 +185,8 @@ impl NewpubApp {
             pane: pane::PaneState::default(),
             freeform: freeform::FreeformState::default(),
             ribbon_tab: shell::RibbonTab::default(),
+            caret: None,
+            clip_objects: None,
             themed: false,
             insert_ui: Default::default(),
             design_ui: Default::default(),
@@ -310,12 +322,12 @@ impl NewpubApp {
         self.page_origin + Vec2::new(x as f32 * self.zoom, y as f32 * self.zoom)
     }
 
-    fn screen_to_page(&self, p: Pos2) -> (f64, f64) {
+    pub(crate) fn screen_to_page(&self, p: Pos2) -> (f64, f64) {
         let d = (p - self.page_origin) / self.zoom;
         (d.x as f64, d.y as f64)
     }
 
-    fn selected_text_frame(&self) -> Option<Id> {
+    pub(crate) fn selected_text_frame(&self) -> Option<Id> {
         let d = self.session.doc();
         self.selection
             .iter()
@@ -367,15 +379,23 @@ impl NewpubApp {
 
     fn shortcuts(&mut self, ctx: &egui::Context) {
         use egui::Key;
+        self.validate_caret();
         let typing_in_widget = ctx.egui_wants_keyboard_input() && !self.canvas_focused(ctx);
         let events = ctx.input(|i| i.events.clone());
         let dialog_open = self.dialog != Dialog::None;
+        if typing_in_widget {
+            return;
+        }
+        let editing = self.selected_text_frame().filter(|f| self.caret_in(*f).is_some());
         for e in &events {
+            match e {
+                egui::Event::Copy => self.copy(ctx, false),
+                egui::Event::Cut => self.copy(ctx, true),
+                egui::Event::Paste(text) if !dialog_open => self.paste(Some(text)),
+                _ => {}
+            }
             let egui::Event::Key { key, pressed: true, modifiers, .. } = e else { continue };
             let (key, m) = (*key, *modifiers);
-            if typing_in_widget {
-                continue;
-            }
             if m.command {
                 match key {
                     Key::Z if !m.shift => {
@@ -385,23 +405,54 @@ impl NewpubApp {
                         self.act(SessionAction::Redo);
                     }
                     Key::P => self.dialog = Dialog::Print(print::PrintState::new()),
-                    Key::E => {
-                        self.dialog =
-                            Dialog::ExportPdf { path: "publication.pdf".into(), crop_marks: false, booklet: false }
-                    }
+                    Key::E => self.open_export_pdf(),
+                    Key::S => self.open_save(),
+                    Key::O => self.dialog = Dialog::Open { path: String::new() },
+                    Key::N => self.open_picker(),
                     _ if dialog_open => {}
+                    Key::A => self.select_all(),
+                    Key::C => self.copy(ctx, false),
+                    Key::X => self.copy(ctx, true),
+                    Key::V => self.paste(None),
                     Key::D => self.duplicate_selection(),
+                    Key::G if m.shift => self.ungroup_selection(),
+                    Key::G => self.group_selection(),
+                    Key::B | Key::I | Key::U if editing.is_some() => self.toggle_char_style(key),
                     Key::CloseBracket => self.reorder(ZOp::Front),
                     Key::OpenBracket => self.reorder(ZOp::Back),
                     Key::Equals | Key::Plus => self.zoom_step(1),
                     Key::Minus => self.zoom_step(-1),
                     Key::Num0 => self.fit_page(),
+                    Key::ArrowLeft | Key::ArrowRight | Key::Home | Key::End if editing.is_some() => {
+                        self.caret_key(key, m);
+                    }
                     _ => {}
                 }
                 continue;
             }
             if dialog_open {
                 continue;
+            }
+            if let Some(frame) = editing {
+                match key {
+                    Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown | Key::Home | Key::End => {
+                        self.caret_key(key, m);
+                        continue;
+                    }
+                    Key::Backspace => {
+                        self.delete_at_caret(frame, false);
+                        continue;
+                    }
+                    Key::Delete => {
+                        self.delete_at_caret(frame, true);
+                        continue;
+                    }
+                    Key::Escape => {
+                        self.end_text_edit();
+                        continue;
+                    }
+                    _ => {}
+                }
             }
             let step = if m.shift { 10.0 } else { 1.0 };
             match key {
@@ -423,18 +474,17 @@ impl NewpubApp {
                 _ => {}
             }
         }
-        // Typing into the selected text frame.
-        if typing_in_widget || dialog_open {
+        // Typing into the selected text frame (at the caret; without one, at the end of the story).
+        if dialog_open {
             return;
         }
         let Some(frame) = self.selected_text_frame() else { return };
         for e in events {
             match e {
-                egui::Event::Text(t) => {
-                    self.act(SessionAction::TypeText { target: frame, at: None, text: t });
-                }
-                egui::Event::Key { key: Key::Enter, pressed: true, .. } => {
-                    self.act(SessionAction::TypeText { target: frame, at: None, text: "\n".into() });
+                egui::Event::Text(t) => self.type_at_caret(frame, &t),
+                egui::Event::Key { key: Key::Enter, pressed: true, modifiers, .. } => {
+                    let text = if modifiers.shift { "\u{2028}" } else { "\n" };
+                    self.type_at_caret(frame, text);
                 }
                 _ => {}
             }
@@ -444,24 +494,21 @@ impl NewpubApp {
     /// Backspace: removes the last character of the selected text frame's story, or deletes the selection
     /// when it is not a text frame (or the frame is empty).
     fn backspace(&mut self) {
-        if let Some(frame) = self.selected_text_frame() {
-            let len = self
-                .session
-                .doc()
-                .story_of(frame)
-                .ok()
-                .and_then(|s| self.session.doc().story(s).ok())
-                .map(|s| s.len())
-                .unwrap_or(0);
-            if len > 0 {
-                self.act(Command::DeleteText { target: frame, start: len - 1, end: len });
-                return;
-            }
+        if let Some(frame) = self.selected_text_frame()
+            && self.story_len(frame) > 0
+        {
+            self.delete_at_caret(frame, false);
+            return;
         }
         let ids = std::mem::take(&mut self.selection);
         if !ids.is_empty() {
             self.act(Command::DeleteObjects { ids });
         }
+    }
+
+    fn story_len(&self, frame: Id) -> usize {
+        let d = self.session.doc();
+        d.story_of(frame).ok().and_then(|s| d.story(s).ok()).map(|s| s.len()).unwrap_or(0)
     }
 
     pub(crate) fn reorder(&mut self, op: ZOp) {
@@ -640,6 +687,28 @@ impl NewpubApp {
             self.freeform_input(resp);
             return;
         }
+        // Inside the text frame being edited, the mouse places the caret and selects text.
+        let press = resp.ctx.input(|i| i.pointer.press_origin());
+        if self.tool == Tool::Select
+            && press.is_none_or(|p| self.handle_at(p).is_none())
+            && self.text_pointer(resp, press)
+        {
+            return;
+        }
+        // Double-click on a text frame starts editing at the word under the pointer.
+        if self.tool == Tool::Select
+            && resp.double_clicked()
+            && let Some(p) = resp.interact_pointer_pos()
+        {
+            let (x, y) = self.screen_to_page(p);
+            if let Some(id) = self.hit(x, y)
+                && matches!(self.session.doc().objects.get(&id).map(|o| &o.kind), Some(ObjectKind::Text(_)))
+            {
+                let pos = self.hit_text(id, x, y);
+                self.select_word(id, pos);
+                return;
+            }
+        }
         if resp.drag_started() {
             // egui reports a drag once the pointer has moved; the gesture began at the press origin.
             self.drag_start = resp.ctx.input(|i| i.pointer.press_origin()).or(resp.interact_pointer_pos());
@@ -695,7 +764,21 @@ impl NewpubApp {
         {
             let (x, y) = self.screen_to_page(p);
             if self.tool == Tool::Select {
-                self.selection = self.hit(x, y).into_iter().collect();
+                let hit = self.hit(x, y);
+                let text = hit.filter(|id| {
+                    matches!(self.session.doc().objects.get(id).map(|o| &o.kind), Some(ObjectKind::Text(_)))
+                });
+                match text {
+                    // A click in an already selected text box places the caret there.
+                    Some(id) if self.selection == [id] => {
+                        let pos = self.hit_text(id, x, y);
+                        self.place_caret(id, pos, false);
+                    }
+                    _ => {
+                        self.end_text_edit();
+                        self.selection = hit.into_iter().collect();
+                    }
+                }
             } else {
                 // A click without dragging creates a default-sized object.
                 let b = p + Vec2::new(144.0, 72.0) * self.zoom;
@@ -755,6 +838,12 @@ impl NewpubApp {
         };
         if let Some(id) = out.and_then(|o| o.created.first().copied()) {
             self.selection = vec![id];
+            if self.tool == Tool::TextBox {
+                // A new text box is ready for typing.
+                self.place_caret(id, 0, false);
+            } else {
+                self.end_text_edit();
+            }
             self.tool = Tool::Select;
         }
     }

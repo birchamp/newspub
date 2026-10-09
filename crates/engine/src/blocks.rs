@@ -124,6 +124,40 @@ impl Session {
         }
     }
 
+    /// Copy, cut and paste of objects through the session clipboard.
+    pub(crate) fn clipboard_action(&mut self, a: &SessionAction) -> Result<Outcome, EngineError> {
+        match a {
+            SessionAction::CopyObjects { ids } | SessionAction::CutObjects { ids } => {
+                let fragment = self.doc.extract_fragment(ids)?;
+                let page = ids.iter().find_map(|id| self.doc.page_of(*id)).unwrap_or(0);
+                self.clipboard = Some((fragment, page, 0));
+                if matches!(a, SessionAction::CutObjects { .. }) {
+                    let mut d = self.doc.clone();
+                    d.apply(&newpub_core::Command::DeleteObjects { ids: ids.clone() })?;
+                    self.commit(d, None);
+                }
+                Ok(Outcome::default())
+            }
+            SessionAction::PasteObjects { page, x, y } => {
+                let Some((fragment, from, count)) = self.clipboard.as_mut() else {
+                    return Err(EngineError::Other("the clipboard is empty".into()));
+                };
+                let page = page.unwrap_or(*from).min(self.doc.pages.len().saturating_sub(1));
+                // In place, cascading by 12 pt per paste so copies do not hide each other.
+                *count += 1;
+                let step = 12.0 * f64::from(*count);
+                let at_x = x.map(|v| v.pt()).unwrap_or(fragment.bounds.x + step);
+                let at_y = y.map(|v| v.pt()).unwrap_or(fragment.bounds.y + step);
+                let fragment = fragment.clone();
+                let mut d = self.doc.clone();
+                let created = d.paste_fragment(&fragment, page, at_x, at_y)?;
+                self.commit(d, None);
+                Ok(Outcome { created })
+            }
+            other => Err(EngineError::Other(format!("{other:?} is not a clipboard action"))),
+        }
+    }
+
     pub(crate) fn blocks_query(&mut self, q: &Query) -> Result<Value, EngineError> {
         match q {
             Query::BuildingBlocks => {

@@ -1,0 +1,53 @@
+id: UI-TE-001
+title: Text editing with a caret — arrows, Home/End, selection with Shift, typing over a selection, Enter, Backspace/Delete, click to place the caret, formatting the selection
+covers: [UI-14]
+ui: true
+steps:
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 1in], to: [6in, 3in]}
+  - type: {text: "Hello world"}
+  - expect: {query: {q: page_objects, page: 0}, path: /0, gt: 0, as: f}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "Hello world"}
+  # the caret moves left five characters and typing inserts there
+  - key: {key: "ArrowLeft"}
+  - key: {key: "ArrowLeft"}
+  - key: {key: "ArrowLeft"}
+  - key: {key: "ArrowLeft"}
+  - key: {key: "ArrowLeft"}
+  - type: {text: "big "}
+  - expect: {query: {q: frame_text, frame: $f}, equals: "Hello big world"}
+  - key: {key: "Home"}
+  - type: {text: ">"}
+  - expect: {query: {q: frame_text, frame: $f}, equals: ">Hello big world"}
+  - key: {key: "End"}
+  - key: {key: "Backspace"}
+  - expect: {query: {q: frame_text, frame: $f}, equals: ">Hello big worl"}
+  # Shift+arrows select; typing replaces the selection
+  - key: {key: "ArrowLeft", shift: true}
+  - key: {key: "ArrowLeft", shift: true}
+  - key: {key: "ArrowLeft", shift: true}
+  - key: {key: "ArrowLeft", shift: true}
+  - type: {text: "there"}
+  - expect: {query: {q: frame_text, frame: $f}, equals: ">Hello big there"}
+  # Enter starts a new paragraph; ArrowUp goes back to the first line
+  - key: {key: "Enter"}
+  - type: {text: "Second line"}
+  - expect: {query: {q: story_text, target: $f}, equals: ">Hello big there\nSecond line"}
+  - key: {key: "ArrowUp"}
+  - key: {key: "Home"}
+  - key: {key: "Delete"}
+  - expect: {query: {q: story_text, target: $f}, equals: "Hello big there\nSecond line"}
+  # Shift+End selects the first line; Cmd+B makes only it bold
+  - key: {key: "End", shift: true}
+  - key: {key: "B", command: true}
+  - expect: {query: {q: char_attrs, target: $f, at: 0}, path: /bold, equals: true}
+  - expect: {query: {q: char_attrs, target: $f, at: 18}, path: /bold, equals: false}
+  # Escape leaves text editing with the frame still selected
+  - key: {key: "Escape"}
+  - expect: {query: {q: view}, path: /editing, equals: false}
+  - expect: {query: {q: view}, path: /selection, len: 1}
+  # a click in the selected text box places the caret: at the very start of the first line
+  - click_at: [1.09in, 1.16in]
+  - expect: {query: {q: view}, path: /editing, equals: true}
+  - type: {text: "*"}
+  - expect: {query: {q: story_text, target: $f}, equals: "*Hello big there\nSecond line"}

@@ -101,6 +101,8 @@ pub struct Session {
     pub(crate) view: Option<Arc<Document>>,
     /// Folder of the user building-block library; None = `<base_dir>/library`.
     pub library_dir: Option<PathBuf>,
+    /// Objects copied with CopyObjects/CutObjects: the fragment, its page, and how often it was pasted.
+    pub(crate) clipboard: Option<(newpub_core::fragment::Fragment, usize, u32)>,
 }
 
 impl Session {
@@ -125,6 +127,7 @@ impl Session {
             merge_preview: None,
             view: None,
             library_dir: None,
+            clipboard: None,
         }
     }
 
@@ -360,6 +363,7 @@ impl Session {
             | MergeToPdf { .. }
             | MergeToPublication {} => self.merge_action(s),
             SaveBuildingBlock { .. } | InsertBuildingBlock { .. } => self.blocks_action(s),
+            CopyObjects { .. } | CutObjects { .. } | PasteObjects { .. } => self.clipboard_action(s),
             SetCatalogArea { .. } | ClearCatalogArea {} => self.merge_action(s),
             SaveBusinessInfoSet {} | ApplyBusinessInfoSet { .. } => self.bizinfo_action(s),
             ReplaceAdvanced { .. } => self.findfmt_action(s),
