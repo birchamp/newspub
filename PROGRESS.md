@@ -242,3 +242,29 @@ The dashboard parses this file:
 - Also: Cmd+F opens Find and Replace; dialogs are centred and Escape cancels them; the Print dialog matches the other dialogs; the .dmg check retries a busy volume.
 - Version 0.2.0.
 - **Released v0.2.0** (CI run 37980609786 and Package run 37980609854 green on f7b108e): https://github.com/birchamp/newspub/releases/tag/v0.2.0. It has seven assets: the Windows setup and portable zip, the macOS .dmg and .pkg, and the Linux AppImage, .deb and .tar.gz.
+
+### 2026-10-09 — Audit, real .pub import, and the missing UI paths (lead, no agents)
+- Audit: many checked features had engine journeys but no way in from the app (text box linking, autoflow, shape text, table editing, page reordering, guides, styles, templates, properties, Design Checker). The `.pub` importer only made one text box on one page. Those PARITY rows were reopened; UI-16..UI-23 and PI-05..PI-08 were added, each with a UI or import journey.
+- User: "Is this app able to open existing .pub files from MS publisher?" Before this work, barely. Now: Publisher 98, 2000, 2002/2003 and 2007/2010+ files open with their pages, text boxes and linked chains, character and paragraph formatting, pictures (including WMF clip art), shapes, groups and tables. Checked against Apache POI's sample files, with positions measured from LibreOffice's rendering. We keep the Publisher 98 table and rectangle outline, which LibreOffice drops. Not imported: WordArt, embedded fonts, gradient and pattern fills, and Publisher 97.
+- User: "stop delegating … just build it." From here on, everything was built by the lead.
+- UI-16..UI-23 are built:
+  - **Unsaved-changes prompt.**
+  - **Drag and drop.**
+  - **AutoRecover.**
+  - **Text flow:** Insert Text File, Link to Next Box (or click the overflow badge), Break Link, Flow onto New Pages, typing in shapes, Clear Formatting.
+  - **Table editing:** cells, Tab and Shift+Tab, Shift-click blocks, merge and split, rows and columns, sizes, table style, cell fill.
+  - **Page list right-click menu and ruler guides.**
+  - **Styles window.**
+  - **Properties, Design Checker, Save as Template and My templates.**
+- Bugs found by the journeys and fixed:
+  - Tab moved keyboard focus into a panel field, because the canvas never took focus; clicking the page now focuses it.
+  - Very high zoom panicked on a page texture larger than the GPU limit; renders are now capped.
+  - A quick Shift-click registered as a double-click.
+  - WMF pictures with a flipped window showed one corner.
+  - Times New Roman rendered sans-serif when the font was missing.
+- Runner improvements (harness only; no journeys were edited):
+  - widgets are scrolled into view with the mouse wheel;
+  - Shift is held for the whole of a shift-click;
+  - a control is preferred over a caption with the same name;
+  - frames step at 1/30 s, so double-clicks register.
+- 145/145 journeys pass locally. PARITY rows get checked once CI is green on all three OSes.

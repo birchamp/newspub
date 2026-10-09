@@ -156,6 +156,16 @@ output consistent. Imposition (booklet, n-up) maps pages onto sheets as transfor
 - **Text editing:** `text_edit.rs` keeps a `Caret {frame, pos, anchor}` in story offsets and hit-tests against the
   layout's glyph positions. Formatting from shortcuts and the Format panel targets the selection
   (`text_target_range`) or the caret's paragraphs (`para_target_range`); inserts go to `insertion_point`.
+- **What the caret edits:** an "editable" is a text frame, a shape (its story), or a table cell (the cell's story id).
+  Commands target the story; the selection holds the object that shows it (`holder`). `table_ui.rs` adds the current
+  cell, the Shift-click cell block (`ViewState.cell_extent`), Tab between cells and the Format panel's Table card.
+- **Canvas tools beyond selection:** link mode for "Link to Next Box" (`ViewState.link_from`, also started from a
+  frame's overflow badge); ruler guides (`guides_ui.rs`: drag out of a ruler, move, drag back to delete; objects win
+  over guides when both are under the pointer). Clicking the page gives it keyboard focus.
+- **Windows:** Styles (`styles_ui.rs`, styles by example via `effective_para_attrs`/`effective_char_attrs`),
+  Properties and Design Checker (`checker.rs`; the checker combines layout overflow, empty stories and the
+  `OffPageObjects`, `MissingFonts` and `MissingLinks` queries). "My templates" are `.npubt` files in
+  `user_templates`, made by the Save dialog's Save as Template and listed on the start screen.
 - **Preferences:** the recent-files list and the theme choice live in the OS config dir (`recent.rs`); journeys keep
   both in memory.
 
@@ -225,6 +235,7 @@ file-level copyleft. The format notes are in crates/io-pub/FORMAT-NOTES.md.
 | 2026-10-09 | Query `PageObjectKinds{page}` (kinds of every object on a page, group members included) | .pub import journeys (J-PI-005, J-PI-006) |
 | 2026-10-09 | `Session::render_page_preview(page, dpi, cmd)` (renders a copy with one command applied); colour scheme "Navy"; built-in templates use scheme colours and fonts ("+major"/"+minor") with the Navy and Editorial schemes | Gallery live preview (UI-PD-002); schemes restyle templates |
 | 2026-10-09 | Layout `fonts::substitutes`: missing Windows fonts resolve to bundled stand-ins (Liberation for Times New Roman/Arial, Carlito for Calibri, else by kind) before the generic fallback; `char_box` also reports `page_x`/`page_baseline`; `.pub` import rewritten (v2002 + Publisher 98/2000 readers over one IR) | Real .pub import (PI-01..PI-07) |
+| 2026-10-09 | App only (no engine changes): `ViewState.link_from`, `cell_extent`, `guide_drag`, `canvas_area`; `Dialog::InsertText`, `Dialog::SaveTemplate`; app `view` query reports `table_cell` and `table_selection`; page renders capped at the GPU's maximum texture side. Runner: widgets are scrolled into view with the mouse wheel before `click`/`fill`, Shift is held for a whole shift-click, a control is preferred over a caption with the same name, `step_dt` 1/30 s | UI-19..UI-23 |
 
 ## 12. Predecessor survey (NewsPub, Electron + React + TS) and what we adopt
 
