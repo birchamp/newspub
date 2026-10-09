@@ -104,24 +104,28 @@ fn parse_pages(text: &str, count: usize) -> Result<Vec<usize>, String> {
 pub fn show(app: &mut NewpubApp, ctx: &egui::Context, st: &mut PrintState) -> bool {
     let mut close = false;
     crate::files::dialog_window("Print publication").show(ctx, |ui| {
-        ui.horizontal(|ui| {
-            ui.label("Printer:");
+        use crate::{icons as ic, widgets};
+        widgets::section(ui, ic::PRINTER, "Print to", |ui| {
             let shown = st.printers.get(st.printer).cloned().unwrap_or_default();
-            let combo = egui::ComboBox::from_id_salt("printer").selected_text(shown).show_ui(ui, |ui| {
+            let combo = egui::ComboBox::from_id_salt("printer").width(260.0).selected_text(shown).show_ui(ui, |ui| {
                 for (i, p) in st.printers.iter().enumerate() {
                     ui.selectable_value(&mut st.printer, i, p);
                 }
             });
             combo.response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, "Printer"));
         });
-        labeled_field(ui, "Copies", &mut st.copies);
-        labeled_field(ui, "Pages", &mut st.pages);
-        ui.weak("Pages: leave empty for all, or e.g. 2-3 or 1,3-4");
+        ui.add_space(6.0);
+        widgets::section(ui, ic::FILES, "Copies and pages", |ui| {
+            labeled_field(ui, "Copies", &mut st.copies);
+            labeled_field(ui, "Pages", &mut st.pages);
+            widgets::hint(ui, "Leave Pages empty for all, or type e.g. 2-3 or 1,3-4.");
+        });
+        ui.add_space(8.0);
         ui.horizontal(|ui| {
-            if crate::widgets::primary_button(ui, "Send to Printer").clicked() {
+            if widgets::primary_button(ui, "Send to Printer").clicked() {
                 close = send(app, st);
             }
-            if crate::widgets::secondary_button(ui, "Cancel").clicked() {
+            if widgets::secondary_button(ui, "Cancel").clicked() {
                 close = true;
             }
         });
