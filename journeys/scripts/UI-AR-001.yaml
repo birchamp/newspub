@@ -1,0 +1,41 @@
+id: UI-AR-001
+title: AutoRecover — after a crash, the next start offers the unsaved publication back
+covers: [UI-18]
+ui: true
+recovery: true
+steps:
+  # nothing to recover from a clean start
+  - expect_ui: {label: "Recover unsaved work", exists: false}
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 1in], to: [4in, 2in]}
+  - type: {text: "Hours of careful work"}
+  - run: {}
+  - expect_files: {dir: recovery, ext: newspub, count: 1}
+  # the app crashes (no clean exit) and starts again
+  - restart_app: {}
+  - expect_ui: {label: "Recover unsaved work"}
+  - click: {label: "Recover Untitled publication"}
+  - expect: {query: {q: all_story_text}, contains: "Hours of careful work"}
+  - expect: {query: {q: session}, path: /dirty, equals: true}
+  # saving the recovered publication removes the recovery copy
+  - key: {key: "S", command: true}
+  - fill: {label: "File name", text: "recovered.npub"}
+  - click: {label: "Save File"}
+  - expect_files: {dir: recovery, ext: newspub, count: 0}
+  - expect_files: {dir: ".", contains: ["recovered.npub"]}
+  # a saved publication with later edits comes back under its own name, ready to save in place
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 3in], to: [4in, 4in]}
+  - type: {text: "More work"}
+  - run: {}
+  - expect_files: {dir: recovery, ext: newspub, count: 1}
+  - restart_app: {}
+  - click: {label: "Recover recovered"}
+  - expect: {query: {q: session}, path: /path, ends_with: "recovered.npub"}
+  - expect: {query: {q: all_story_text}, contains: "More work"}
+  # a publication discarded on purpose is not offered again
+  - close_window: {}
+  - click: {label: "Don't Save"}
+  - expect_files: {dir: recovery, ext: newspub, count: 0}
+  - restart_app: {}
+  - expect_ui: {label: "Recover unsaved work", exists: false}

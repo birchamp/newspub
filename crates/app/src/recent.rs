@@ -10,6 +10,11 @@ pub struct Recent {
     store: Option<PathBuf>,
 }
 
+/// newpub's folder in the OS config dir.
+pub fn config_dir() -> Option<PathBuf> {
+    config_file().and_then(|f| f.parent().map(Path::to_path_buf))
+}
+
 fn config_file() -> Option<PathBuf> {
     let base = if cfg!(windows) {
         std::env::var_os("APPDATA").map(PathBuf::from)

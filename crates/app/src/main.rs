@@ -29,7 +29,7 @@ fn main() -> eframe::Result {
 fn launch(viewport: egui::ViewportBuilder, session: Session, opened: bool) -> eframe::Result {
     let options = eframe::NativeOptions { viewport, ..Default::default() };
     macos::run(options, move || {
-        let mut app = NewpubApp::new(session).with_persistent_recent();
+        let mut app = with_recovery(NewpubApp::new(session).with_persistent_recent());
         app.startup_picker = !opened;
         app
     })
@@ -48,7 +48,7 @@ fn launch(viewport: egui::ViewportBuilder, session: Session, opened: bool) -> ef
             options,
             Box::new(|_cc| {
                 let session = session.borrow_mut().take().ok_or("the app was already started")?;
-                let mut app = NewpubApp::new(session).with_persistent_recent();
+                let mut app = with_recovery(NewpubApp::new(session).with_persistent_recent());
                 app.startup_picker = !opened;
                 Ok(Box::new(app))
             }),
@@ -148,6 +148,14 @@ mod macos {
             let _: () = msg_send![app, setDelegate: none];
             let _: () = msg_send![app, setDelegate: delegate];
         }
+    }
+}
+
+/// AutoRecover copies live in newpub's config folder; one is written every 5 changes.
+fn with_recovery(app: NewpubApp) -> NewpubApp {
+    match newpub_app::config_dir() {
+        Some(dir) => app.with_recovery(dir.join("recovery"), 5),
+        None => app,
     }
 }
 

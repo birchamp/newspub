@@ -14,6 +14,8 @@ mod pane;
 mod picker;
 mod print;
 mod recent;
+mod recovery;
+pub use recent::config_dir;
 mod shell;
 mod tabs;
 mod text_edit;
@@ -100,6 +102,8 @@ pub struct NewpubApp {
     close_confirmed: bool,
     /// How many times the window was let close (journeys observe it; the desktop app exits on the first).
     window_closes: u32,
+    /// AutoRecover copies (the desktop app and recovery journeys).
+    recovery: Option<recovery::Recovery>,
     /// Screen rect of the canvas, for drops.
     canvas_rect: egui::Rect,
     pub status: String,
@@ -197,6 +201,7 @@ impl NewpubApp {
             close_confirmed: false,
             window_closes: 0,
             canvas_rect: egui::Rect::NOTHING,
+            recovery: None,
             status: String::new(),
             texture: None,
             page_origin: Pos2::ZERO,
@@ -411,7 +416,11 @@ impl NewpubApp {
             return;
         }
         if std::mem::take(&mut self.startup_picker) {
-            self.open_picker();
+            // Work to recover comes first; the start screen follows if the user declines it.
+            match self.recovery.as_mut().filter(|r| !r.offers.is_empty()) {
+                Some(r) => r.picker_after = true,
+                None => self.open_picker(),
+            }
         }
         let _ = OPEN_CTX.set(ctx.clone());
         let requests = std::mem::take(&mut *OPEN_REQUESTS.lock().unwrap_or_else(|e| e.into_inner()));
@@ -441,6 +450,8 @@ impl NewpubApp {
         egui::CentralPanel::default().frame(egui::Frame::new().fill(p.pasteboard)).show(ui, |ui| self.canvas(ui));
         self.dialogs(&ctx);
         self.unsaved_prompt(&ctx);
+        self.recovery_prompt(&ctx);
+        self.recovery_tick();
         self.tab_windows(&ctx);
         self.selection_pane(&ctx);
     }

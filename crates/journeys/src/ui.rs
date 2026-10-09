@@ -4,7 +4,8 @@
 //! `drag: {from: [x, y], to: [x, y]}` and `click_at: [x, y]` (page points on the canvas),
 //! `expect_ui: {label, exists}`, `focus: {label}` (keyboard focus), `scroll: {dx, dy}` (mouse wheel over
 //! the canvas, screen points), `close_window: {}` (the window's close button), `drop_file: {path, at}` (a file
-//! dragged from the desktop and dropped, optionally over a page point), `run: {}`.
+//! dragged from the desktop and dropped, optionally over a page point), `restart_app: {}` (the app goes away
+//! without a clean exit and starts again), `run: {}`.
 //! Journey options: `startup_template_picker: true` starts the app as the desktop binary does;
 //! print jobs go to `<out>/print-spool/job-<n>.pdf`.
 //! Observation steps are shared with headless journeys: `expect`, `let`, `dump`, `expect_pdf`,
@@ -212,8 +213,9 @@ fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Resul
     Ok(())
 }
 
-/// Runs a UI journey. Errors carry the 1-based failing step.
-pub fn run_ui_journey(script: &Value, steps: &[Value], ctx: &mut Ctx) -> Result<(), (usize, anyhow::Error)> {
+/// A fresh app as the journey options describe it. `recovery: true` keeps AutoRecover copies in
+/// `<out>/recovery`, written after every change.
+fn start_app(script: &Value, ctx: &Ctx) -> Harness<'static, NewpubApp> {
     let mut session = Session::bundled();
     session.base_dir = ctx.out.clone();
     let mut app = NewpubApp::new(session);
@@ -223,12 +225,27 @@ pub fn run_ui_journey(script: &Value, steps: &[Value], ctx: &mut Ctx) -> Result<
     if std::env::var_os("NEWPUB_REAL_PRINT").is_none() {
         app.print_spool = Some(ctx.out.join("print-spool"));
     }
+    if script.get("recovery").and_then(|v| v.as_bool()).unwrap_or(false) {
+        app = app.with_recovery(ctx.out.join("recovery"), 1);
+    }
     let mut h = Harness::builder()
         .with_size(egui::Vec2::new(1280.0, 860.0))
         .with_max_steps(64)
         .build_ui_state(|ui, app: &mut NewpubApp| app.ui(ui), app);
     settle(&mut h);
+    h
+}
+
+/// Runs a UI journey. Errors carry the 1-based failing step.
+pub fn run_ui_journey(script: &Value, steps: &[Value], ctx: &mut Ctx) -> Result<(), (usize, anyhow::Error)> {
+    let mut h = start_app(script, ctx);
     for (i, step) in steps.iter().enumerate() {
+        if step.get("restart_app").is_some() {
+            // The app goes away without a clean exit (a crash) and starts again.
+            drop(h);
+            h = start_app(script, ctx);
+            continue;
+        }
         ui_step(&mut h, ctx, step).map_err(|e| (i + 1, e))?;
     }
     // Screenshots of the final document for the gallery.

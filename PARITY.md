@@ -263,3 +263,4 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | UI-15 | P1 | Clipboard and context menu: cut, copy, paste objects and text; right-click menu | UI-CB-001 | [x] |
 | UI-16 | P0 | Unsaved changes are never lost silently: Save Changes / Don't Save / Cancel before closing the window, New and Open | UI-SV-001 | [ ] |
 | UI-17 | P1 | Drag and drop from the desktop: pictures are placed where dropped; publications and .pub files open | UI-DD-001 | [ ] |
+| UI-18 | P0 | AutoRecover in the app: after a crash the next start offers unsaved work back (per-window locked copies; discarded work is not offered) | UI-AR-001 | [ ] |

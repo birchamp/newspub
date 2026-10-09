@@ -31,16 +31,29 @@ fn walk(dir: &Path, base: &Path, out: &mut Vec<String>) -> Result<()> {
     Ok(())
 }
 
-/// `expect_files: {dir, contains: [paths], not_contains: [paths]}` (paths relative to `dir`, `/`-separated).
+/// `expect_files: {dir, contains: [paths], not_contains: [paths], ext, count}` (paths relative to `dir`,
+/// `/`-separated; `count` counts the files, only those ending in `.<ext>` when `ext` is given). A missing folder
+/// counts as empty.
 pub fn check_files(ctx: &Ctx, spec: &Value) -> Result<()> {
     let dir = spec.get("dir").and_then(|d| d.as_str()).ok_or_else(|| anyhow!("expect_files needs dir"))?;
     let dir = resolve(ctx, dir);
-    if !dir.is_dir() {
+    let mut files = vec![];
+    if dir.is_dir() {
+        walk(&dir, &dir, &mut files)?;
+    } else if spec.get("count").is_none() {
         bail!("{} is not a folder", dir.display());
     }
-    let mut files = vec![];
-    walk(&dir, &dir, &mut files)?;
     files.sort();
+    if let Some(want) = spec.get("count").and_then(|c| c.as_u64()) {
+        let ext = spec.get("ext").and_then(|e| e.as_str()).map(|e| format!(".{e}"));
+        let n = files.iter().filter(|f| ext.as_ref().is_none_or(|e| f.ends_with(e.as_str()))).count() as u64;
+        if n != want {
+            bail!(
+                "expected {want} files{}, found {n}: {files:?}",
+                ext.map(|e| format!(" ending {e}")).unwrap_or_default()
+            );
+        }
+    }
     for want in strs(spec.get("contains")) {
         if !files.contains(&want) {
             bail!("folder has no {want:?} (it has {files:?})");

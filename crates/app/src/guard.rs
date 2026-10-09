@@ -121,6 +121,7 @@ impl NewpubApp {
         match choice {
             Some(false) => {
                 self.unsaved = None;
+                self.recovery_discard();
                 self.proceed(pending);
             }
             Some(true) => {
