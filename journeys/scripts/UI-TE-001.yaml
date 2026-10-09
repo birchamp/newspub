@@ -1,5 +1,5 @@
 id: UI-TE-001
-title: Text editing with a caret — arrows, Home/End, selection with Shift, typing over a selection, Enter, Backspace/Delete, click to place the caret, formatting the selection
+title: Text editing with a caret — arrows, Home/End, selection with Shift, typing over a selection, Enter, Backspace/Delete, click to place the caret, formatting the selection from shortcuts and the Format panel
 covers: [UI-14]
 ui: true
 steps:
@@ -42,6 +42,13 @@ steps:
   - key: {key: "B", command: true}
   - expect: {query: {q: char_attrs, target: $f, at: 0}, path: /bold, equals: true}
   - expect: {query: {q: char_attrs, target: $f, at: 18}, path: /bold, equals: false}
+  # the Format panel acts on the selection too: Italic on the selected first line only, Center on its paragraph
+  - click: {label: "Italic"}
+  - expect: {query: {q: char_attrs, target: $f, at: 0}, path: /italic, equals: true}
+  - expect: {query: {q: char_attrs, target: $f, at: 18}, path: /italic, equals: false}
+  - click: {label: "Center"}
+  - expect: {query: {q: para_attrs, target: $f, at: 0}, path: /align, equals: "center"}
+  - expect: {query: {q: para_attrs, target: $f, at: 18}, path: /align, equals: "left"}
   # Escape leaves text editing with the frame still selected
   - key: {key: "Escape"}
   - expect: {query: {q: view}, path: /editing, equals: false}

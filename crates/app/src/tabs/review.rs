@@ -201,17 +201,20 @@ impl NewpubApp {
         }
     }
 
-    fn find_hits(&mut self) -> Vec<Id> {
+    fn find_hits(&mut self) -> Vec<(Id, usize, usize)> {
         let r = &self.review_ui;
         if r.find.is_empty() {
             return vec![];
         }
         let q = Query::Find { text: r.find.clone(), match_case: r.match_case, whole_word: r.whole_word };
         let Ok(v) = self.session.query(&q) else { return vec![] };
-        v.as_array().map(|a| a.iter().filter_map(|h| Some(Id(h["story"].as_u64()?))).collect()).unwrap_or_default()
+        let hit = |h: &serde_json::Value| {
+            Some((Id(h["story"].as_u64()?), h["start"].as_u64()? as usize, h["end"].as_u64()? as usize))
+        };
+        v.as_array().map(|a| a.iter().filter_map(hit).collect()).unwrap_or_default()
     }
 
-    /// Selects the frame holding the next hit.
+    /// Selects the text of the next hit, editing its frame.
     fn find_next(&mut self) {
         let hits = self.find_hits();
         if hits.is_empty() {
@@ -220,9 +223,11 @@ impl NewpubApp {
         }
         let i = self.review_ui.next_hit % hits.len();
         self.review_ui.next_hit = i + 1;
-        if let Some((frame, page)) = self.frame_of_story(hits[i]) {
-            self.selection = vec![frame];
+        let (story, start, end) = hits[i];
+        if let Some((frame, page)) = self.frame_of_story(story) {
             self.page = page;
+            self.place_caret(frame, start, false);
+            self.place_caret(frame, end, true);
             self.status = format!("Match {} of {}", i + 1, hits.len());
         }
     }

@@ -67,6 +67,15 @@ impl NewpubApp {
         }
     }
 
+    /// The paragraphs paragraph formatting applies to: those the caret or selection touches while editing,
+    /// else (None, None) for the whole story.
+    pub(crate) fn para_target_range(&self, frame: Id) -> (Option<usize>, Option<usize>) {
+        match self.caret_in(frame) {
+            Some(c) => (Some(c.range().start), Some(c.range().end)),
+            None => (None, None),
+        }
+    }
+
     /// Where inserted material (fields, special characters) goes: the caret, else the end of the story.
     pub(crate) fn insertion_point(&self, frame: Id) -> usize {
         self.caret_in(frame).map(|c| c.range().start).unwrap_or_else(|| self.story_len_of(frame))

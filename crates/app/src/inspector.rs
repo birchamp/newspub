@@ -235,8 +235,11 @@ impl NewpubApp {
         let doc = self.session.doc();
         let Ok(sid) = doc.story_of(frame) else { return };
         let Ok(story) = doc.story(sid) else { return };
-        let Some(para0) = story.paras.first() else { return };
-        let rc = doc.resolve_char(para0, &story.span_attrs_at(0));
+        // Shows and edits the selected text while editing, else the whole story.
+        let (start, end) = self.text_target_range(frame);
+        let at = start.unwrap_or(0).min(story.len());
+        let Some(para0) = story.paras.get(story.para_index_at(at)) else { return };
+        let rc = doc.resolve_char(para0, &story.span_attrs_at(at));
         let style_name = para0.style.and_then(|id| doc.styles.para.get(&id)).map(|s| s.name.clone());
         let color_now = rc.color.clone();
         let color_edit = {
@@ -274,10 +277,7 @@ impl NewpubApp {
         }
         if let Some(c) = color_edit.filter(|c| *c != color_now) {
             let attrs = CharAttrs { color: Some(c), ..Default::default() };
-            self.act_run(
-                format!("tcolor:{frame}"),
-                Command::FormatChars { target: frame, start: None, end: None, attrs },
-            );
+            self.act_run(format!("tcolor:{frame}"), Command::FormatChars { target: frame, start, end, attrs });
         }
         let size_edit = field(ui, &mut self.fields.size, "Font size", &fmt_num(rc.size));
         toggle_row(ui, |ui| {
@@ -307,17 +307,14 @@ impl NewpubApp {
             }
         });
         if !patch.is_empty() {
-            self.act(Command::FormatChars { target: frame, start: None, end: None, attrs: patch });
+            self.act(Command::FormatChars { target: frame, start, end, attrs: patch });
         }
         if let Some(t) = size_edit
             && let Some(v) = core::units::parse_length(&t).filter(|v| (1.0..=999.0).contains(v))
             && (v - rc.size).abs() > 1e-9
         {
             let attrs = CharAttrs { size: Some(Length(v)), ..Default::default() };
-            self.act_run(
-                format!("size:{frame}"),
-                Command::FormatChars { target: frame, start: None, end: None, attrs },
-            );
+            self.act_run(format!("size:{frame}"), Command::FormatChars { target: frame, start, end, attrs });
         }
         if !styles.is_empty() {
             let current = style_name.unwrap_or_else(|| "None".into());
@@ -327,8 +324,8 @@ impl NewpubApp {
                 let style = (i > 0).then(|| StyleRef::Name(styles[i - 1].clone()));
                 self.act(Command::ApplyParaStyle {
                     target: frame,
-                    start: None,
-                    end: None,
+                    start: self.para_target_range(frame).0,
+                    end: self.para_target_range(frame).1,
                     style,
                     clear_overrides: false,
                 });
@@ -342,7 +339,10 @@ impl NewpubApp {
         let doc = self.session.doc();
         let Ok(sid) = doc.story_of(frame) else { return };
         let Ok(story) = doc.story(sid) else { return };
-        let Some(para0) = story.paras.first() else { return };
+        // The paragraphs at the caret or selection while editing, else every paragraph.
+        let (start, end) = self.para_target_range(frame);
+        let at = start.unwrap_or(0).min(story.len());
+        let Some(para0) = story.paras.get(story.para_index_at(at)) else { return };
         let rp = doc.resolve_para(para0);
         let mut patch = ParaAttrs::default();
         toggle_row(ui, |ui| {
@@ -380,7 +380,7 @@ impl NewpubApp {
             }
         });
         if patch != ParaAttrs::default() {
-            self.act(Command::FormatParas { target: frame, start: None, end: None, attrs: patch });
+            self.act(Command::FormatParas { target: frame, start, end, attrs: patch });
         }
         let ls_model = match rp.line_spacing {
             LineSpacing::Multiple(m) => fmt_num(m),
@@ -427,10 +427,7 @@ impl NewpubApp {
             key = "indentfirst";
         }
         if attrs != ParaAttrs::default() {
-            self.act_run(
-                format!("{key}:{frame}"),
-                Command::FormatParas { target: frame, start: None, end: None, attrs },
-            );
+            self.act_run(format!("{key}:{frame}"), Command::FormatParas { target: frame, start, end, attrs });
         }
     }
 

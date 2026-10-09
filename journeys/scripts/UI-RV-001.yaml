@@ -15,6 +15,9 @@ steps:
   - click: {label: "Find and Replace"}
   - fill: {label: "Find what", text: "fair"}
   - fill: {label: "Replace with", text: "fete"}
+  # Find Next selects the matched text itself
+  - click: {label: "Find Next"}
+  - expect: {query: {q: view}, path: /text_selection, equals: [23, 27]}
   - click: {label: "Replace All"}
   - expect: {query: {q: frame_text, frame: $f}, equals: "The committee met. The fete is on."}
   - click: {label: "Home"}
