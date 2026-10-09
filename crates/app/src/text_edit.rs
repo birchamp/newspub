@@ -244,6 +244,7 @@ impl NewpubApp {
             _ => pos,
         };
         self.caret = Some(Caret { frame, pos, anchor, goal_x: None });
+        self.view.cell_extent = None;
         let holder = self.holder(frame);
         self.selection = vec![holder];
         self.view.editing = Some(holder);
@@ -505,8 +506,11 @@ impl NewpubApp {
         {
             let (x, y) = self.screen_to_page(p);
             if let Some(ed) = self.editable_at(holder, x, y) {
-                let pos = self.hit_text(ed, x, y);
-                self.select_word(ed, pos);
+                // A quick Shift-click onto another cell still extends the cell selection.
+                if !(shift && self.extend_cell_selection(ed)) {
+                    let pos = self.hit_text(ed, x, y);
+                    self.select_word(ed, pos);
+                }
                 return true;
             }
         }
@@ -515,6 +519,9 @@ impl NewpubApp {
         let Some(ed) = self.editable_at(holder, px, py) else { return false };
         if resp.drag_started() || resp.clicked() || resp.is_pointer_button_down_on() {
             let pos = self.hit_text(ed, px, py);
+            if (resp.drag_started() || resp.clicked()) && shift && self.extend_cell_selection(ed) {
+                return true;
+            }
             if resp.drag_started() || resp.clicked() {
                 // Shift extends only within the same story.
                 let extend = shift && self.caret_in(ed).is_some();
@@ -525,7 +532,10 @@ impl NewpubApp {
             && let Some(now) = resp.interact_pointer_pos()
         {
             let (x, y) = self.screen_to_page(now);
-            if self.editable_at(holder, x, y) == Some(ed) {
+            let under = self.editable_at(holder, x, y);
+            if under.is_some_and(|u| u != ed) && under.is_some_and(|u| self.extend_cell_selection(u)) {
+                // Dragging from one cell into another selects a block of cells.
+            } else if under == Some(ed) {
                 let pos = self.hit_text(ed, x, y);
                 if let Some(c) = self.caret.as_mut() {
                     c.pos = pos;

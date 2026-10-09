@@ -28,6 +28,8 @@ pub struct ViewState {
     pub editing: Option<Id>,
     /// "Link to Next Box" is waiting for a click on the box the story should continue in.
     pub link_from: Option<Id>,
+    /// The far corner (table, row, col) of a cell selection that starts at the caret's cell.
+    pub cell_extent: Option<(Id, usize, usize)>,
     /// Show text frame and shape boundaries on the canvas.
     pub boundaries: bool,
     /// Document (file, page size) the view was last fitted to.
@@ -46,6 +48,7 @@ impl Default for ViewState {
             units: Units::In,
             editing: None,
             link_from: None,
+            cell_extent: None,
             boundaries: true,
             fit_key: None,
             canvas_id: None,
@@ -163,6 +166,9 @@ impl NewpubApp {
         v["preview"] = self.preview.as_ref().map(|p| p.0.clone()).into();
         v["preview_rendered"] =
             self.preview_texture.as_ref().zip(self.preview.as_ref()).is_some_and(|(t, p)| t.1 == p.0).into();
+        v["table_cell"] = self.current_cell().map(|(_, r, c)| serde_json::json!([r, c])).into();
+        v["table_selection"] =
+            self.cell_selection().map(|(_, r, c, rows, cols)| serde_json::json!([r, c, rows, cols])).into();
         v["text_selection"] = match &self.caret {
             Some(c) if self.editing_frame() == Some(c.frame) => serde_json::json!([c.range().start, c.range().end]),
             _ => serde_json::Value::Null,
@@ -277,12 +283,18 @@ impl NewpubApp {
 
         let resp = ui.interact(cv, id, Sense::click_and_drag());
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Page canvas"));
+        if resp.clicked() || resp.drag_started() {
+            // Working on the page takes the keyboard from the panels.
+            resp.request_focus();
+        }
         if ctx.memory(|m| m.has_focus(id)) {
-            // Arrow keys and Escape belong to the canvas while it is focused.
+            // Arrow keys and Escape belong to the canvas while it is focused; so does Tab while typing in a table
+            // cell (it moves to the next cell).
+            let tab = self.current_cell().is_some();
             ctx.memory_mut(|m| {
                 m.set_focus_lock_filter(
                     id,
-                    egui::EventFilter { horizontal_arrows: true, vertical_arrows: true, escape: true, tab: false },
+                    egui::EventFilter { horizontal_arrows: true, vertical_arrows: true, escape: true, tab },
                 )
             });
         }
@@ -320,6 +332,7 @@ impl NewpubApp {
         self.draw_guides(&painter);
         self.draw_hover(&painter, ctx.pointer_hover_pos().filter(|p| cv.contains(*p)));
         self.draw_selection(&painter);
+        self.draw_cell_selection(&painter);
         self.draw_text_edit(&painter);
         if resp.has_focus() {
             let c = crate::theme::palette(&ctx).primary;

@@ -67,6 +67,36 @@ fn choice(ui: &mut egui::Ui, label: &str, current: &str, items: &[&str]) -> Opti
     })
 }
 
+/// A length field row kept in the panel's field buffers under `key`; returns the new length in points once it
+/// parses.
+pub(crate) fn length_field(
+    app: &mut NewpubApp,
+    ui: &mut egui::Ui,
+    key: &'static str,
+    label: &str,
+    model: &str,
+) -> Option<f64> {
+    field(ui, buf(&mut app.fields.more, key), label, model).and_then(|t| core::units::parse_length(t.trim()))
+}
+
+pub(crate) fn choice_row(ui: &mut egui::Ui, label: &str, current: &str, items: &[&str]) -> Option<usize> {
+    choice(ui, label, current, items)
+}
+
+/// A colour field row kept in the panel's field buffers under `key`.
+pub(crate) fn color_row(
+    app: &mut NewpubApp,
+    ui: &mut egui::Ui,
+    key: &'static str,
+    label: &str,
+    current: Option<&Color>,
+) -> Option<Color> {
+    let mut t = std::mem::take(buf(&mut app.fields.more, key));
+    let r = color_field(ui, app.session.doc(), &mut t, label, current);
+    *buf(&mut app.fields.more, key) = t;
+    r
+}
+
 fn rgba_of(doc: &core::Document, c: &Color) -> [u8; 4] {
     doc.scheme_color(c).to_rgba8()
 }
@@ -205,6 +235,14 @@ impl NewpubApp {
                 }
                 ObjectKind::Image(_) => {
                     card(ui, icons::IMAGE, "Picture", |ui| self.picture_section(ui, &obj));
+                }
+                ObjectKind::Table(_) => {
+                    // While typing in a cell, its text gets the text cards.
+                    if let Some(c) = self.caret.filter(|_| self.current_cell().is_some()) {
+                        card(ui, icons::TEXT_AA, "Text", |ui| self.text_section(ui, c.frame));
+                        card(ui, icons::TEXT_ALIGN_LEFT, "Paragraph", |ui| self.paragraph_section(ui, c.frame));
+                    }
+                    card(ui, icons::TABLE, "Table", |ui| self.table_section(ui, obj.id));
                 }
                 _ => {}
             }

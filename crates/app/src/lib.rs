@@ -17,6 +17,7 @@ mod recent;
 mod recovery;
 pub use recent::config_dir;
 mod shell;
+mod table_ui;
 mod tabs;
 mod text_edit;
 pub mod theme;
@@ -567,6 +568,10 @@ impl NewpubApp {
                         self.end_text_edit();
                         continue;
                     }
+                    Key::Tab if self.current_cell().is_some() => {
+                        self.tab_cell(!m.shift);
+                        continue;
+                    }
                     _ => {}
                 }
             }
@@ -974,10 +979,13 @@ impl NewpubApp {
                 let hit = self.hit(x, y);
                 // A click in an already selected text box, shape with text or table places the caret there.
                 let editable = hit.filter(|id| self.selection == [*id]).and_then(|id| self.editable_at(id, x, y));
+                let shift = resp.ctx.input(|i| i.modifiers.shift);
                 match editable {
+                    Some(ed) if shift && self.extend_cell_selection(ed) => {}
                     Some(ed) => {
                         let pos = self.hit_text(ed, x, y);
-                        self.place_caret(ed, pos, false);
+                        let extend = shift && self.caret_in(ed).is_some();
+                        self.place_caret(ed, pos, extend);
                     }
                     _ => {
                         self.end_text_edit();

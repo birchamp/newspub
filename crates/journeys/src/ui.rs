@@ -56,7 +56,13 @@ fn find<'a>(h: &'a Harness<'_, NewpubApp>, label: &'a str) -> Result<egui_kittes
     if all.is_empty() {
         bail!("no UI element labelled {label:?}");
     }
-    let pick = all.iter().position(|n| n.accesskit_node().role() == egui::accesskit::Role::TextInput).unwrap_or(0);
+    // A row's caption and its control share a name; the control is what a person uses.
+    use egui::accesskit::Role;
+    let pick = all
+        .iter()
+        .position(|n| n.accesskit_node().role() == Role::TextInput)
+        .or_else(|| all.iter().position(|n| n.accesskit_node().role() == Role::ComboBox))
+        .unwrap_or(0);
     Ok(all.into_iter().nth(pick).expect("index in range"))
 }
 
@@ -230,6 +236,9 @@ fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Resul
                 h.run_steps(24);
             }
             if secondary || flag("shift") || flag("double") {
+                // Shift is held down for the whole click, as on a real keyboard.
+                h.event(egui::Event::ModifiersChanged(modifiers));
+                h.run_steps(1);
                 let button = if secondary { egui::PointerButton::Secondary } else { egui::PointerButton::Primary };
                 let clicks = if flag("double") { 2 } else { 1 };
                 for _ in 0..clicks {
@@ -238,6 +247,7 @@ fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Resul
                         h.run_steps(1);
                     }
                 }
+                h.event(egui::Event::ModifiersChanged(egui::Modifiers::NONE));
             } else {
                 h.drag_at(p);
                 h.run_steps(1);
