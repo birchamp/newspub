@@ -22,6 +22,13 @@
       <key>CFBundleTypeExtensions</key><array><string>npub</string></array>
       <key>CFBundleTypeIconFile</key><string>newpub</string>
     </dict>
+    <dict>
+      <!-- Publisher files open as new publications; newpub never becomes their default app on its own. -->
+      <key>CFBundleTypeName</key><string>Microsoft Publisher document</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>CFBundleTypeExtensions</key><array><string>pub</string></array>
+    </dict>
   </array>
 </dict>
 </plist>

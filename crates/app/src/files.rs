@@ -29,9 +29,11 @@ fn browse(kind: Browse, current: &str) -> Option<String> {
         dlg = dlg.set_directory(dir);
     }
     let picked = match kind {
-        Browse::OpenPub => {
-            dlg.add_filter("Publication", &["npub", "newspub"]).add_filter("All files", &["*"]).pick_file()
-        }
+        Browse::OpenPub => dlg
+            .add_filter("Publications", &["npub", "newspub", "pub"])
+            .add_filter("Microsoft Publisher", &["pub"])
+            .add_filter("All files", &["*"])
+            .pick_file(),
         Browse::SavePub => dlg.add_filter("Publication", &["npub"]).set_file_name("publication.npub").save_file(),
         Browse::Picture => dlg
             .add_filter("Pictures", &["png", "jpg", "jpeg", "gif", "bmp", "webp", "svg", "tif", "tiff"])
@@ -436,6 +438,10 @@ impl NewpubApp {
                 dialog_window("Open Publication").show(ctx, |ui| {
                     widgets::section(ui, ic::FOLDER_OPEN, "Open a file", |ui| {
                         path_field(ui, "File name", path, Browse::OpenPub);
+                        widgets::hint(
+                            ui,
+                            "newpub publications (.npub), or Microsoft Publisher files (.pub) to import.",
+                        );
                     });
                     let recent: Vec<_> = self.recent.files().to_vec();
                     if !recent.is_empty() {
@@ -445,23 +451,15 @@ impl NewpubApp {
                                 let name =
                                     file.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
                                 if widgets::secondary_button(ui, &format!("Recent: {name}")).clicked()
-                                    && self
-                                        .act(SessionAction::Open { path: file.to_string_lossy().to_string() })
-                                        .is_some()
+                                    && self.open_file(&file)
                                 {
-                                    self.remember_recent();
-                                    self.page = 0;
-                                    self.selection.clear();
                                     close = true;
                                 }
                             }
                         });
                     }
                     let (ok, cancel) = confirm_row(ui, "Open File");
-                    if ok && self.act(SessionAction::Open { path: path.clone() }).is_some() {
-                        self.remember_recent();
-                        self.page = 0;
-                        self.selection.clear();
+                    if ok && self.open_file(std::path::Path::new(path.as_str())) {
                         close = true;
                     }
                     close |= cancel;

@@ -7,5 +7,5 @@ Exec=newpub %f
 Icon=newpub
 Terminal=false
 Categories=Office;Publishing;
-MimeType=application/x-newpub;
+MimeType=application/x-newpub;application/vnd.ms-publisher;
 StartupWMClass=newpub

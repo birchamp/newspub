@@ -50,6 +50,8 @@ Root: HKA; Subkey: "Software\Classes\.npub"; ValueType: string; ValueName: ""; V
 Root: HKA; Subkey: "Software\Classes\newpub.Publication"; ValueType: string; ValueName: ""; ValueData: "newpub publication"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\newpub.Publication\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\newpub.ico"
 Root: HKA; Subkey: "Software\Classes\newpub.Publication\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\newpub.exe"" ""%1"""
+; Publisher files list newpub under "Open with" without changing their default app.
+Root: HKA; Subkey: "Software\Classes\.pub\OpenWithProgids"; ValueType: string; ValueName: "newpub.Publication"; ValueData: ""; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\newpub.exe"; Description: "{cm:LaunchProgram,newpub}"; Flags: nowait postinstall skipifsilent

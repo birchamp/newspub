@@ -220,18 +220,30 @@ impl NewpubApp {
         self
     }
 
-    /// Opens a publication, closing the start screen; failures go to the status bar.
-    pub fn open_file(&mut self, path: &std::path::Path) {
-        let path = path.to_string_lossy().to_string();
-        if self.act(SessionAction::Open { path }).is_some() {
-            self.remember_recent();
-            self.page = 0;
-            self.selection.clear();
-            self.end_text_edit();
-            if matches!(self.dialog, Dialog::Picker(_)) {
-                self.dialog = Dialog::None;
-            }
+    /// Opens a publication, or imports a Microsoft Publisher (.pub) file as a new one, closing the start screen.
+    /// Failures go to the status bar. Returns whether it opened.
+    pub fn open_file(&mut self, path: &std::path::Path) -> bool {
+        let imported = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pub"));
+        if self.act(SessionAction::Open { path: path.to_string_lossy().to_string() }).is_none() {
+            return false;
         }
+        if imported {
+            // The import has no file of its own yet; the .pub goes on the recent list so it can be imported again.
+            let abs = std::path::absolute(self.session.base_dir.join(path)).unwrap_or_else(|_| path.to_path_buf());
+            self.recent.add(&abs);
+            let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            self.status = format!("Imported from {name}");
+        } else {
+            self.remember_recent();
+        }
+        self.page = 0;
+        self.selection.clear();
+        self.end_text_edit();
+        self.thumbs.clear();
+        if matches!(self.dialog, Dialog::Picker(_)) {
+            self.dialog = Dialog::None;
+        }
+        true
     }
 
     /// Recent files, newest first.

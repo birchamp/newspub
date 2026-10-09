@@ -11,6 +11,11 @@ fn main() -> eframe::Result {
     session.base_dir = std::env::current_dir().unwrap_or_default();
     // A file passed on the command line (double-click on a .npub file) opens instead of the template picker.
     let opened = std::env::args().nth(1).is_some_and(|path| {
+        // A Publisher file is imported by the app on its first frame, so it reports what it imported.
+        if path.to_ascii_lowercase().ends_with(".pub") {
+            newpub_app::request_open(session.base_dir.join(&path));
+            return true;
+        }
         session.run(&newpub_engine::Action::Session(newpub_engine::SessionAction::Open { path })).is_ok()
     });
     let mut viewport = egui::ViewportBuilder::default().with_title("newpub").with_inner_size([1280.0, 860.0]);

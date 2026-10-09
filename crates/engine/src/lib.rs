@@ -318,6 +318,16 @@ impl Session {
             }
             Open { path } => {
                 let p = self.resolve(path);
+                // A Microsoft Publisher file opens as a new, unsaved publication named after the file.
+                if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("pub")) {
+                    let out = self.pub_action(&ImportPub { path: path.clone() })?;
+                    if self.doc.meta.title.trim().is_empty()
+                        && let Some(stem) = p.file_stem()
+                    {
+                        self.doc.meta.title = stem.to_string_lossy().into_owned();
+                    }
+                    return Ok(out);
+                }
                 let d = newpub_io_native::open(&p)?;
                 self.doc = d;
                 self.history = History::default();
