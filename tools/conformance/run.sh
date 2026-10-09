@@ -26,6 +26,10 @@ verapdf_ua() {
 }
 check verapdf-ua1-accessibility-journey "verapdf_ua" "$R/J-AX-003/tagged.pdf"
 check verapdf-ua1-newsletter "verapdf_ua" "$R/J-EX-007/ua.pdf"
+check verapdf-ua1-table "verapdf_ua" "$R/J-AX-004/table.pdf"
+for t in newsletter flyer bulletin booklet; do
+  check "verapdf-ua1-template-$t" "verapdf_ua" "$R/J-AX-004/template-$t.pdf"
+done
 
 # epubcheck on the EPUB export.
 epubcheck_run() {

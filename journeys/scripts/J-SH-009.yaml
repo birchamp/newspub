@@ -1,0 +1,26 @@
+id: J-SH-009
+title: Point editing converts an older polyline shape to a Bézier shape on its first edit
+covers: [SH-08]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - add_shape: {page: 0, rect: [1in, 1in, 2in, 2in], kind: {path: {points: [[0, 0], [1, 0], [1, 1]], closed: true}}, fill: "#2050a0"}
+    as: p
+  - expect: {query: {q: path_nodes, id: $p}, len: 3}
+  - expect: {query: {q: path_nodes, id: $p}, path: /1/x, approx: [216, 0.01]}
+  # the first edit turns the polyline into an equivalent Bézier path and applies the edit
+  - move_path_node: {id: $p, index: 1, x: 4in, y: 1in}
+  - expect: {query: {q: object, id: $p}, path: /kind/kind/bezier/closed, equals: true}
+  - expect: {query: {q: path_nodes, id: $p}, len: 3}
+  - expect: {query: {q: path_nodes, id: $p}, path: /1/x, approx: [288, 0.01]}
+  - expect: {query: {q: path_nodes, id: $p}, path: /0/x, approx: [72, 0.01]}
+  - set_path_node_kind: {id: $p, index: 1, kind: smooth}
+  - expect: {query: {q: path_nodes, id: $p}, path: /1/smooth, equals: true}
+  - insert_path_node: {id: $p, after: 2}
+  - expect: {query: {q: path_nodes, id: $p}, len: 4}
+  # one undo step per edit, back to the original polyline
+  - undo: {}
+  - undo: {}
+  - undo: {}
+  - expect: {query: {q: object, id: $p}, path: /kind/kind/path/closed, equals: true}
+  - expect: {query: {q: path_nodes, id: $p}, path: /1/x, approx: [216, 0.01]}
+  - expect_roundtrip: {}

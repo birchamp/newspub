@@ -275,11 +275,19 @@ fn edit(
     id: Id,
     f: impl FnOnce(&mut Vec<PathNodeInfo>, bool) -> Result<(), CoreError>,
 ) -> Result<Applied, CoreError> {
-    let o = doc.object(id)?;
-    let (nodes, closed) = bezier_of(o)?;
     if doc.object_locked(id) {
         return Err(CoreError::Locked(id));
     }
+    // An older polyline `Path` becomes the equivalent Bézier path (corner points, no handles) on its first edit.
+    if let ObjectKind::Shape(Shape { kind: k @ ShapeKind::Path { .. }, .. }) = &mut doc.object_mut(id)?.kind
+        && let ShapeKind::Path { points, closed } = k.clone()
+    {
+        let nodes =
+            points.iter().map(|p| BezierNode { at: *p, ctrl_in: None, ctrl_out: None, smooth: false }).collect();
+        *k = ShapeKind::Bezier { nodes, closed };
+    }
+    let o = doc.object(id)?;
+    let (nodes, closed) = bezier_of(o)?;
     let mut page = to_page(nodes, o.rect);
     f(&mut page, closed)?;
     let rect = bounds(&page);

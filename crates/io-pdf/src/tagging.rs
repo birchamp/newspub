@@ -132,6 +132,7 @@ impl Tagger {
             Role::Table => Tag::Table.into(),
             Role::Row => Tag::TR.into(),
             Role::Cell => Tag::TD.into(),
+            Role::HeaderCell => Tag::TH(krilla::tagging::TableHeaderScope::Column).into(),
             Role::Link => Tag::Link.into(),
         };
         let mut g = TagGroup::new(kind);

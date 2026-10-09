@@ -1,0 +1,31 @@
+id: J-AX-004
+title: Tagged PDF tables have header cells with scope; every built-in template exports as PDF/UA
+covers: [AX-03]
+steps:
+  - new_document: {width: 8.5in, height: 11in}
+  - set_meta: {title: "Price list", lang: "en-US"}
+  - add_table: {page: 0, rect: [1in, 1in, 4in, 1.5in], rows: 3, cols: 2}
+    as: t
+  - apply_table_format: {table: $t, format: "Banded rows"}
+  - expect: {query: {q: table, id: $t}, path: /header_rows, equals: 1}
+  - paste_table_text: {table: $t, row: 0, col: 0, text: "Item\tPrice\nTeapot\t12.50\nMug\t6.00"}
+  - export_pdf: {path: table.pdf, options: {standard: pdf_ua1}}
+  # the header row's cells are TH elements scoped to their column; body cells are TD
+  - expect_pdf: {file: table.pdf, tagged: {structure: ["Table", "TR", "TH", "TD", "TH/Scope=Column"]}}
+  # every built-in template, given a title and language, exports as PDF/UA (veraPDF checks these files in CI)
+  - new_from_builtin: {id: newsletter}
+  - set_meta: {title: "Newsletter", lang: "en-US"}
+  - export_pdf: {path: template-newsletter.pdf, options: {standard: pdf_ua1}}
+  - expect_pdf: {file: template-newsletter.pdf, tagged: {structure: ["P"], lang: "en-US"}}
+  - new_from_builtin: {id: flyer}
+  - set_meta: {title: "Flyer", lang: "en-US"}
+  - export_pdf: {path: template-flyer.pdf, options: {standard: pdf_ua1}}
+  - expect_pdf: {file: template-flyer.pdf, tagged: {structure: ["P"]}}
+  - new_from_builtin: {id: bulletin}
+  - set_meta: {title: "Bulletin", lang: "en-US"}
+  - export_pdf: {path: template-bulletin.pdf, options: {standard: pdf_ua1}}
+  - expect_pdf: {file: template-bulletin.pdf, tagged: {structure: ["P"]}}
+  - new_from_builtin: {id: booklet}
+  - set_meta: {title: "Booklet", lang: "en-US"}
+  - export_pdf: {path: template-booklet.pdf, options: {standard: pdf_ua1}}
+  - expect_pdf: {file: template-booklet.pdf, tagged: {structure: ["P"]}}

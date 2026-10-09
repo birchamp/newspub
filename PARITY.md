@@ -86,7 +86,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | SH-05 | P2 | AutoShapes library (rounded rectangle, star, arrow, callout, polygon, triangle) | J-SH-005 | [x] |
 | SH-06 | P2 | Text inside shapes | J-SH-006 | [x] |
 | SH-07 | P2 | Gradient, pattern, and transparency fills; shape shadow | J-SH-007 | [x] |
-| SH-08 | P3 | Freeform / Bézier drawing and point editing (canvas tool and point handles) | J-SH-008, UI-SH-008 | [x] |
+| SH-08 | P3 | Freeform / Bézier drawing and point editing (canvas tool and point handles) | J-SH-008, J-SH-009, UI-SH-008 | [ ] |
 
 ## TB: Tables
 
@@ -219,7 +219,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 |----|---|---------|----------|------|
 | AX-01 | P1 | Alt text on all non-text objects; mark decorative | J-AX-001 | [x] |
 | AX-02 | P1 | Accessibility checker (missing alt text, low contrast, reading order, tiny text) | J-AX-002 | [x] |
-| AX-03 | P2 | Tagged PDF (PDF/UA) with reading order and alt text | J-AX-003, J-EX-007 | [x] |
+| AX-03 | P2 | Tagged PDF (PDF/UA) with reading order and alt text | J-AX-003, J-AX-004, J-EX-007 | [ ] |
 | AX-04 | P2 | App UI fully operable by keyboard and screen reader (AccessKit tree) | UI-AX-001 | [x] |
 
 ## FR: Find and replace

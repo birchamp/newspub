@@ -582,6 +582,20 @@ fn struct_walk(pdf: &Pdf, node: &Object, types: &mut Vec<String>, alts: &mut Vec
                 {
                     alts.push(decode_pdf_string(b));
                 }
+                // Table header cells also report their scope as "TH/Scope=<Row|Column|Both>".
+                if s == "TH"
+                    && let Ok(a) = d.get(b"A")
+                {
+                    let attrs: Vec<&Object> = match resolve(pdf, a) {
+                        Object::Array(v) => v.iter().map(|x| resolve(pdf, x)).collect(),
+                        o => vec![o],
+                    };
+                    for at in attrs {
+                        if let Ok(sc) = at.as_dict().and_then(|ad| ad.get(b"Scope")).and_then(|v| v.as_name()) {
+                            types.push(format!("TH/Scope={}", String::from_utf8_lossy(sc)));
+                        }
+                    }
+                }
                 types.push(s);
             }
             if let Ok(k) = d.get(b"K") {

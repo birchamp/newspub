@@ -112,6 +112,8 @@ pub enum Role {
     Table,
     Row,
     Cell,
+    /// A cell of a header row (scoped to its column).
+    HeaderCell,
     /// A link annotation (added by the PDF exporter).
     Link,
 }
@@ -805,7 +807,10 @@ fn push_object_inner(
                         let outer = [
                             (TagKey::Object(id), Role::Table),
                             (TagKey::Row(id, r), Role::Row),
-                            (TagKey::Cell(id, r, c), Role::Cell),
+                            (
+                                TagKey::Cell(id, r, c),
+                                if r < tb.header_rows as usize { Role::HeaderCell } else { Role::Cell },
+                            ),
                         ];
                         push_lines(doc, top_owner(doc, id), cell.story, fl, &outer, t, items);
                         for d in &fl.decorations {
