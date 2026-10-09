@@ -1,5 +1,5 @@
 id: J-PI-001
-title: Open a .pub container, report its streams; reject non-Publisher files gracefully
+title: Open a .pub container, report its streams; reject non-Publisher and damaged files gracefully
 covers: [PI-01]
 steps:
   - expect: {query: {q: pub_report, path: fixtures/tika-sample.pub}, path: /is_publisher, equals: true}
@@ -9,3 +9,7 @@ steps:
   - expect: {query: {q: pub_report, path: fixtures/tika-sample.pub}, path: /version, starts_with: "Publisher"}
   - expect_error: {import_pub: {path: fixtures/photo.png}, message: "not a Publisher file"}
   - expect_error: {import_pub: {path: fixtures/letter.docx}, message: "not a Publisher file"}
+  # damaged Publisher files (minimised fuzzer cases) fail with an error, never a crash
+  - expect_error: {import_pub: {path: fixtures/pub/fuzz-1.pub}}
+  - expect_error: {import_pub: {path: fixtures/pub/fuzz-2.pub}}
+  - expect_error: {import_pub: {path: fixtures/pub/fuzz-3.pub}}

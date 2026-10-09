@@ -580,6 +580,22 @@ impl Session {
             }
             ObjectCount { page } => json!(self.doc.pages.get(*page).ok_or(CoreError::NoSuchPage(*page))?.objects.len()),
             PageObjects { page } => to(&self.doc.pages.get(*page).ok_or(CoreError::NoSuchPage(*page))?.objects),
+            PageObjectKinds { page } => {
+                fn walk(doc: &newpub_core::Document, ids: &[Id], out: &mut Vec<String>) {
+                    for id in ids {
+                        let Some(o) = doc.objects.get(id) else { continue };
+                        let kind = serde_json::to_value(&o.kind).ok();
+                        out.push(kind.and_then(|k| k["type"].as_str().map(String::from)).unwrap_or_default());
+                        if let ObjectKind::Group { children } = &o.kind {
+                            walk(doc, children, out);
+                        }
+                    }
+                }
+                let page = self.doc.pages.get(*page).ok_or(CoreError::NoSuchPage(*page))?;
+                let mut out = vec![];
+                walk(&self.doc, &page.objects, &mut out);
+                json!(out)
+            }
             StoryText { target } => {
                 let sid = self.doc.story_of(*target)?;
                 json!(self.doc.story(sid)?.text)

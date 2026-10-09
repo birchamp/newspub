@@ -2,6 +2,22 @@ id: J-PI-004
 title: Import .pub character and paragraph formatting
 covers: [PI-04]
 steps:
-  - import_pub: {path: fixtures/tika-sample.pub}
-  - expect: {query: {q: import_report}, path: /fonts, contains: "Times New Roman"}
-  - expect: {query: {q: fonts_used}, len: {gte: 1}}
+  - import_pub: {path: fixtures/pub/Sample.pub}
+  - expect: {query: {q: find, text: "This is some text on the first page"}, path: /0/story, gt: 0, as: s1}
+  - expect: {query: {q: char_attrs, target: $s1, at: 0}, path: /font, equals: "Times New Roman"}
+  - expect: {query: {q: char_attrs, target: $s1, at: 0}, path: /size, approx: [10, 0.01]}
+  - expect: {query: {q: char_attrs, target: $s1, at: 0}, path: /bold, equals: false}
+  - expect: {query: {q: char_attrs, target: $s1, at: 0}, path: /italic, equals: false}
+  - expect: {query: {q: find, text: "This is in bold and italic"}, path: /0/story, gt: 0, as: s2}
+  - expect: {query: {q: char_attrs, target: $s2, at: 0}, path: /font, equals: "Arial"}
+  - expect: {query: {q: char_attrs, target: $s2, at: 0}, path: /size, approx: [20, 0.01]}
+  - expect: {query: {q: char_attrs, target: $s2, at: 0}, path: /bold, equals: true}
+  - expect: {query: {q: char_attrs, target: $s2, at: 0}, path: /italic, equals: true}
+  # formatting changes inside a story: the newsletter masthead is much larger than its body text
+  - import_pub: {path: fixtures/pub/SampleNewsletter.pub}
+  - expect: {query: {q: find, text: "Living and Learning"}, path: /0/story, gt: 0, as: title}
+  - expect: {query: {q: char_attrs, target: $title, at: 0}, path: /size, gt: 30}
+  - expect: {query: {q: find, text: "This week in class"}, path: /0/story, gt: 0, as: body}
+  - expect: {query: {q: char_attrs, target: $body, at: 0}, path: /size, lt: 14}
+  # paragraph spacing comes through: consecutive paragraphs of body text sit at least a line apart
+  - expect: {query: {q: para_attrs, target: $body, at: 0}, path: /line_spacing, not_equals: null}

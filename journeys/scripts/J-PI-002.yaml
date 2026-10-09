@@ -1,9 +1,26 @@
 id: J-PI-002
-title: Import .pub text stories as plain text with paragraphs
+title: Import .pub stories into their own text boxes on their own pages
 covers: [PI-02]
 steps:
-  - import_pub: {path: fixtures/tika-sample.pub}
-  - expect: {query: {q: page_count}, gte: 1}
-  - expect: {query: {q: all_story_text}, contains: "0123456789abcdef"}
+  - import_pub: {path: fixtures/pub/Sample.pub}
+  - expect: {query: {q: page_count}, equals: 2}
+  # page 1 has two text boxes, each with its own story
+  - expect: {query: {q: find, text: "This is some text on the first page"}, path: /0/story, gt: 0, as: s1}
+  - expect: {query: {q: find, text: "This is in bold and italic"}, path: /0/story, not_equals: $s1, as: s2}
+  - expect: {query: {q: story_text, target: $s1}, contains: "It’s in times new roman, font size 10, all normal"}
+  - expect: {query: {q: story_text, target: $s1}, not_contains: "bold and italic"}
+  - expect: {query: {q: story_text, target: $s2}, contains: "It’s in the second textbox on the first page"}
+  - expect: {query: {q: char_page, target: $s1, at: 0}, equals: 0}
+  - expect: {query: {q: char_page, target: $s2, at: 0}, equals: 0}
+  # page 2 text stays on page 2
+  - expect: {query: {q: find, text: "This is the second page"}, path: /0/story, gt: 0, as: s3}
+  - expect: {query: {q: char_page, target: $s3, at: 0}, equals: 1}
+  - expect: {query: {q: find, text: "This text is on page two"}, path: /0/story, gt: 0, as: s4}
+  - expect: {query: {q: char_page, target: $s4, at: 0}, equals: 1}
+  - expect: {query: {q: story_text, target: $s4}, not_contains: "This is the second page"}
+  # every story is placed in a text box: nothing overflows, nothing is off the page
+  - expect: {query: {q: off_page_objects}, len: 0}
   - export_pdf: {path: imported.pdf}
-  - expect_pdf: {file: imported.pdf, text_contains: ["0123456789"]}
+  - expect_pdf: {file: imported.pdf, pages: 2, text_contains: ["This is some text on the first page", "This is the second page"]}
+  # the import is an ordinary publication: it saves and reopens unchanged
+  - expect_roundtrip: {}

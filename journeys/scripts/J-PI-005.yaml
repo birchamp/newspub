@@ -1,0 +1,16 @@
+id: J-PI-005
+title: Import .pub pictures and shapes
+covers: [PI-05]
+steps:
+  - import_pub: {path: fixtures/pub/SampleBrochure.pub}
+  - expect: {query: {q: page_object_kinds, page: 0}, contains: "image"}
+  - expect: {query: {q: page_object_kinds, page: 1}, contains: "image"}
+  - expect: {query: {q: assets}, len: {gte: 4}}
+  # the newsletter's coloured bars and boxes are shapes; its clip art is pictures
+  - import_pub: {path: fixtures/pub/SampleNewsletter.pub}
+  - expect: {query: {q: page_object_kinds, page: 0}, contains: "shape"}
+  - expect: {query: {q: page_object_kinds, page: 0}, contains: "image"}
+  - expect: {query: {q: off_page_objects}, len: 0}
+  # pictures and shapes reach the PDF
+  - export_pdf: {path: newsletter.pdf}
+  - expect_pdf: {file: newsletter.pdf, pages: 4, text_contains: ["Living and Learning"]}

@@ -191,14 +191,18 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | FI-04 | P2 | File format versioning and forward migration | J-FI-004 | [x] |
 | FI-05 | P1 | Open predecessor NewsPub (Electron) `.newspub` files, converting threads, runs, and assets | J-FI-005 | [x] |
 
-## PI: .pub import (research track; see ARCHITECTURE.md §9)
+## PI: .pub import (see ARCHITECTURE.md §9; samples in journeys/fixtures/pub)
 
 | ID | P | Feature | Journeys | Done |
 |----|---|---------|----------|------|
-| PI-01 | P2 | Open .pub container (OLE CFB); report streams; reject gracefully if unsupported | J-PI-001 | [x] |
-| PI-02 | P3 | Import text stories (Quill/CONTENTS) as plain text with paragraphs | J-PI-002 | [x] |
-| PI-03 | P3 | Import page size, frame geometry, and pictures | J-PI-003 | [x] |
-| PI-04 | P3 | Import character/paragraph formatting | J-PI-004 | [x] |
+| PI-01 | P2 | Open .pub container (OLE CFB); report streams; reject non-Publisher and damaged files gracefully | J-PI-001 | [ ] |
+| PI-02 | P1 | Import each story into its own text box on its own page | J-PI-002 | [ ] |
+| PI-03 | P1 | Import page size and orientation, page count, and text box positions | J-PI-003 | [ ] |
+| PI-04 | P1 | Import character and paragraph formatting (fonts, sizes, bold/italic, spacing) | J-PI-004 | [ ] |
+| PI-05 | P1 | Import pictures and shapes | J-PI-005 | [ ] |
+| PI-06 | P2 | Import tables | J-PI-006 | [ ] |
+| PI-07 | P1 | Import files from Publisher 98, 2000, 2003 and 2010+ | J-PI-007 | [ ] |
+| PI-08 | P0 | Open a .pub file from the app (Open dialog, file picker, double-click) | UI-PI-001 | [ ] |
 
 ## UR: Undo/redo
 

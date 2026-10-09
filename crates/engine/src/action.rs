@@ -472,6 +472,11 @@ pub enum Query {
     PageObjects {
         page: usize,
     },
+    /// Kinds ("text", "shape", "image", "group", "table", "word_art") of every object on a page, back to front,
+    /// with group members listed after their group.
+    PageObjectKinds {
+        page: usize,
+    },
     /// Full story text (paragraphs separated by "\n").
     StoryText {
         target: Id,

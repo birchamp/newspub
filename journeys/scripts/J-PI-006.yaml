@@ -1,0 +1,11 @@
+id: J-PI-006
+title: Import .pub tables
+covers: [PI-06]
+steps:
+  - import_pub: {path: fixtures/pub/Sample.pub}
+  - expect: {query: {q: page_object_kinds, page: 1}, contains: "table"}
+  - expect: {query: {q: find, text: "P2 table left"}, path: /0/story, gt: 0, as: cell}
+  - expect: {query: {q: char_page, target: $cell, at: 0}, equals: 1}
+  - expect: {query: {q: find, text: "Bottom Right"}, path: /0/story, not_equals: $cell}
+  - import_pub: {path: fixtures/pub/Sample_2010.pub}
+  - expect: {query: {q: page_object_kinds, page: 1}, contains: "table"}

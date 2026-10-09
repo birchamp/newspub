@@ -1,0 +1,13 @@
+id: UI-PI-001
+title: Open a Microsoft Publisher file from the Open dialog
+covers: [PI-08]
+ui: true
+steps:
+  - key: {key: "O", command: true}
+  - fill: {label: "File name", text: "fixtures/pub/Sample.pub"}
+  - click: {label: "Open File"}
+  - expect: {query: {q: page_count}, equals: 2}
+  - expect: {query: {q: all_story_text}, contains: "This is in bold and italic"}
+  # an imported file is a new, unsaved publication: Save asks for a .npub name instead of overwriting the .pub
+  - expect: {query: {q: session}, path: /path, is_null: true}
+  - expect_ui: {label: "Imported from Sample.pub"}

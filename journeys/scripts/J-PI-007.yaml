@@ -1,0 +1,24 @@
+id: J-PI-007
+title: Import the same publication saved by Publisher 98, 2000, 2003 and 2010
+covers: [PI-07]
+steps:
+  - import_pub: {path: fixtures/pub/Sample98.pub}
+  - expect: {query: {q: page_count}, gte: 2}
+  - expect: {query: {q: find, text: "This is in bold and italic"}, path: /0/story, gt: 0, as: a}
+  - expect: {query: {q: char_page, target: $a, at: 0}, equals: 0}
+  - expect: {query: {q: char_attrs, target: $a, at: 0}, path: /bold, equals: true}
+  - expect: {query: {q: find, text: "This is the second page"}, path: /0/story, gt: 0, as: b}
+  - expect: {query: {q: char_page, target: $b, at: 0}, equals: 1}
+  - expect: {query: {q: char_box, target: $b, at: 0}, path: /x, approx: [65.2, 4]}
+  - import_pub: {path: fixtures/pub/Sample2000.pub}
+  - expect: {query: {q: find, text: "This is in bold and italic"}, path: /0/story, gt: 0, as: c}
+  - expect: {query: {q: char_attrs, target: $c, at: 0}, path: /size, approx: [20, 0.01]}
+  - expect: {query: {q: find, text: "This is the second page"}, path: /0/story, gt: 0, as: d}
+  - expect: {query: {q: char_page, target: $d, at: 0}, equals: 1}
+  - import_pub: {path: fixtures/pub/Sample_2010.pub}
+  - expect: {query: {q: page_count}, equals: 2}
+  - expect: {query: {q: find, text: "This is in bold and italic"}, path: /0/story, gt: 0, as: e}
+  - expect: {query: {q: char_attrs, target: $e, at: 0}, path: /italic, equals: true}
+  - import_pub: {path: fixtures/pub/60685.pub}
+  - expect: {query: {q: page_count}, equals: 1}
+  - expect: {query: {q: all_story_text}, contains: "Professional Experience"}
