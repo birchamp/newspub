@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=newpub
+GenericName=Desktop Publishing
+Comment=Make newsletters, bulletins, flyers and booklets
+Exec=newpub %f
+Icon=newpub
+Terminal=false
+Categories=Office;Publishing;Graphics;
+MimeType=application/x-newpub;
+StartupWMClass=newpub

@@ -1,0 +1,157 @@
+name: Package
+
+# Installers for Windows (setup .exe), macOS (universal .dmg and .pkg) and Linux (AppImage, .deb, .tar.gz).
+# Every run uploads them as workflow artifacts; a tag `v*` also publishes them as a GitHub Release.
+# Each job installs what it built and checks that the app starts and keeps running.
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  linux:
+    # The oldest supported Ubuntu image keeps the glibc requirement low for other distributions.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: package
+      - name: packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libgtk-3-dev squashfs-tools desktop-file-utils xvfb libgl1-mesa-dri
+      - name: version
+        run: echo "VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)" >> "$GITHUB_ENV"
+      - name: build
+        run: cargo build --release -p newpub-app
+      - name: package
+        run: tools/package/linux/build.sh target/release/newpub-app "$VERSION" dist
+      - name: install the .deb and start the app
+        run: |
+          sudo apt-get install -y "./dist/newpub_${VERSION}_amd64.deb"
+          desktop-file-validate /usr/share/applications/newpub.desktop
+          # timeout's exit code 124 means the app was still running after 10 s.
+          set +e; xvfb-run -a timeout 10 newpub; code=$?; set -e
+          echo "exit code $code"; [ "$code" = 124 ]
+      - name: start the AppImage
+        run: |
+          set +e; APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a timeout 10 "dist/newpub-${VERSION}-linux-x86_64.AppImage"; code=$?; set -e
+          echo "exit code $code"; [ "$code" = 124 ]
+      - uses: actions/upload-artifact@v4
+        with:
+          name: newpub-linux
+          path: dist/*
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: package
+      - name: version
+        run: echo "VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)" >> "$GITHUB_ENV"
+      - name: build (Apple silicon and Intel)
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+        run: |
+          cargo build --release -p newpub-app --target aarch64-apple-darwin
+          cargo build --release -p newpub-app --target x86_64-apple-darwin
+      - name: package
+        run: |
+          tools/package/macos/build.sh target/aarch64-apple-darwin/release/newpub-app \
+            target/x86_64-apple-darwin/release/newpub-app "$VERSION" dist
+      - name: install the .pkg and start the app
+        run: |
+          sudo installer -pkg "dist/newpub-${VERSION}-macos-universal.pkg" -target /
+          test -x /Applications/newpub.app/Contents/MacOS/newpub
+          /Applications/newpub.app/Contents/MacOS/newpub & pid=$!
+          sleep 10
+          kill -0 "$pid" && echo "still running after 10 s"
+          kill "$pid"
+      - name: check the .dmg
+        run: |
+          hdiutil attach "dist/newpub-${VERSION}-macos-universal.dmg" -mountpoint /Volumes/newpub
+          lipo -archs /Volumes/newpub/newpub.app/Contents/MacOS/newpub
+          codesign --verify --deep --strict /Volumes/newpub/newpub.app
+          test -L /Volumes/newpub/Applications
+          hdiutil detach /Volumes/newpub
+      - uses: actions/upload-artifact@v4
+        with:
+          name: newpub-macos
+          path: dist/*
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: package
+      - name: version
+        shell: bash
+        run: echo "VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)" >> "$GITHUB_ENV"
+      - name: build
+        run: cargo build --release -p newpub-app
+      - name: package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force stage, dist | Out-Null
+          Copy-Item target/release/newpub-app.exe stage/newpub.exe
+          Copy-Item assets/icon/newpub.ico stage/newpub.ico
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          & $iscc /Qp "/DAppVersion=$env:VERSION" "/DSourceDir=$PWD\stage" "/O$PWD\dist" tools/package/windows/newpub.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Compress-Archive -Path stage/newpub.exe, stage/newpub.ico, LICENSE -DestinationPath "dist/newpub-$env:VERSION-windows-x64-portable.zip"
+          Get-ChildItem dist
+      - name: install and start the app
+        shell: pwsh
+        run: |
+          $setup = "dist/newpub-$env:VERSION-windows-x64-setup.exe"
+          Start-Process -FilePath $setup -ArgumentList "/VERYSILENT", "/CURRENTUSER", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+          $exe = "$env:LOCALAPPDATA\Programs\newpub\newpub.exe"
+          if (-not (Test-Path $exe)) { Write-Error "not installed at $exe"; exit 1 }
+          $assoc = (Get-ItemProperty "HKCU:\Software\Classes\.npub")."(default)"
+          if ($assoc -ne "newpub.Publication") { Write-Error ".npub is not associated ($assoc)"; exit 1 }
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 10
+          if ($p.HasExited) { Write-Error "newpub exited with $($p.ExitCode)"; exit 1 }
+          Write-Output "still running after 10 s"
+          Stop-Process -Id $p.Id
+      - uses: actions/upload-artifact@v4
+        with:
+          name: newpub-windows
+          path: dist/*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: newpub-*
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

@@ -201,3 +201,14 @@ The dashboard parses this file:
 - The queue that works uses the generic PostScript driver and a socket queue to a local `nc` listener.
 - macOS's PostScript conversion re-encodes subset fonts, so the printed text is checked as a consistent one-to-one re-encoding of "Printed by newpub" (tools/conformance/text_or_reencoded.py).
 - Open: the user asked about a Mac installer (.pkg). Proposed an unsigned universal .pkg CI job (signing needs an Apple Developer ID). Waiting for their answer.
+
+### 2026-10-09 15:40 — Installers (user: "make easy installs for all 3 OSs")
+- New workflow `.github/workflows/package.yml`, with scripts in `tools/package/`:
+  - **Windows:** an Inno Setup installer that installs per user (no admin prompt), with a Start menu entry, an optional desktop icon, the `.npub` association and an uninstaller. Also a portable zip.
+  - **macOS:** a universal (arm64 + x86_64), ad-hoc-signed `newpub.app` in a drag-to-Applications `.dmg`, and a `.pkg`.
+  - **Linux:** an AppImage, a `.deb` (desktop entry, icon, `.npub` MIME type) and a `.tar.gz`.
+- Each job installs what it built and checks that the app starts and is still running after 10 s (Linux under Xvfb).
+- A `v*` tag publishes everything as a GitHub Release.
+- The app has an original icon (tools/package/make_icon.py), shown as its window icon. Release builds on Windows no longer open a console window. A file passed on the command line (a double-clicked `.npub`) opens instead of the template picker.
+- INSTALL.md explains installing, and the one-time "unidentified developer" prompts on Windows and macOS. Signing needs a Windows code-signing certificate and an Apple Developer ID.
+- Known gap: on macOS, double-clicking a `.npub` file starts newpub but does not open that file yet, because macOS passes it as an Apple Event, not as an argument.
