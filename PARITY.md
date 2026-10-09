@@ -10,6 +10,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
   from CI run 37842573100 (commit bb529dc): 100/100 journeys pass on macOS, Windows, and Linux. The P3 items were
   checked from CI run 37854377656 (commit 6c64ad8): 116/116 journeys pass on all three OSes.
   PF-01 and the widened SH-08 were checked from CI run 37859050166 (commit 41e16cb): 119/119 journeys pass on all three OSes.
+  SH-08, AX-03 and PF-01 with their widened journey lists were re-checked from CI run 37864129775 (commit 1d082f4): 122/122 journeys pass on all three OSes.
 - Journeys are written by the lead **before** an item is dispatched. The implementing agent never edits them.
 - Priorities: **P0** means newpub is unusable without it. **P1** means everyday work needs it.
   **P2** covers professional and occasional workflows. **P3** is rare, legacy, or research.
@@ -86,7 +87,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | SH-05 | P2 | AutoShapes library (rounded rectangle, star, arrow, callout, polygon, triangle) | J-SH-005 | [x] |
 | SH-06 | P2 | Text inside shapes | J-SH-006 | [x] |
 | SH-07 | P2 | Gradient, pattern, and transparency fills; shape shadow | J-SH-007 | [x] |
-| SH-08 | P3 | Freeform / Bézier drawing and point editing (canvas tool and point handles) | J-SH-008, J-SH-009, UI-SH-008 | [ ] |
+| SH-08 | P3 | Freeform / Bézier drawing and point editing (canvas tool and point handles) | J-SH-008, J-SH-009, UI-SH-008 | [x] |
 
 ## TB: Tables
 
@@ -219,7 +220,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 |----|---|---------|----------|------|
 | AX-01 | P1 | Alt text on all non-text objects; mark decorative | J-AX-001 | [x] |
 | AX-02 | P1 | Accessibility checker (missing alt text, low contrast, reading order, tiny text) | J-AX-002 | [x] |
-| AX-03 | P2 | Tagged PDF (PDF/UA) with reading order and alt text | J-AX-003, J-AX-004, J-EX-007 | [ ] |
+| AX-03 | P2 | Tagged PDF (PDF/UA) with reading order and alt text | J-AX-003, J-AX-004, J-EX-007 | [x] |
 | AX-04 | P2 | App UI fully operable by keyboard and screen reader (AccessKit tree) | UI-AX-001 | [x] |
 
 ## FR: Find and replace
@@ -234,7 +235,7 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 
 | ID | P | Feature | Journeys | Done |
 |----|---|---------|----------|------|
-| PF-01 | P2 | Editing and exporting a long publication stays responsive (no quadratic slow-downs; edits re-flow only what they change) | J-PF-001, J-PF-002 | [ ] |
+| PF-01 | P2 | Editing and exporting a long publication stays responsive (no quadratic slow-downs; edits re-flow only what they change) | J-PF-001, J-PF-002 | [x] |
 
 ## UI: Application shell (real-UI journeys)
 

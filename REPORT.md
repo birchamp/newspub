@@ -1,19 +1,22 @@
 # newpub-rs: status report
 
 **Date:** 2026-10-09.
-**Commit:** 545d57d, branch `claude/happy-davinci-r0kfpv`.
-**CI:** run 37860525724. Clippy, build and 120/120 journeys pass on Linux, macOS and Windows, and the conformance job is green.
+**Commit:** 1d082f4, branch `claude/happy-davinci-r0kfpv`.
+**CI:** run 37864129775. Clippy, build and 122/122 journeys pass on Linux, macOS and Windows. The conformance job and the Windows native-print job are green.
 
-**All 130 PARITY items, P0–P3 plus the new PF-01, pass their journeys on all three OSes.** IM-11 (EMF/WMF) was split out of IM-09 so that each could be checked honestly.
+**All 130 PARITY items, P0–P3 plus PF-01, pass their journeys on all three OSes.** IM-11 (EMF/WMF) was split out of IM-09 so that each could be checked honestly.
 
-## External conformance (CI job `conformance`, Linux)
+## External conformance (CI jobs `conformance` on Linux, `native-print` on Windows and macOS)
 
 | Check | Tool | Result |
 |-------|------|--------|
-| PDF/UA-1, accessibility journey and newsletter exports | veraPDF | compliant |
+| PDF/UA-1: the accessibility journey, a table with header rows, and the newsletter, flyer, bulletin and booklet templates | veraPDF | compliant |
 | EPUB 3 fixed layout | epubcheck 5.1.0 | valid |
 | XPS | libgxps `xpstopdf` (independent renderer) and pdftotext | renders, text intact |
-| Print hand-off | `lp`, then CUPS, then the cups-pdf virtual printer | job printed, text intact |
+| XPS (Windows) | Windows' own XPS reader (`System.Windows.Xps`) | opens, pages counted |
+| Print hand-off (Linux) | `lp`, then CUPS, then the cups-pdf virtual printer | job printed, text intact |
+| Print (Windows) | native GDI job to "Microsoft Print to PDF" | PDF written |
+| Print (macOS) | `lp`, then CUPS, then a file-device queue | CI run pending (fix in dc52474) |
 | PDF/X-4 | none (no free validator exists) | not externally validated |
 
 ## Parity by area
@@ -23,7 +26,7 @@
 | PG page setup, masters, publication types | 11/11 | Cards, labels and badges print several per sheet; envelopes |
 | TF text frames | 11/11 | |
 | TY typography | 19/19 | Includes text effects (shadow, outline, glow, reflection, emboss) and WordArt with warps |
-| SH shapes | 8/8 | Includes freeform and Bézier point editing (API; no on-canvas point-editing tool yet) |
+| SH shapes | 8/8 | Includes the freeform tool and on-canvas point editing; older polyline shapes convert to Bézier on first edit |
 | TB tables | 5/5 | Includes TSV paste |
 | IM pictures | 11/11 | PNG, JPEG, GIF, BMP, TIFF, SVG (vector in PDF), EMF/WMF (as SVG); captions |
 | GD guides and units | 5/5 | |
@@ -35,37 +38,38 @@
 | FI files | 5/5 | |
 | PI .pub import | 4/4 | |
 | UR, SP, AX, FR, UI | 2/2, 3/3, 4/4, 3/3, 8/8 | |
+| PF performance | 1/1 | Incremental layout: ~10 ms per keystroke on a 60-page story |
 
 ## Known gaps
 
 Each of these is real behaviour that a journey does not cover, or that is only partly done.
 
 1. **PDF/X-4** has no external validator. Our own checks cover the output intent, the ICC profile, the XMP identification and the boxes.
-2. **Printing** is verified on Linux through CUPS. The macOS (`lp`) and Windows (PowerShell PrintTo) hand-offs have not run against a printer.
-3. **XPS** renders in libgxps but has not been tried in Microsoft's XPS Viewer. GIF and WebP pictures are dropped from XPS. EPUB does not embed .ttc fonts.
+2. **Printing** to a physical printer has not been tried. The CI jobs print to virtual printers only. On Windows, pages print as images at the printer's resolution (up to 600 dpi), not as vector output.
+3. **XPS** opens in Windows' XPS reader and renders in libgxps, but nobody has looked at it in XPS Viewer. GIF and WebP pictures are dropped from XPS. EPUB does not embed .ttc fonts.
 4. **EMF/WMF** conversion covers the common drawing records only. Bitmaps, clipping and gradients inside metafiles are skipped.
 5. **Separations** ignore overprint on group children. Composite PDFs carry no overprint flag.
-6. **Tagged PDF**: tables have no TH or scope. PDF/UA is validated only for the two journey documents.
+6. **Tagged PDF**: table headers are always column headers (no row headers). PDF/UA is validated for the built-in templates and the journey documents, not for user publications.
 7. **.pub import** covers text, frames, pictures, fonts and basic formatting only.
-8. **Freeform point editing** covers Bézier shapes. Older polyline `Path` shapes can enter point editing, but their edits are refused with a status message.
+8. **Incremental layout** does not apply to stories with fields (page numbers, dates, merge fields) or to table cells. These are always laid out in full.
 
 Fixed since the previous report:
-- Right-to-left copy and paste: tagged export everywhere, with /ActualText.
-- Layout performance: per-keystroke layout of a 20-page story went from 8 s to about 45 ms.
-- On-canvas freeform drawing and point editing.
+- Legacy polyline point editing: the shape converts to Bézier on its first edit.
+- TH with column scope in tagged tables; veraPDF runs over every built-in template.
+- Truly incremental layout: a story reflows from its first changed paragraph and stops when it rejoins its previous flow.
+- Native Windows printing through GDI, checked in CI; XPS checked by Windows' own reader.
 
 ## Top risks
 
 1. **UI depth.** Every workflow exists, but the panels are simpler than Publisher's ribbon and galleries, and nobody from the target audience has used the app yet.
-2. **Performance.** Layout covers the whole document and the display copy is rebuilt per change. Long booklets and large merges are untested.
+2. **Performance.** Layout is incremental per story, but the display copy of the document is still rebuilt on every change. Large merges are untested.
 3. **Core complexity.** The layout engine and the display list (effects, WordArt, tagging, separations) are dense, and only journeys pin them down.
 4. **Dependencies.** egui, krilla, krilla-svg, resvg/usvg and calamine are pinned and move quickly; so is the toolchain (1.97.0).
 5. **Agent sessions.** Parallel worktrees can exhaust disk. The lead clears the shared target directory after each batch.
 
 ## Recommended next steps
 
-1. **Usability testing with real target users** (blocker B-003 in PROGRESS.md: needs people). Then a UI polish pass based on what they find.
-2. **Print and XPS on Windows and macOS**, checked by hand on a real printer and in XPS Viewer.
-3. **Wider PDF/UA coverage:** table headers (TH, scope), and veraPDF across all built-in templates.
-4. **Truly incremental layout:** re-flow only from the first changed paragraph. The caches make edits cheap today, but a 100-page story still re-flows in full.
-5. **Point editing for legacy polyline shapes:** convert them to Bézier on the first edit.
+1. **Usability testing with real target users** (blocker B-003 in PROGRESS.md: it needs people). The kit is in docs/usability-test-plan.md. Then a UI polish pass based on what they find.
+2. **A physical-printer check** on Windows and macOS, and a look at the XPS in XPS Viewer, by a person with the hardware.
+3. **Vector printing on Windows** (EMF spool or XPS Print API) instead of page images, if print shops ask for it.
+4. **Incremental layout for stories with fields**, by keying page-dependent paragraphs on their page.
