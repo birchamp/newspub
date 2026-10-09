@@ -2447,7 +2447,7 @@ dependencies = [
 
 [[package]]
 name = "newpub-app"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "eframe",
  "egui",
@@ -2463,7 +2463,7 @@ dependencies = [
 
 [[package]]
 name = "newpub-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2472,7 +2472,7 @@ dependencies = [
 
 [[package]]
 name = "newpub-engine"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "calamine",
  "image",
@@ -2496,7 +2496,7 @@ dependencies = [
 
 [[package]]
 name = "newpub-io-html"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "newpub-core",
  "newpub-layout",
@@ -2507,14 +2507,14 @@ dependencies = [
 
 [[package]]
 name = "newpub-io-metafile"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "newpub-io-native"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "newpub-core",
  "serde_json",
@@ -2524,7 +2524,7 @@ dependencies = [
 
 [[package]]
 name = "newpub-io-pdf"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "krilla",
  "krilla-svg",
@@ -2540,7 +2540,7 @@ dependencies = [
 
 [[package]]
 name = "newpub-io-pub"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "cfb",
  "miniz_oxide 0.8.9",
@@ -2552,7 +2552,7 @@ dependencies = [
 
 [[package]]
 name = "newpub-io-xps"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "image",
  "newpub-core",
@@ -2564,7 +2564,7 @@ dependencies = [
 
 [[package]]
 name = "newpub-journeys"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2584,7 +2584,7 @@ dependencies = [
 
 [[package]]
 name = "newpub-layout"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "fontdb 0.24.0",
  "hyphenation",
@@ -2599,7 +2599,7 @@ dependencies = [
 
 [[package]]
 name = "newpub-render"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "image",
  "newpub-core",
@@ -2612,7 +2612,7 @@ dependencies = [
 
 [[package]]
 name = "newpub-spell"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "spellbook",
 ]

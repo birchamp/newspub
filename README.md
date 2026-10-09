@@ -8,6 +8,8 @@ A desktop publishing app in Rust for macOS, Windows, and Linux, built toward fea
 |---|---|---|
 | ![Start screen](docs/screenshots/start-screen.png) | ![Dark mode](docs/screenshots/editor-dark.png) | ![Export As](docs/screenshots/export-as.png) |
 
+It opens Microsoft Publisher files (`.pub`, Publisher 98 through 2010 and later) as well as its own `.npub` publications.
+
 **To install it, see [INSTALL.md](INSTALL.md).** There is a setup program for Windows, a .dmg or .pkg for macOS, and an AppImage or .deb for Linux.
 
 - `PARITY.md` lists the parity checklist and the journeys that prove each item.

@@ -268,3 +268,6 @@ The dashboard parses this file:
   - a control is preferred over a caption with the same name;
   - frames step at 1/30 s, so double-clicks register.
 - 145/145 journeys pass on Linux, macOS and Windows (CI run 38001645773, commit 6c857f4). PI-01..PI-08 and UI-16..UI-24 are checked; all 150 PARITY items are now checked.
+
+### 2026-10-09 — v0.3.0 (user: "yes, cut v0.3.0")
+- Version 0.3.0. It brings the real `.pub` import and the UI paths UI-16..UI-24 to the installers.
