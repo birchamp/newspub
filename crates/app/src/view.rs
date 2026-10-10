@@ -169,6 +169,7 @@ impl NewpubApp {
         v["visible_pages"] = serde_json::json!(self.visible_pages());
         v["editing"] = self.editing_frame().is_some().into();
         v["window_closes"] = self.window_closes.into();
+        v["status"] = self.status.clone().into();
         v["preview"] = self.preview.as_ref().map(|p| p.0.clone()).into();
         v["preview_rendered"] =
             self.preview_texture.as_ref().zip(self.preview.as_ref()).is_some_and(|(t, p)| t.1 == p.0).into();

@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+"""Writes docs/agent-reference.md: every engine action (document commands and session actions) and every
+query, with their fields, read from the Rust sources. Standard library only.
+
+    python3 tools/agent/reference.py          # rewrite docs/agent-reference.md
+    python3 tools/agent/reference.py --check  # exit 1 when the file is out of date (CI)
+
+The agent crate embeds the generated file (newpub_agent::REFERENCE), so run this after changing
+`Command`, `SessionAction` or `Query`.
+"""
+import os
+import re
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+OUT = os.path.join(ROOT, "docs", "agent-reference.md")
+SOURCES = [
+    ("Document commands", os.path.join(ROOT, "crates", "core", "src", "command.rs"), "Command",
+     "Change the publication. Every command is one undo step (typing coalesces). Names are the `cmd` tag."),
+    ("Session actions", os.path.join(ROOT, "crates", "engine", "src", "action.rs"), "SessionAction",
+     "Session-level actions: files, undo, export, autoflow, merge and the like. Names are the `cmd` tag."),
+    ("Queries", os.path.join(ROOT, "crates", "engine", "src", "action.rs"), "Query",
+     "Read-only questions, answered as JSON. Names are the `q` tag."),
+]
+
+VARIANT_RE = re.compile(r"^    ([A-Z]\w*)\s*(\{|\(([^)]*)\)\s*,|,)\s*(//.*)?$")
+FIELD_RE = re.compile(r"^ {4,8}(?:pub )?(\w+):\s*(.+?),?\s*$")
+STRUCT_RE = re.compile(r"^pub struct (\w+)\s*\{")
+ENUM_RE = re.compile(r"^pub enum (\w+)\s*\{")
+
+
+def snake(name):
+    out = re.sub(r"(?<=[a-z0-9])([A-Z])", r"_\1", name)
+    out = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", out)
+    return out.lower()
+
+
+def read(path):
+    with open(path, encoding="utf-8") as f:
+        return f.read().splitlines()
+
+
+def block(lines, start):
+    """Lines of the item that opens at `start` up to its closing brace at column 0."""
+    body = []
+    for line in lines[start + 1:]:
+        if line.startswith("}"):
+            break
+        body.append(line)
+    return body
+
+
+def parse_fields(body):
+    """[(name, type, optional, doc)] of a struct body or a struct-variant body (8-space indent)."""
+    fields, doc, optional = [], [], False
+    for line in body:
+        s = line.strip()
+        if s.startswith("///"):
+            doc.append(s[3:].strip())
+        elif s.startswith("#[serde(") and "default" in s:
+            optional = True
+        elif s.startswith("#[") or s.startswith("//"):
+            continue
+        else:
+            m = FIELD_RE.match(line)
+            if m:
+                ty = m.group(2)
+                optional = optional or ty.startswith("Option<")
+                fields.append((m.group(1), ty, optional, " ".join(doc)))
+            doc, optional = [], False
+    return fields
+
+
+def parse_structs(lines):
+    structs = {}
+    for i, line in enumerate(lines):
+        m = STRUCT_RE.match(line)
+        if m:
+            structs[m.group(1)] = parse_fields(block(lines, i))
+    return structs
+
+
+def all_structs():
+    """Every `pub struct` in core, engine and io-pdf, for tuple-variant payloads such as `SetupPatch`."""
+    structs = {}
+    for crate in ("core", "engine", "io-pdf"):
+        src = os.path.join(ROOT, "crates", crate, "src")
+        for name in sorted(os.listdir(src)):
+            if name.endswith(".rs"):
+                structs.update(parse_structs(read(os.path.join(src, name))))
+    return structs
+
+
+def parse_enum(lines, name):
+    """[(variant, doc, fields, tuple_type)] of `pub enum name`."""
+    start = next(i for i, l in enumerate(lines) if ENUM_RE.match(l) and ENUM_RE.match(l).group(1) == name)
+    body = block(lines, start)
+    variants, doc, i = [], [], 0
+    while i < len(body):
+        line = body[i]
+        s = line.strip()
+        if s.startswith("///"):
+            doc.append(s[3:].strip())
+        elif s.startswith("#[") or s.startswith("//") or not s:
+            pass
+        else:
+            m = VARIANT_RE.match(line)
+            if m:
+                vname, opener = m.group(1), m.group(2)
+                if opener == "{":
+                    vbody = []
+                    i += 1
+                    while i < len(body) and not body[i].startswith("    }"):
+                        vbody.append(body[i])
+                        i += 1
+                    variants.append((vname, " ".join(doc), parse_fields(vbody), None))
+                elif opener.startswith("("):
+                    variants.append((vname, " ".join(doc), [], m.group(3).strip()))
+                else:
+                    variants.append((vname, " ".join(doc), [], None))
+            doc = []
+        i += 1
+    return variants
+
+
+def bare_type(ty):
+    """`Option<ObjectPatch>` → `ObjectPatch`, `Vec<Id>` → `Id`."""
+    m = re.match(r"^(?:Option|Vec|Box)<(.+)>$", ty)
+    return bare_type(m.group(1)) if m else ty
+
+
+def render():
+    out = [
+        "# newpub agent reference",
+        "",
+        "Generated by `tools/agent/reference.py` from `crates/core/src/command.rs` and `crates/engine/src/action.rs`.",
+        "Do not edit by hand.",
+        "",
+        "Conventions: geometry is in points (1/72 in), page coordinates, origin top-left, y down. Any `Length` may",
+        "be a number of points or a string with a unit (`\"8.5in\"`, `\"210mm\"`, `\"2cm\"`, `\"12pt\"`, `\"3pi\"`).",
+        "A `Rect` is `{x, y, w, h}`. Ids are integers (`Id`); every object, story, page, master, style and asset has",
+        "one. Pages are 0-based indexes. Text positions are char indexes into a story's text, where `\\n` separates",
+        "paragraphs. Fields marked *optional* may be omitted. Actions and queries are JSON objects: an action is",
+        "`{\"cmd\": \"<name>\", ...fields}` and a query is `{\"q\": \"<name>\", ...fields}`; the MCP tools",
+        "`newpub_action` and `newpub_query` take the name and the fields separately.",
+        "",
+    ]
+    for title, path, enum, intro in SOURCES:
+        lines = read(path)
+        structs = all_structs()
+        out += [f"## {title}", "", intro, ""]
+        for vname, doc, fields, tuple_ty in parse_enum(lines, enum):
+            out.append(f"### `{snake(vname)}`")
+            if doc:
+                out.append(doc)
+            if tuple_ty:
+                inner = structs.get(tuple_ty)
+                if inner:
+                    out.append(f"Fields (of `{tuple_ty}`, all optional unless noted):")
+                    for fname, ty, optional, fdoc in inner:
+                        out.append(f"- `{fname}`: `{ty}`" + (f" — {fdoc}" if fdoc else ""))
+                else:
+                    out.append(f"Payload: `{tuple_ty}`.")
+            elif fields:
+                for fname, ty, optional, fdoc in fields:
+                    tag = " *(optional)*" if optional else ""
+                    out.append(f"- `{fname}`: `{ty}`{tag}" + (f" — {fdoc}" if fdoc else ""))
+                    inner = structs.get(bare_type(ty))
+                    if inner and bare_type(ty) not in ("Rect", "Insets", "Id", "Length"):
+                        # One level of nesting: patch and attribute structs are what agents need most.
+                        for iname, ity, _opt, idoc in inner:
+                            out.append(f"  - `{iname}`: `{ity}`" + (f" — {idoc}" if idoc else ""))
+            else:
+                out.append("No fields.")
+            out.append("")
+    return "\n".join(out).rstrip() + "\n"
+
+
+def main():
+    text = render()
+    if "--check" in sys.argv:
+        current = open(OUT, encoding="utf-8").read() if os.path.exists(OUT) else ""
+        if current != text:
+            print("docs/agent-reference.md is out of date: run python3 tools/agent/reference.py", file=sys.stderr)
+            sys.exit(1)
+        return
+    with open(OUT, "w", encoding="utf-8") as f:
+        f.write(text)
+    print(f"wrote {OUT} ({len(text)} bytes)")
+
+
+if __name__ == "__main__":
+    main()

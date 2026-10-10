@@ -304,6 +304,13 @@ pub fn run_step(s: &mut Session, ctx: &mut Ctx, step: &Value) -> Result<()> {
         "expect_files" => crate::filecheck::check_files(ctx, &args)?,
         "expect_zip" => crate::filecheck::check_zip(ctx, &args)?,
         "expect_roundtrip" => roundtrip(s, ctx)?,
+        "agent" => {
+            // `as` may sit inside the map, as in `expect`.
+            let v = agent_step(s, &args)?;
+            if let Some(Value::String(var)) = bind.or_else(|| args.get("as").cloned()) {
+                ctx.vars.insert(var, v);
+            }
+        }
         "snapshot" => {
             let page = args.get("page").and_then(|p| p.as_u64()).unwrap_or(0) as usize;
             let name = args.get("name").and_then(|p| p.as_str()).unwrap_or("snapshot");
@@ -344,6 +351,35 @@ pub fn run_step(s: &mut Session, ctx: &mut Ctx, step: &Value) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// `agent: {tool, args, path?, check?: {matchers}, error?: bool}`: calls an MCP tool in-process on the host (the
+/// session, or the app in a UI journey) and returns the tool's structured result (or its text), after `path` and
+/// the `check` matchers. `error: true` expects the tool to fail.
+pub fn agent_step(host: &mut dyn newpub_agent::Host, args: &Value) -> Result<Value> {
+    let tool = args.get("tool").and_then(|t| t.as_str()).ok_or_else(|| anyhow!("agent needs a tool"))?;
+    let targs = args.get("args").cloned().unwrap_or(Value::Null);
+    let r = newpub_agent::call_tool(host, tool, &targs);
+    let text: Vec<&str> = r.content.iter().filter_map(|c| c.get("text").and_then(|t| t.as_str())).collect();
+    let text = text.join("\n");
+    let want_error = args.get("error").and_then(|e| e.as_bool()).unwrap_or(false);
+    if r.is_error && !want_error {
+        bail!("{tool} failed: {text}");
+    }
+    if !r.is_error && want_error {
+        bail!("{tool} succeeded, but an error was expected: {text}");
+    }
+    let mut value = match &r.structured {
+        Some(v) => v.clone(),
+        None => json!({"text": text, "content": r.content}),
+    };
+    if let Some(p) = args.get("path").and_then(|p| p.as_str()) {
+        value = pointer(&value, p)?.clone();
+    }
+    if let Some(Value::Object(check)) = args.get("check") {
+        check_matchers(&value, check).map_err(|e| anyhow!("{e} — agent tool {tool}"))?;
+    }
+    Ok(value)
 }
 
 fn roundtrip(s: &mut Session, ctx: &mut Ctx) -> Result<()> {

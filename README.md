@@ -12,6 +12,7 @@ It opens Microsoft Publisher files (`.pub`, Publisher 98 through 2010 and later)
 
 **To install it, see [INSTALL.md](INSTALL.md).** There is a setup program for Windows, a .dmg or .pkg for macOS, and an AppImage or .deb for Linux.
 
+- `docs/agent.md` explains how an AI agent operates newpub: an MCP server (`newpub-agent`, or `newpub --agent` inside the window) and a command line over every action and query.
 - `PARITY.md` lists the parity checklist and the journeys that prove each item.
 - `ARCHITECTURE.md` covers crates, the document model, the command layer, layout, and testing.
 - `PROGRESS.md` is the build log, with decisions and open blockers.
@@ -19,6 +20,8 @@ It opens Microsoft Publisher files (`.pub`, Publisher 98 through 2010 and later)
 
 ```sh
 cargo run -p newpub-app                          # the app
+cargo run -p newpub-app -- --agent               # the app, driven by an AI agent over MCP (docs/agent.md)
+cargo run -p newpub-agent                        # headless MCP server; `-- reference`, `exec`, `query`, `render`
 cargo run -p newpub-journeys --release           # run all journeys
 cargo run -p newpub-journeys --release -- --filter J-TF   # a subset
 python3 tools/dashboard/build.py                 # regenerate dashboard/index.html

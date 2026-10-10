@@ -2,6 +2,7 @@
 //! becomes an [`Action`], every displayed fact comes from the session.
 
 mod a11y;
+mod agent;
 mod checker;
 mod clipboard;
 mod dup;
@@ -180,6 +181,8 @@ pub struct NewpubApp {
     pub(crate) mailings_ui: tabs::mailings::MailingsState,
     pub(crate) review_ui: tabs::review::ReviewState,
     pub(crate) checker_ui: checker::CheckerUi,
+    /// A connected agent (`newpub --agent`).
+    agent: Option<agent::Live>,
 }
 
 /// Text buffers of the object and format panels.
@@ -258,6 +261,7 @@ impl NewpubApp {
             template_previews: Default::default(),
             themed: false,
             insert_ui: Default::default(),
+            agent: None,
             styles_ui: Default::default(),
             design_ui: Default::default(),
             mailings_ui: Default::default(),
@@ -394,8 +398,7 @@ impl NewpubApp {
     pub fn act(&mut self, a: impl Into<Action>) -> Option<newpub_engine::Outcome> {
         match self.session.run(&a.into()) {
             Ok(o) => {
-                self.page = self.page.min(self.session.doc().pages.len().saturating_sub(1));
-                self.selection.retain(|id| self.session.doc().objects.contains_key(id));
+                self.sync_after_change();
                 Some(o)
             }
             Err(e) => {
@@ -403,6 +406,13 @@ impl NewpubApp {
                 None
             }
         }
+    }
+
+    /// Brings the view in step with the document after a change (an action here or from an agent): the current
+    /// page and the selection must exist.
+    pub(crate) fn sync_after_change(&mut self) {
+        self.page = self.page.min(self.session.doc().pages.len().saturating_sub(1));
+        self.selection.retain(|id| self.session.doc().objects.contains_key(id));
     }
 
     /// View state for UI journeys (`{q: view}`): zoom, whether the view is fitted, whether the zoom
@@ -475,6 +485,7 @@ impl NewpubApp {
         }
         self.window_events(&ctx);
         self.sync_units();
+        self.agent_pump(&ctx);
         self.shortcuts(&ctx);
         let p = theme::palette(&ctx);
         let bar = |fill| egui::Frame::new().fill(fill).stroke(Stroke::new(1.0, p.border));

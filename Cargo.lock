@@ -2446,11 +2446,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "newpub-agent"
+version = "0.3.1"
+dependencies = [
+ "anyhow",
+ "base64",
+ "clap",
+ "newpub-core",
+ "newpub-engine",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "newpub-app"
 version = "0.3.1"
 dependencies = [
  "eframe",
  "egui",
+ "newpub-agent",
  "newpub-core",
  "newpub-engine",
  "newpub-io-pdf",
@@ -2573,6 +2587,7 @@ dependencies = [
  "hayro",
  "image",
  "lopdf",
+ "newpub-agent",
  "newpub-app",
  "newpub-core",
  "newpub-engine",

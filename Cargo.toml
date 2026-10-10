@@ -13,6 +13,7 @@ members = [
     "crates/spell",
     "crates/engine",
     "crates/app",
+    "crates/agent",
     "crates/journeys",
 ]
 
@@ -35,6 +36,7 @@ newpub-io-xps = { path = "crates/io-xps" }
 newpub-spell = { path = "crates/spell" }
 newpub-engine = { path = "crates/engine" }
 newpub-app = { path = "crates/app" }
+newpub-agent = { path = "crates/agent" }
 
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"

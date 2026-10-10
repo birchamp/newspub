@@ -42,6 +42,11 @@ jobs:
       - name: build
         id: build
         run: cargo build --workspace --release
+      - name: agent reference up to date
+        if: runner.os == 'Linux'
+        run: python3 tools/agent/reference.py --check
+      - name: agent MCP server over stdio
+        run: cargo test -p newpub-agent --release
       - name: journeys
         id: journeys
         continue-on-error: true

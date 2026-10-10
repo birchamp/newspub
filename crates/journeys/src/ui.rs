@@ -284,6 +284,14 @@ fn ui_step(h: &mut Harness<'_, NewpubApp>, ctx: &mut Ctx, step: &Value) -> Resul
             settle(h);
         }
         "run" => settle(h),
+        "agent" => {
+            // The app itself is the MCP host, as with `newpub --agent`.
+            let v = runner::agent_step(h.state_mut(), &args)?;
+            if let Some(Value::String(var)) = m.get("as").or_else(|| args.get("as")) {
+                ctx.vars.insert(var.clone(), v);
+            }
+            settle(h);
+        }
         "expect" if args.get("query").and_then(|q| q.get("q")).and_then(|q| q.as_str()) == Some("view") => {
             // App view state is answered by the app, not the engine.
             let spec = args.as_object().ok_or_else(|| anyhow!("expect needs a map"))?;

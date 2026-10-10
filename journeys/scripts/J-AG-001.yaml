@@ -1,0 +1,73 @@
+id: J-AG-001
+title: Agent access — the MCP tools build, inspect, render, undo, save and export a publication through the engine
+covers: [AG-01]
+steps:
+  # the reference answers "how do I link boxes?"
+  - agent: {tool: newpub_reference, args: {search: "link_frames"}, path: /text, check: {contains: "### `link_frames`"}}
+  - agent: {tool: newpub_reference, args: {names_only: true}, path: /text, check: {contains: "add_text_frame\n"}}
+  # a blank Letter publication, then a text box with more text than fits
+  - agent: {tool: newpub_new, args: {width: "8.5in", height: "11in"}, path: /page_count, check: {equals: 1}}
+  - agent: {tool: newpub_action, args: {action: add_text_frame, args: {page: 0, rect: {x: "1in", y: "1in", w: "2.5in", h: "1.5in"}}}, path: /created/0, check: {gt: 0}, as: a}
+  - agent: {tool: newpub_action, args: {action: insert_text, args: {target: $a, text: "@repeat:40:Members are invited to the spring fair on the village green. "}}}
+  - expect: {query: {q: overflow, target: $a}, equals: true}
+  # status reports the overflow and the box
+  - agent: {tool: newpub_status, args: {}, as: st}
+  - agent: {tool: newpub_status, args: {}, path: /pages/0/objects/0/overflow, check: {equals: true}}
+  - agent: {tool: newpub_status, args: {}, path: /warnings, check: {len: 1}}
+  - agent: {tool: newpub_status, args: {}, path: /warnings/0, check: {contains: "overflows"}}
+  # a batch is one undo step: a second box, linked, with the first words bold
+  - agent: {tool: newpub_action, args: {action: add_text_frame, args: {page: 0, rect: {x: "4in", y: "1in", w: "3in", h: "4in"}}}, path: /created/0, as: b}
+  - agent:
+      tool: newpub_actions
+      args:
+        actions:
+          - {action: link_frames, args: {from: $a, to: $b}}
+          - {action: format_chars, args: {target: $a, start: 0, end: 7, attrs: {bold: true}}}
+      path: /ran
+      check: {equals: 2}
+  - expect: {query: {q: story_frames, target: $a}, equals: [$a, $b]}
+  - expect: {query: {q: char_attrs, target: $a, at: 0}, path: /bold, equals: true}
+  - agent: {tool: newpub_query, args: {query: frame_lines, args: {frame: $b}}, path: /0/x, check: {approx: [5.76, 0.01]}}
+  - agent: {tool: newpub_action, args: {action: undo}}
+  - expect: {query: {q: story_frames, target: $a}, equals: [$a]}
+  - expect: {query: {q: char_attrs, target: $a, at: 0}, path: /bold, equals: false}
+  - agent: {tool: newpub_action, args: {action: redo}}
+  - expect: {query: {q: story_frames, target: $a}, equals: [$a, $b]}
+  # a batch with an unknown action is refused whole: nothing runs
+  - agent:
+      tool: newpub_actions
+      args:
+        actions:
+          - {action: set_object, args: {id: $b, patch: {name: "Body continued"}}}
+          - {action: no_such_action, args: {}}
+      error: true
+  - expect: {query: {q: object, id: $b}, path: /name, is_null: true}
+  # a batch that fails while running stops there; the steps before it ran as one undo step
+  - agent:
+      tool: newpub_actions
+      args:
+        actions:
+          - {action: set_object, args: {id: $b, patch: {name: "Body continued"}}}
+          - {action: link_frames, args: {from: $a, to: $a}}
+      error: true
+      path: /ran
+      check: {equals: 1}
+  - expect: {query: {q: object, id: $b}, path: /name, equals: "Body continued"}
+  - agent: {tool: newpub_action, args: {action: undo}}
+  - expect: {query: {q: object, id: $b}, path: /name, is_null: true}
+  - agent: {tool: newpub_action, args: {action: no_such_action}, error: true}
+  # the agent can look at the page
+  - agent: {tool: newpub_render_page, args: {page: 0, dpi: 36}, path: /width, check: {equals: 306}}
+  - agent: {tool: newpub_render_page, args: {page: 7}, error: true}
+  # save, export, reopen
+  - agent: {tool: newpub_save, args: {path: "agent.newspub"}, path: /ok, check: {equals: true}}
+  - expect: {query: {q: session}, path: /dirty, equals: false}
+  # PDF/UA needs a title: the validator's message reaches the agent, which sets one
+  - agent: {tool: newpub_export_pdf, args: {path: "agent.pdf", standard: pdf_ua1}, error: true, path: /text, check: {contains: "NoDocumentTitle"}}
+  - agent: {tool: newpub_action, args: {action: set_meta, args: {title: "Spring fair"}}}
+  - agent: {tool: newpub_export_pdf, args: {path: "agent.pdf", standard: pdf_ua1}, path: /ok, check: {equals: true}}
+  - expect_pdf: {file: "agent.pdf", pages: 1, text_contains: ["Members are invited"]}
+  - agent: {tool: newpub_new, args: {template: newsletter}, path: /page_count, check: {gt: 1}}
+  - agent: {tool: newpub_open, args: {path: "agent.newspub"}, path: /page_count, check: {equals: 1}}
+  - expect: {query: {q: story_frames, target: $a}, equals: [$a, $b]}
+  - expect_roundtrip: {}
