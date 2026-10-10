@@ -6,10 +6,17 @@ use newpub_engine::core::{Document, Object, ObjectKind, ShapeKind};
 pub fn object_name(doc: &Document, o: &Object) -> String {
     match &o.kind {
         ObjectKind::Text(_) => {
-            let text =
-                doc.story_of(o.id).ok().and_then(|s| doc.story(s).ok()).map(|s| s.text.clone()).unwrap_or_default();
+            let story = doc.story_of(o.id).ok().and_then(|s| doc.story(s).ok());
+            let text = story.map(|s| s.text.as_str()).unwrap_or_default();
             let first: String = text.chars().take(40).map(|c| if c == '\n' { ' ' } else { c }).collect();
-            format!("Text box: {first}")
+            // A box of a story that runs through several boxes says where it sits in the chain.
+            let place = story
+                .filter(|s| s.frames.len() > 1)
+                .and_then(|s| s.frames.iter().position(|f| *f == o.id).map(|k| (k + 1, s.frames.len())));
+            match place {
+                Some((k, n)) => format!("Text box {k} of {n}: {first}"),
+                None => format!("Text box: {first}"),
+            }
         }
         ObjectKind::Image(_) => {
             let alt = o.alt_text.as_deref().map(str::trim).filter(|a| !a.is_empty()).unwrap_or("no alt text");

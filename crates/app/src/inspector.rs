@@ -580,15 +580,16 @@ impl NewpubApp {
                 }
             });
             if let Some(forward) = go {
-                self.go_to_box(id, forward);
+                self.go_to_box(id, forward, false);
             }
         }
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
-            if widgets::small_button(ui, icons::LINK, "Link to Next Box", linking, true)
+            if widgets::small_button(ui, icons::LINK, "Link to Next Box", linking, !has_next)
                 .on_hover_text(
                     "Then click an empty text box: the story continues there (click again or press Esc to stop)",
                 )
+                .on_disabled_hover_text("This box already continues in another box; break that link first")
                 .clicked()
             {
                 if linking {

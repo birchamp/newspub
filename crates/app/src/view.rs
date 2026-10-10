@@ -44,6 +44,17 @@ pub struct ViewState {
     other_tex: Option<(TextureHandle, u64, usize, u32)>,
 }
 
+impl ViewState {
+    /// Clears what only makes sense for the publication being shown (text editing, "Link to Next Box", a cell
+    /// selection, a guide drag): called whenever another publication replaces it.
+    pub(crate) fn reset_transient(&mut self) {
+        self.link_from = None;
+        self.editing = None;
+        self.cell_extent = None;
+        self.guide_drag = None;
+    }
+}
+
 impl Default for ViewState {
     fn default() -> Self {
         ViewState {
@@ -187,11 +198,10 @@ impl NewpubApp {
         self.view.editing.filter(|id| self.selection.contains(id))
     }
 
-    /// Escape: leaves text editing (keeping the selection), else clears the selection.
+    /// Escape: leaves text editing (keeping the selection), else clears the selection. ("Link to Next Box" takes
+    /// Escape before this, in `shortcuts`.)
     pub(crate) fn escape(&mut self) {
-        if self.view.link_from.is_some() {
-            self.cancel_link();
-        } else if self.editing_frame().is_some() {
+        if self.editing_frame().is_some() {
             self.view.editing = None;
         } else {
             self.selection.clear();

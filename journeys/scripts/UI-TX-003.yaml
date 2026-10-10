@@ -1,5 +1,5 @@
 id: UI-TX-003
-title: Text flow feedback — Link to Next Box mode (banner, targets, Escape, Cancel, invalid target, empty-space cancel), the numbered chain with Previous / Next chips and panel buttons, navigation across flowed pages, undo and redo
+title: Text flow feedback — Link to Next Box mode (banner, targets, Escape from a panel and from the canvas, Cancel, invalid target, empty-space cancel, undo of the source box, disabled on a box that already continues), the numbered chain with Previous / Next chips and panel buttons, navigation across flowed pages, undo and redo
 covers: [UI-26]
 ui: true
 steps:
@@ -31,6 +31,21 @@ steps:
   - expect: {query: {q: frame_text, frame: $b}, equals: ""}
   - expect: {query: {q: frame_text, frame: $d}, equals: ""}
 
+  # --- link mode never outlives its source box: Undo of D's creation while linking from D ends the mode
+  - expect: {query: {q: view}, path: /selection, equals: [$d]}
+  - click: {label: "Link to Next Box"}
+  - expect: {query: {q: view}, path: /link_mode, equals: $d}
+  - expect_ui: {label: "Linking text boxes"}
+  - click: {label: "Undo"}
+  - expect: {query: {q: page_objects, page: 0}, len: {equals: 3}}
+  - expect: {query: {q: view}, path: /link_mode, equals: null}
+  - expect: {query: {q: view}, path: /link_targets, equals: []}
+  - expect_ui: {label: "Linking text boxes", exists: false}
+  - expect_ui: {label: "Cancel linking", exists: false}
+  - click: {label: "Redo"}
+  - expect: {query: {q: page_objects, page: 0}, path: /3, equals: $d}
+  - expect: {query: {q: frame_text, frame: $d}, equals: ""}
+
   # --- a single-box story shows no chain feedback and no link banner
   - click_at: [2in, 2in]
   - expect: {query: {q: view}, path: /selection, equals: [$a]}
@@ -57,6 +72,15 @@ steps:
   - expect: {query: {q: view}, path: /selection, equals: [$a]}
   - expect_ui: {label: "Linking text boxes", exists: false}
   - expect_ui: {label: "Cancel linking", exists: false}
+  # Escape with the canvas focused cancels the same way
+  - click: {label: "Link to Next Box"}
+  - expect: {query: {q: view}, path: /link_mode, equals: $a}
+  - focus: {label: "Page canvas"}
+  - key: {key: "Escape"}
+  - expect: {query: {q: view}, path: /link_mode, equals: null}
+  - expect: {query: {q: view}, path: /status, contains: "Linking cancelled"}
+  - expect: {query: {q: view}, path: /selection, equals: [$a]}
+  - expect_ui: {label: "Linking text boxes", exists: false}
   # the banner's Cancel button cancels too
   - click: {label: "Link to Next Box"}
   - expect: {query: {q: view}, path: /link_mode, equals: $a}
@@ -177,6 +201,12 @@ steps:
   - expect_ui: {label: "Go to previous text box"}
   - expect_ui: {label: "Go to next text box"}
   - expect: {query: {q: overflow, target: $a}, equals: true}
+  # "Link to Next Box" is disabled on a box that already continues in another: clicking it does nothing
+  - expect_ui: {label: "Link to Next Box"}
+  - click: {label: "Link to Next Box"}
+  - expect: {query: {q: view}, path: /link_mode, equals: null}
+  - expect_ui: {label: "Linking text boxes", exists: false}
+  - expect: {query: {q: view}, path: /selection, equals: [$b]}
 
   # --- Flow onto New Pages: the chain grows across pages; the hint on the last box of page 1 says where the story continues
   - click: {label: "Flow onto New Pages"}

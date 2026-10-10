@@ -295,6 +295,7 @@ impl NewpubApp {
         self.page = 0;
         self.selection.clear();
         self.end_text_edit();
+        self.view.reset_transient();
         self.thumbs.clear();
         if matches!(self.dialog, Dialog::Picker(_)) {
             self.dialog = Dialog::None;
@@ -397,6 +398,8 @@ impl NewpubApp {
             Ok(o) => {
                 self.page = self.page.min(self.session.doc().pages.len().saturating_sub(1));
                 self.selection.retain(|id| self.session.doc().objects.contains_key(id));
+                // A deleted (or undone) source box ends "Link to Next Box".
+                self.view.link_from = self.view.link_from.filter(|f| self.session.doc().objects.contains_key(f));
                 Some(o)
             }
             Err(e) => {
@@ -515,15 +518,17 @@ impl NewpubApp {
         let typing_in_widget = ctx.egui_wants_keyboard_input() && !self.canvas_focused(ctx);
         let events = ctx.input(|i| i.events.clone());
         let dialog_open = self.dialog != Dialog::None;
-        // Escape leaves "Link to Next Box" mode even from a panel field (a dialog keeps its own Escape); with
-        // the canvas focused, `escape()` below handles it.
-        if typing_in_widget {
-            if self.view.link_from.is_some()
-                && !dialog_open
+        // "Link to Next Box" is modal: Escape leaves it from anywhere (a dialog keeps its own Escape), and no
+        // other key reaches the document until it ends.
+        if self.view.link_from.is_some() {
+            if !dialog_open
                 && events.iter().any(|e| matches!(e, egui::Event::Key { key: Key::Escape, pressed: true, .. }))
             {
                 self.cancel_link();
             }
+            return;
+        }
+        if typing_in_widget {
             return;
         }
         let editing = self.edit_target().filter(|f| self.caret_in(*f).is_some());
@@ -668,20 +673,12 @@ impl NewpubApp {
         self.act(SessionAction::EndGroup);
     }
 
-    /// Tab / Shift+Tab: selects the next / previous frame of the selected text frame's story.
+    /// Tab / Shift+Tab: selects the next / previous frame of the selected text frame's story, wrapping around
+    /// at either end.
     fn cycle_frame(&mut self, forward: bool) {
-        let Some(frame) = self.selected_text_frame() else { return };
-        let doc = self.session.doc();
-        let Some(frames) = doc.story_of(frame).ok().and_then(|s| doc.story(s).ok()).map(|s| s.frames.clone()) else {
-            return;
-        };
-        let Some(i) = frames.iter().position(|f| *f == frame) else { return };
-        let n = frames.len();
-        let next = frames[if forward { (i + 1) % n } else { (i + n - 1) % n }];
-        if let Some(p) = doc.page_of(next) {
-            self.page = p;
+        if let Some(frame) = self.selected_text_frame() {
+            self.go_to_box(frame, forward, true);
         }
-        self.selection = vec![next];
     }
 
     /// Resolution for rendering the current page at this zoom, capped so the image fits in one GPU texture
@@ -888,8 +885,17 @@ impl NewpubApp {
     }
 
     fn handle_canvas_input(&mut self, resp: &egui::Response) {
+        // "Link to Next Box" is modal: the pointer only hovers and clicks the box the story continues in (or
+        // cancels); presses and drags move, resize, edit and create nothing.
         if self.view.link_from.is_some() {
             resp.ctx.set_cursor_icon(egui::CursorIcon::Alias);
+            if resp.clicked()
+                && let Some(p) = resp.interact_pointer_pos()
+            {
+                let (x, y) = self.screen_to_page(p);
+                self.finish_link(self.hit(x, y));
+            }
+            return;
         }
         // Over a guide (and no object), the pointer shows that the guide can be dragged.
         if self.tool == Tool::Select
@@ -1014,10 +1020,6 @@ impl NewpubApp {
             && let Some(p) = resp.interact_pointer_pos()
         {
             let (x, y) = self.screen_to_page(p);
-            if self.tool == Tool::Select && self.view.link_from.is_some() {
-                self.finish_link(self.hit(x, y));
-                return;
-            }
             if self.tool == Tool::Select
                 && let Some(f) = self.overflow_badge_at(p)
             {

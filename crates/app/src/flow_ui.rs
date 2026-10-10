@@ -9,6 +9,10 @@ use crate::{NewpubApp, Tool, dashed_rect, icons, theme};
 
 /// Radius of a Previous / Next chip on the selected box.
 const CHIP: f32 = 9.0;
+/// Smallest box (on screen) that shows its chips; a smaller one keeps the Format panel's buttons only.
+const CHIP_MIN: Vec2 = Vec2::new(64.0, 44.0);
+/// Outline and link icon of a box the story may continue in: readable on the white page in both themes.
+const TARGET: Color32 = Color32::from_rgb(30, 142, 90);
 
 impl NewpubApp {
     /// The chain of text box `frame`: its index and every box of its story in reading order. None unless the
@@ -31,14 +35,17 @@ impl NewpubApp {
         self.chain_of(self.selected_text_frame()?)
     }
 
-    /// Selects the box before (`forward == false`) or after `frame` in its story, turning to its page.
-    /// Nothing happens at either end of the chain.
-    pub(crate) fn go_to_box(&mut self, frame: Id, forward: bool) {
+    /// Selects the box before (`forward == false`) or after `frame` in its story, turning to its page. At either
+    /// end of the chain nothing happens, unless `wrap` (Tab) goes round to the other end.
+    pub(crate) fn go_to_box(&mut self, frame: Id, forward: bool, wrap: bool) {
         let Some((i, frames)) = self.chain_of(frame) else { return };
+        let n = frames.len();
         let j = match (forward, i) {
-            (true, i) => i + 1,
-            (false, 0) => return,
-            (false, i) => i - 1,
+            (true, i) if i + 1 < n => i + 1,
+            (false, i) if i > 0 => i - 1,
+            (true, _) if wrap => 0,
+            (false, _) if wrap => n - 1,
+            _ => return,
         };
         let Some(&next) = frames.get(j) else { return };
         let Some(p) = self.session.doc().page_of(next) else {
@@ -83,9 +90,12 @@ impl NewpubApp {
     }
 
     /// Canvas overlay drawn after the page: the link-mode hint and targets, then the chain of the selected box.
+    /// Its buttons live in a child ui clipped to the canvas, so nothing of them reaches the panels around it.
     pub(crate) fn flow_overlay(&mut self, ui: &mut egui::Ui, canvas: ERect) {
-        self.link_overlay(ui, canvas);
-        self.chain_overlay(ui, canvas);
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(canvas));
+        child.set_clip_rect(canvas);
+        self.link_overlay(&mut child, canvas);
+        self.chain_overlay(&mut child, canvas);
     }
 
     /// While linking: the source box, every box the story may continue in, and a banner with a Cancel button.
@@ -108,22 +118,16 @@ impl NewpubApp {
             let Some(o) = doc.objects.get(&id) else { continue };
             let rr = self.screen_rect(o.rect);
             if hover == Some(id) {
-                painter.rect_filled(rr, 0.0, p.success.gamma_multiply(0.1));
-                painter.rect_stroke(rr, 0.0, Stroke::new(2.0, p.success), egui::StrokeKind::Outside);
+                painter.rect_filled(rr, 0.0, TARGET.gamma_multiply(0.1));
+                painter.rect_stroke(rr, 0.0, Stroke::new(2.0, TARGET), egui::StrokeKind::Outside);
             } else {
-                dashed_rect(&painter, rr, Stroke::new(1.5, p.success), 5.0);
+                dashed_rect(&painter, rr, Stroke::new(1.5, TARGET), 5.0);
             }
-            painter.text(
-                rr.center() - Vec2::new(0.0, 18.0),
-                Align2::CENTER_CENTER,
-                icons::LINK,
-                icon.clone(),
-                p.success,
-            );
+            painter.text(rr.center() - Vec2::new(0.0, 18.0), Align2::CENTER_CENTER, icons::LINK, icon.clone(), TARGET);
         }
 
         // Banner: what to do next, and a way out.
-        let text = "Click an empty text box to continue the story there";
+        let text = "Click an empty text box to continue the story there (Esc cancels)";
         let galley = painter.layout_no_wrap(text.to_string(), theme::medium(12.0), p.on_primary);
         let size = Vec2::new(galley.size().x + 70.0, 30.0);
         let r = ERect::from_center_size(Pos2::new(canvas.center().x, canvas.top() + 12.0 + size.y / 2.0), size);
@@ -156,7 +160,7 @@ impl NewpubApp {
 
     /// With one box of a linked story selected: a numbered tag on every box of the story on this page, a
     /// dashed outline on the other boxes, dashed connectors between consecutive boxes, and Previous / Next
-    /// chips on the selected box.
+    /// chips inside the selected box (when it is big enough for them and they are on the canvas).
     fn chain_overlay(&mut self, ui: &mut egui::Ui, canvas: ERect) {
         if self.tool != Tool::Select || self.view.link_from.is_some() {
             return;
@@ -180,10 +184,10 @@ impl NewpubApp {
             if k != i {
                 dashed_rect(&painter, *rr, faint, 4.0);
             }
-            // Numbered tag inside the top-left corner.
+            // Numbered tag inside the top-left corner, beside the Previous chip.
             let label = format!("{} of {}", k + 1, n);
             let galley = painter.layout_no_wrap(label, theme::medium(10.0), p.on_primary);
-            let tag = ERect::from_min_size(rr.left_top() + Vec2::splat(7.0), galley.size() + Vec2::new(8.0, 3.0));
+            let tag = ERect::from_min_size(rr.left_top() + Vec2::new(30.0, 9.0), galley.size() + Vec2::new(8.0, 3.0));
             painter.rect_filled(tag, 3.0, p.primary);
             painter.galley(tag.left_top() + Vec2::new(4.0, 1.5), galley, p.on_primary);
             // Connector to the next box when both are on this page.
@@ -193,6 +197,9 @@ impl NewpubApp {
             }
         }
         let Some(sel) = rects[i] else { return };
+        if sel.width() < CHIP_MIN.x || sel.height() < CHIP_MIN.y {
+            return;
+        }
         let frame = frames[i];
         let (prev_c, next_c) = chips(sel);
         let mut go = None;
@@ -214,7 +221,7 @@ impl NewpubApp {
                 "The box the story continues in (Tab)",
             ),
         ] {
-            if !exists {
+            if !exists || !canvas.contains(c) {
                 continue;
             }
             let resp = ui
@@ -234,7 +241,7 @@ impl NewpubApp {
             }
         }
         if let Some(forward) = go {
-            self.go_to_box(frame, forward);
+            self.go_to_box(frame, forward, false);
         }
     }
 
@@ -250,8 +257,9 @@ impl NewpubApp {
     }
 }
 
-/// Centres of the Previous (above the top-left corner) and Next (below the bottom-right corner) chips of a box,
-/// clear of its resize handles and of the overflow badge.
+/// Centres of the Previous (inside the top-left corner) and Next (inside the bottom-right corner) chips of a box,
+/// clear of its corner resize handles and of the overflow badge. They stay inside the box so they never cover a
+/// neighbouring object.
 fn chips(rr: ERect) -> (Pos2, Pos2) {
-    (Pos2::new(rr.left() + 18.0, rr.top() - 12.0), Pos2::new(rr.right() - 18.0, rr.bottom() + 12.0))
+    (Pos2::new(rr.left() + 18.0, rr.top() + 18.0), Pos2::new(rr.right() - 18.0, rr.bottom() - 18.0))
 }
