@@ -6,6 +6,7 @@ mod checker;
 mod clipboard;
 mod dup;
 mod files;
+mod flow_ui;
 mod freeform;
 mod guard;
 mod guides_ui;
@@ -514,7 +515,15 @@ impl NewpubApp {
         let typing_in_widget = ctx.egui_wants_keyboard_input() && !self.canvas_focused(ctx);
         let events = ctx.input(|i| i.events.clone());
         let dialog_open = self.dialog != Dialog::None;
+        // Escape leaves "Link to Next Box" mode even from a panel field (a dialog keeps its own Escape); with
+        // the canvas focused, `escape()` below handles it.
         if typing_in_widget {
+            if self.view.link_from.is_some()
+                && !dialog_open
+                && events.iter().any(|e| matches!(e, egui::Event::Key { key: Key::Escape, pressed: true, .. }))
+            {
+                self.cancel_link();
+            }
             return;
         }
         let editing = self.edit_target().filter(|f| self.caret_in(*f).is_some());
@@ -725,7 +734,9 @@ impl NewpubApp {
         let full = ui.available_rect_before_wrap();
         self.canvas_rect = full;
         self.canvas_view(ui);
-        self.freeform_overlay(ui, ERect::from_min_max(full.max - self.canvas_size, full.max));
+        let area = ERect::from_min_max(full.max - self.canvas_size, full.max);
+        self.flow_overlay(ui, area);
+        self.freeform_overlay(ui, area);
     }
 
     /// Margin guides, frame boundaries, empty-frame placeholders and overflow badges of the current page.
@@ -1047,18 +1058,29 @@ impl NewpubApp {
         self.status = "Click an empty text box to continue the story there (Esc cancels)".into();
     }
 
+    /// A click while linking: an empty, unlinked text box continues the story; another text box keeps the
+    /// mode with a hint; anything else cancels.
     fn finish_link(&mut self, target: Option<Id>) {
-        let Some(from) = self.view.link_from.take() else { return };
+        let Some(from) = self.view.link_from else { return };
         let is_text =
             |id: &Id| self.session.doc().objects.get(id).is_some_and(|o| matches!(o.kind, ObjectKind::Text(_)));
-        match target.filter(is_text) {
-            Some(to) if to != from => {
+        match target {
+            Some(to) if to != from && self.is_link_target(to) => {
+                self.view.link_from = None;
                 if self.act(Command::LinkFrames { from, to }).is_some() {
                     self.status = "Text boxes linked".into();
+                    self.selection = vec![to];
                 }
-                self.selection = vec![to];
             }
-            _ => self.status = "Linking cancelled: click an empty text box".into(),
+            Some(to) if to != from && is_text(&to) => {
+                self.status =
+                    "That text box already has text or is linked: click an empty text box, or press Esc to cancel"
+                        .into();
+            }
+            _ => {
+                self.view.link_from = None;
+                self.status = "Linking cancelled: click an empty text box".into();
+            }
         }
     }
 

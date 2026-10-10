@@ -169,6 +169,7 @@ impl NewpubApp {
         v["visible_pages"] = serde_json::json!(self.visible_pages());
         v["editing"] = self.editing_frame().is_some().into();
         v["window_closes"] = self.window_closes.into();
+        self.flow_view(v);
         v["preview"] = self.preview.as_ref().map(|p| p.0.clone()).into();
         v["preview_rendered"] =
             self.preview_texture.as_ref().zip(self.preview.as_ref()).is_some_and(|(t, p)| t.1 == p.0).into();
@@ -188,8 +189,8 @@ impl NewpubApp {
 
     /// Escape: leaves text editing (keeping the selection), else clears the selection.
     pub(crate) fn escape(&mut self) {
-        if self.view.link_from.take().is_some() {
-            self.status = "Linking cancelled".into();
+        if self.view.link_from.is_some() {
+            self.cancel_link();
         } else if self.editing_frame().is_some() {
             self.view.editing = None;
         } else {
