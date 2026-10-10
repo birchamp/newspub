@@ -277,3 +277,6 @@ The dashboard parses this file:
 - The layout engine already wrapped text around any object in front of a text box, but only pictures had wrapping on (by default), and nothing in the app could change it. So shapes and text boxes placed over a story could not push its text aside.
 - The Format panel's Arrange card now has **Wrap text** (None, Square, Tight, Top and bottom, Through) and **Distance from text**. They apply to every selected object. Turning wrap on starts from a 0.1 in gap.
 - Journey UI-WR-001 covers all four settings with measured line positions: Square starts lines 7.2 pt right of the box, 0.5 in starts them 36 pt right, and Top and bottom resumes the text below the box. PARITY UI-25 checked from CI run 38007907775 (748c8c2), green on Linux, macOS and Windows; 151/151 items.
+
+### 2026-10-10 — v0.3.1 (user: "cut v0.3.1 with the text wrap")
+- Version 0.3.1: v0.3.0 plus Wrap text in the Format panel (UI-25). Release notes in docs/release-notes/v0.3.1.md.
