@@ -1,0 +1,45 @@
+id: UI-WR-001
+title: Text wrap from the Format panel — text in a box flows around another box placed over it; distance; top and bottom; none
+covers: [UI-25]
+ui: true
+steps:
+  # a story box, then a second box over its left side (drawn later, so it is in front)
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 1in], to: [7.5in, 9in]}
+  - paste: {text: "Members are invited to the spring fair on the village green. Stalls open at ten, with cakes, plants, books and games for children. Members are invited to the spring fair on the village green. Stalls open at ten, with cakes, plants, books and games for children. Members are invited to the spring fair on the village green. Stalls open at ten, with cakes, plants, books and games for children. Members are invited to the spring fair on the village green. Stalls open at ten, with cakes, plants, books and games for children. Members are invited to the spring fair on the village green. Stalls open at ten, with cakes, plants, books and games for children. Members are invited to the spring fair on the village green. Stalls open at ten, with cakes, plants, books and games for children. Members are invited to the spring fair on the village green. Stalls open at ten, with cakes, plants, books and games for children. Members are invited to the spring fair on the village green. Stalls open at ten, with cakes, plants, books and games for children. Members are invited to the spring fair on the village green. Stalls open at ten, with cakes, plants, books and games for children. Members are invited to the spring fair on the village green. Stalls open at ten, with cakes, plants, books and games for children. Members are invited to the spring fair on the village green. Stalls open at ten, with cakes, plants, books and games for children. Members are invited to the spring fair on the village green. Stalls open at ten, with cakes, plants, books and games for children. Members are invited to the spring fair on the village green. Stalls open at ten, with cakes, plants, books and games for children. Members are invited to the spring fair on the village green. Stalls open at ten, with cakes, plants, books and games for children."}
+  - key: {key: "Escape"}
+  - expect: {query: {q: page_objects, page: 0}, path: /0, gt: 0, as: story}
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 3in], to: [3.5in, 5in]}
+  - type: {text: "Pull quote"}
+  - key: {key: "Escape"}
+  - expect: {query: {q: page_objects, page: 0}, path: /1, gt: 0, as: quote}
+  - expect: {query: {q: view}, path: /selection, equals: [$quote]}
+  # by default text boxes do not push text: the story runs underneath
+  - expect: {query: {q: object, id: $quote}, path: /wrap/mode, equals: none}
+  - dump: {query: {q: frame_lines, frame: $story}, file: none.json}
+  - expect: {query: {q: frame_lines, frame: $story}, path: /12/x, approx: [5.76, 0.01]}
+  # Square: lines beside the quote box start to its right
+  - click: {label: "Wrap text"}
+  - click: {label: "Square"}
+  - expect: {query: {q: object, id: $quote}, path: /wrap/mode, equals: square}
+  - expect: {query: {q: object, id: $quote}, path: /wrap/distance, approx: [7.2, 0.01]}
+  - dump: {query: {q: frame_lines, frame: $story}, file: square.json}
+  - expect: {query: {q: frame_lines, frame: $story}, path: /12/x, gt: 180}
+  - expect: {query: {q: frame_lines, frame: $story}, path: /0/x, approx: [5.76, 0.01]}
+  # a larger distance pushes them further
+  - fill: {label: "Distance from text", text: "0.5in"}
+  - expect: {query: {q: object, id: $quote}, path: /wrap/distance, approx: [36, 0.01]}
+  - dump: {query: {q: frame_lines, frame: $story}, file: distance.json}
+  - expect: {query: {q: frame_lines, frame: $story}, path: /12/x, gt: 208}
+  # top and bottom: nothing beside the box
+  - click: {label: "Wrap text"}
+  - click: {label: "Top and bottom"}
+  - expect: {query: {q: object, id: $quote}, path: /wrap/mode, equals: top_bottom}
+  - expect: {query: {q: frame_lines, frame: $story}, path: /12/x, approx: [5.76, 0.01]}
+  - dump: {query: {q: frame_lines, frame: $story}, file: topbottom.json}
+  # and back to none
+  - click: {label: "Wrap text"}
+  - click: {label: "None"}
+  - expect: {query: {q: object, id: $quote}, path: /wrap/mode, equals: none}
+  - expect: {query: {q: frame_lines, frame: $story}, path: /12/x, approx: [5.76, 0.01]}

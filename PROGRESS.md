@@ -272,3 +272,8 @@ The dashboard parses this file:
 ### 2026-10-09 — v0.3.0 (user: "yes, cut v0.3.0")
 - Version 0.3.0. It brings the real `.pub` import and the UI paths UI-16..UI-24 to the installers.
 - **Released v0.3.0** (CI run 38003123705 and Package run 38003123649 green on 784886c; release published by Package run 38004300374, started by hand with `release_tag` because this session cannot push tags): https://github.com/birchamp/newspub/releases/tag/v0.3.0. It has seven assets: the Windows setup and portable zip, the macOS .dmg and .pkg, and the Linux AppImage, .deb and .tar.gz.
+
+### 2026-10-10 — Text wrap in the UI (user: "How do you wrap text around another box that's overlaying a text box?")
+- The layout engine already wrapped text around any object in front of a text box, but only pictures had wrapping on (by default), and nothing in the app could change it. So shapes and text boxes placed over a story could not push its text aside.
+- The Format panel's Arrange card now has **Wrap text** (None, Square, Tight, Top and bottom, Through) and **Distance from text**. They apply to every selected object. Turning wrap on starts from a 0.1 in gap.
+- Journey UI-WR-001 covers all four settings with measured line positions: Square starts lines 7.2 pt right of the box, 0.5 in starts them 36 pt right, and Top and bottom resumes the text below the box. PARITY UI-25 gets checked once CI is green on all three OSes.

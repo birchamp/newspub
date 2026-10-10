@@ -6,7 +6,7 @@ use egui::{Align, Layout, RichText};
 use newpub_engine::core::{
     self as core, Align as TextAlign, AlignEdge, AlignTo, Autofit, Axis, Baseline, Caps, CharAttrs, Color, Command,
     Dash, Fit, Id, Insets, Length, LineSpacing, ListStyle, Object, ObjectKind, ObjectPatch, ParaAttrs, ShapePatch,
-    StyleRef, TextFramePatch, VAlign, ZOp,
+    StyleRef, TextFramePatch, VAlign, Wrap, WrapMode, ZOp,
 };
 use std::collections::HashMap;
 
@@ -823,6 +823,44 @@ impl NewpubApp {
                 }
             }
         });
+        // Text wrap: how text in boxes behind this object flows around it.
+        let wrap = obj.wrap;
+        let modes = [
+            (WrapMode::None, "None"),
+            (WrapMode::Square, "Square"),
+            (WrapMode::Tight, "Tight"),
+            (WrapMode::TopBottom, "Top and bottom"),
+            (WrapMode::Through, "Through"),
+        ];
+        let labels: Vec<&str> = modes.iter().map(|m| m.1).collect();
+        let cur = modes.iter().position(|m| m.0 == wrap.mode).unwrap_or(0);
+        if let Some(i) = choice(ui, "Wrap text", labels[cur], &labels)
+            && i != cur
+        {
+            // Turning wrap on with no gap would let text touch the object; start from Publisher's 0.1 in.
+            let distance =
+                if wrap.mode == WrapMode::None && wrap.distance.0 == 0.0 { Length(7.2) } else { wrap.distance };
+            let w = Wrap { mode: modes[i].0, distance };
+            for id in &ids {
+                cmds.push(Command::SetObject { id: *id, patch: ObjectPatch { wrap: Some(w), ..Default::default() } });
+            }
+        }
+        if wrap.mode != WrapMode::None {
+            let model = fmt_len(wrap.distance.0);
+            if let Some(v) = length_field(self, ui, "wrap_distance", "Distance from text", &model)
+                .filter(|v| *v >= 0.0 && (v - wrap.distance.0).abs() > 1e-9)
+            {
+                let w = Wrap { mode: wrap.mode, distance: Length(v) };
+                for id in &ids {
+                    self.act_run(
+                        format!("wrapdist:{id}"),
+                        Command::SetObject { id: *id, patch: ObjectPatch { wrap: Some(w), ..Default::default() } },
+                    );
+                }
+            }
+        } else {
+            widgets::hint(ui, "Text in boxes behind this object runs underneath it.");
+        }
         for c in cmds {
             self.act(c);
         }
