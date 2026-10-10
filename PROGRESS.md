@@ -280,3 +280,4 @@ The dashboard parses this file:
 
 ### 2026-10-10 — v0.3.1 (user: "cut v0.3.1 with the text wrap")
 - Version 0.3.1: v0.3.0 plus Wrap text in the Format panel (UI-25). Release notes in docs/release-notes/v0.3.1.md.
+- **Released v0.3.1** (CI run 38010606933 and Package run 38010606913 green on 5fe2fef; published by Package run 38011418767 with `release_tag`): https://github.com/birchamp/newspub/releases/tag/v0.3.1. It has all seven assets, and the notes come from docs/release-notes/v0.3.1.md.
