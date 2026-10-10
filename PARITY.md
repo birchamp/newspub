@@ -270,4 +270,4 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | UI-22 | P1 | Styles in the UI: paragraph and character styles from formatted text, apply, delete | UI-ST-001 | [x] |
 | UI-23 | P1 | Publication properties, Design Checker (overflow, empty boxes, off-page objects), Save as Template and My Templates | UI-DC-001 | [x] |
 | UI-24 | P2 | Gallery live preview: hovering a colour or font scheme shows it on the page before it is applied; built-in templates follow the schemes | UI-PD-002 | [x] |
-| UI-25 | P1 | Text wrap in the UI: wrap text around any object placed over a text box (none, square, tight, top and bottom, through) with a distance, from the Format panel | UI-WR-001 | [ ] |
+| UI-25 | P1 | Text wrap in the UI: wrap text around any object placed over a text box (none, square, tight, top and bottom, through) with a distance, from the Format panel | UI-WR-001 | [x] |
