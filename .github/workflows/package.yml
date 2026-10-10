@@ -172,15 +172,23 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: dist
           pattern: newpub-*
           merge-multiple: true
+      # Hand-written notes in docs/release-notes/<tag>.md when present; GitHub's generated notes otherwise.
+      - name: release notes
+        id: notes
+        run: |
+          f="docs/release-notes/${{ inputs.release_tag || github.ref_name }}.md"
+          if [ -s "$f" ]; then echo "path=$f" >> "$GITHUB_OUTPUT"; fi
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.release_tag || github.ref_name }}
           target_commitish: ${{ github.sha }}
           name: newpub ${{ inputs.release_tag || github.ref_name }}
           files: dist/*
-          generate_release_notes: true
+          body_path: ${{ steps.notes.outputs.path }}
+          generate_release_notes: ${{ steps.notes.outputs.path == '' }}

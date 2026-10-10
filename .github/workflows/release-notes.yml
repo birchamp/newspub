@@ -1,0 +1,48 @@
+# Writes docs/release-notes/<tag>.md onto the existing GitHub Release with that tag, without rebuilding or touching
+# its files. Runs when a notes file is pushed, or by hand for one tag.
+name: Release notes
+
+on:
+  push:
+    paths: ["docs/release-notes/*.md"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (for example v0.3.0); its notes are read from docs/release-notes/<tag>.md"
+        required: true
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: update the release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -n "${TAG:-}" ]; then
+            tags="$TAG"
+          elif [ -z "${BEFORE:-}" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            tags=$(ls docs/release-notes/*.md | xargs -n1 basename | sed 's/\.md$//')
+          else
+            tags=$(git diff --name-only --diff-filter=AM "$BEFORE" "$AFTER" -- 'docs/release-notes/*.md' \
+              | xargs -r -n1 basename | sed 's/\.md$//')
+          fi
+          for t in $tags; do
+            f="docs/release-notes/$t.md"
+            test -s "$f"
+            if gh release view "$t" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+              gh release edit "$t" --repo "$GITHUB_REPOSITORY" --notes-file "$f"
+              echo "updated the notes of $t"
+            else
+              echo "no release $t yet; the Package workflow uses $f when it publishes it"
+            fi
+          done
