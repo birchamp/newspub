@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Builds the Linux packages from a release binary: an AppImage (runs on most distributions), a .deb
 # (Debian, Ubuntu, Mint) and a plain .tar.gz.
-# Usage: tools/package/linux/build.sh <newpub binary> <version> <out dir>
+# Usage: tools/package/linux/build.sh <newpub binary> <version> <out dir> [newpub-agent binary]
 set -euo pipefail
-BIN=$1 VERSION=$2 OUT=$3
+BIN=$1 VERSION=$2 OUT=$3 AGENT=${4:-}
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../.." && pwd)
 ICON="$ROOT/assets/icon/newpub.png"
@@ -14,6 +14,7 @@ mkdir -p "$OUT"
 stage() {
   local d=$1
   install -Dm755 "$BIN" "$d/usr/bin/newpub"
+  [ -n "$AGENT" ] && install -Dm755 "$AGENT" "$d/usr/bin/newpub-agent"
   install -Dm644 "$HERE/newpub.desktop" "$d/usr/share/applications/newpub.desktop"
   install -Dm644 "$HERE/newpub-mime.xml" "$d/usr/share/mime/packages/newpub.xml"
   install -Dm644 "$ROOT/assets/icon/newpub-256.png" "$d/usr/share/icons/hicolor/256x256/apps/newpub.png"
@@ -72,6 +73,7 @@ ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$TOOL" --runtime-file "$WORK/runtime" "$
 TAR="$WORK/newpub-$VERSION"
 mkdir -p "$TAR"
 install -m755 "$BIN" "$TAR/newpub"
+[ -n "$AGENT" ] && install -m755 "$AGENT" "$TAR/newpub-agent"
 cp "$HERE/newpub.desktop" "$ROOT/assets/icon/newpub-256.png" "$ROOT/LICENSE" "$TAR/"
 tar -C "$WORK" -czf "$OUT/newpub-${VERSION}-linux-x86_64.tar.gz" "newpub-$VERSION"
 

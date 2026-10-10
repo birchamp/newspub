@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Builds the macOS packages from the arm64 and x86_64 release binaries: a universal newpub.app,
 # a drag-to-Applications .dmg, and a .pkg installer.
-# Usage: tools/package/macos/build.sh <arm64 binary> <x86_64 binary> <version> <out dir>
+# Usage: tools/package/macos/build.sh <arm64 binary> <x86_64 binary> <version> <out dir> [arm64 newpub-agent] [x86_64 newpub-agent]
 # Without an Apple Developer ID the app is ad-hoc signed, so macOS asks once before opening it
 # (System Settings > Privacy & Security > Open Anyway).
 set -euo pipefail
-ARM=$1 X86=$2 VERSION=$3 OUT=$4
+ARM=$1 X86=$2 VERSION=$3 OUT=$4 ARM_AGENT=${5:-} X86_AGENT=${6:-}
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../.." && pwd)
 WORK=$(mktemp -d)
@@ -14,6 +14,8 @@ mkdir -p "$OUT"
 APP="$WORK/newpub.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 lipo -create -output "$APP/Contents/MacOS/newpub" "$ARM" "$X86"
+# The MCP server for AI agents ships inside the bundle (docs/agent.md).
+if [ -n "$ARM_AGENT" ]; then lipo -create -output "$APP/Contents/MacOS/newpub-agent" "$ARM_AGENT" "$X86_AGENT"; fi
 sed "s/@VERSION@/$VERSION/g" "$HERE/Info.plist" >"$APP/Contents/Info.plist"
 printf 'APPL????' >"$APP/Contents/PkgInfo"
 

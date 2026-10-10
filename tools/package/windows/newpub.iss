@@ -39,6 +39,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "{#SourceDir}\newpub.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\newpub-agent.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\newpub.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]

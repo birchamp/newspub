@@ -36,8 +36,9 @@ Claude Desktop and other clients that take a JSON configuration:
 }
 ```
 
-Both binaries are in the release archives next to `newpub`; from a checkout, `cargo build --release` puts
-them in `target/release/`. Relative paths in tool calls resolve against the server's working directory.
+`newpub-agent` ships next to `newpub` in the .deb, the Linux .tar.gz, the macOS app bundle
+(`newpub.app/Contents/MacOS/newpub-agent`) and the Windows setup and portable zip; from a checkout,
+`cargo build --release` puts both in `target/release/`. Relative paths in tool calls resolve against the server's working directory.
 `--bundled-fonts` makes the headless server use only the bundled fonts (deterministic output, as in journeys)
 instead of the system's fonts.
 
