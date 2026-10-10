@@ -2462,6 +2462,7 @@ dependencies = [
 name = "newpub-app"
 version = "0.3.1"
 dependencies = [
+ "anyhow",
  "eframe",
  "egui",
  "newpub-agent",

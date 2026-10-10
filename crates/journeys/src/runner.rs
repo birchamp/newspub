@@ -359,7 +359,7 @@ pub fn run_step(s: &mut Session, ctx: &mut Ctx, step: &Value) -> Result<()> {
 pub fn agent_step(host: &mut dyn newpub_agent::Host, args: &Value) -> Result<Value> {
     let tool = args.get("tool").and_then(|t| t.as_str()).ok_or_else(|| anyhow!("agent needs a tool"))?;
     let targs = args.get("args").cloned().unwrap_or(Value::Null);
-    let r = newpub_agent::call_tool(host, tool, &targs);
+    let r = newpub_agent::call_tool(host, tool, &targs)?;
     let text: Vec<&str> = r.content.iter().filter_map(|c| c.get("text").and_then(|t| t.as_str())).collect();
     let text = text.join("\n");
     let want_error = args.get("error").and_then(|e| e.as_bool()).unwrap_or(false);

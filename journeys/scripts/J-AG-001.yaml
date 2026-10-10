@@ -15,6 +15,16 @@ steps:
   - agent: {tool: newpub_status, args: {}, path: /pages/0/objects/0/overflow, check: {equals: true}}
   - agent: {tool: newpub_status, args: {}, path: /warnings, check: {len: 1}}
   - agent: {tool: newpub_status, args: {}, path: /warnings/0, check: {contains: "overflows"}}
+  # grouped and hidden objects are still reported, nested under the group
+  - agent: {tool: newpub_action, args: {action: add_shape, args: {page: 0, rect: {x: "5in", y: "6in", w: "1in", h: "1in"}, kind: rect}}, path: /created/0, as: sh}
+  - agent: {tool: newpub_actions, args: {actions: [{action: group, args: {ids: [$a, $sh]}}, {action: set_object, args: {id: $sh, patch: {hidden: true}}}]}, path: /results/0/created/0, as: g}
+  - agent: {tool: newpub_status, args: {}, path: /pages/0/objects/0/kind, check: {equals: group}}
+  - agent: {tool: newpub_status, args: {}, path: /pages/0/objects/0/children/0/overflow, check: {equals: true}}
+  - agent: {tool: newpub_status, args: {}, path: /pages/0/objects/0/children/1/hidden, check: {equals: true}}
+  - agent: {tool: newpub_status, args: {}, path: /warnings, check: {len: 1}}
+  - agent: {tool: newpub_action, args: {action: undo}}
+  - agent: {tool: newpub_action, args: {action: undo}}
+  - agent: {tool: newpub_status, args: {}, path: /pages/0/objects, check: {len: 1}}
   # a batch is one undo step: a second box, linked, with the first words bold
   - agent: {tool: newpub_action, args: {action: add_text_frame, args: {page: 0, rect: {x: "4in", y: "1in", w: "3in", h: "4in"}}}, path: /created/0, as: b}
   - agent:
@@ -27,7 +37,8 @@ steps:
       check: {equals: 2}
   - expect: {query: {q: story_frames, target: $a}, equals: [$a, $b]}
   - expect: {query: {q: char_attrs, target: $a, at: 0}, path: /bold, equals: true}
-  - agent: {tool: newpub_query, args: {query: frame_lines, args: {frame: $b}}, path: /0/x, check: {approx: [5.76, 0.01]}}
+  - agent: {tool: newpub_query, args: {query: frame_lines, args: {frame: $b}}, path: /result/0/x, check: {approx: [5.76, 0.01]}}
+  - agent: {tool: newpub_query, args: {query: overflow, args: {target: $a}}, path: /result, check: {equals: true}}
   - agent: {tool: newpub_action, args: {action: undo}}
   - expect: {query: {q: story_frames, target: $a}, equals: [$a]}
   - expect: {query: {q: char_attrs, target: $a, at: 0}, path: /bold, equals: false}
@@ -56,6 +67,14 @@ steps:
   - agent: {tool: newpub_action, args: {action: undo}}
   - expect: {query: {q: object, id: $b}, path: /name, is_null: true}
   - agent: {tool: newpub_action, args: {action: no_such_action}, error: true}
+  # a grouped batch may not steer the history itself; without grouping it may
+  - agent: {tool: newpub_actions, args: {actions: [{action: set_meta, args: {author: "A"}}, {action: undo}]}, error: true, path: /text, check: {contains: "undo_group false"}}
+  - expect: {query: {q: document}, path: /meta/author, equals: ""}
+  - agent: {tool: newpub_actions, args: {undo_group: false, actions: [{action: set_meta, args: {author: "A"}}, {action: undo}]}, path: /ran, check: {equals: 2}}
+  - expect: {query: {q: document}, path: /meta/author, equals: ""}
+  # bad arguments are refused, not coerced
+  - agent: {tool: newpub_render_page, args: {page: 1.5}, error: true}
+  - agent: {tool: newpub_render_page, args: {page: 0, dpi: 9000}, error: true}
   # the agent can look at the page
   - agent: {tool: newpub_render_page, args: {page: 0, dpi: 36}, path: /width, check: {equals: 306}}
   - agent: {tool: newpub_render_page, args: {page: 7}, error: true}

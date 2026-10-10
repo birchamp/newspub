@@ -58,7 +58,10 @@ instead of the system's fonts.
 | `newpub_export_pdf` | PDF export: plain, PDF/X-4 or PDF/UA-1, a page subset, a saddle-stitched booklet, bleed and crop marks. Other exports (PNG, JPEG, HTML, EPUB, XPS, Pack and Go) are actions. |
 
 Tool failures come back as results with `isError: true` and a message that names the `newpub_reference`
-search to run, never as protocol errors, so the agent can read them and try again.
+search to run, so the agent can read them and try again (only an unknown tool name is a protocol error).
+Every tool's `structuredContent` is a JSON object; a query whose answer is a number, string or list returns
+it as `{"result": …}`. `newpub_actions` refuses, up front, a batch that contains `undo`, `redo`,
+`begin_group`, `end_group` or an action that replaces the publication, unless `undo_group` is false.
 
 Conventions the agent needs: geometry is in points (72 per inch) from the page's top-left corner, y down;
 any length also accepts a string with a unit (`"2in"`, `"50mm"`, `"12pt"`); pages are numbered from 0; text
@@ -89,7 +92,15 @@ insert_text"). The person can select, type, undo (the agent's batches are single
 usual; the agent sees those changes in its next `newpub_status`. An agent change ends any text editing the
 person was doing, and the current page and selection stay valid when the agent deletes things.
 
-The app's own diagnostics go to stderr, so stdout stays a clean protocol stream.
+The person's unsaved work is safe: while the publication has unsaved changes, `newpub_new`, `newpub_open`
+and any action that replaces the publication (`new_document`, `open`, `import_pub`, `new_from_builtin`, …)
+are refused with a message that tells the agent to save first or ask. When the client disconnects, the
+window stays open with the publication and the status bar says "Agent disconnected"; MCP clients that kill
+the server process on exit would close the window with it, so save before the session ends.
+
+The app's own diagnostics go to stderr, so stdout stays a clean protocol stream. On Windows the release
+build is a windowed program: started by an MCP client it inherits the client's pipes, but typed into a
+console `newpub --agent` has no stdin to read.
 
 ## Command line
 
@@ -104,7 +115,8 @@ newpub-agent reference link
 ```
 
 `exec` takes actions as JSON objects with a `cmd` field, or as a name followed by its fields; `--save`
-writes back to `--file`, `--save=other.newspub` elsewhere. Exit status 1 on the first failure.
+writes back to `--file`, `--save=other.newspub` elsewhere (the `=` is required, so a following action is
+never taken as the path). A failing tool prints its message to stderr and ends with exit status 1.
 
 ## Keeping the reference honest
 

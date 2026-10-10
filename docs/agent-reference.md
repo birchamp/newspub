@@ -5,11 +5,14 @@ Do not edit by hand.
 
 Conventions: geometry is in points (1/72 in), page coordinates, origin top-left, y down. Any `Length` may
 be a number of points or a string with a unit (`"8.5in"`, `"210mm"`, `"2cm"`, `"12pt"`, `"3pi"`).
-A `Rect` is `{x, y, w, h}`. Ids are integers (`Id`); every object, story, page, master, style and asset has
+A `Rect` is `{x, y, w, h}` or `[x, y, w, h]`, each a `Length`. `Insets` are `{top, bottom, left, right}`,
+each a `Length` defaulting to 0 (`inside`/`outside` are accepted for `left`/`right`). Ids are integers
+(`Id`); every object, story, page, master, style and asset has
 one. Pages are 0-based indexes. Text positions are char indexes into a story's text, where `\n` separates
 paragraphs. Fields marked *optional* may be omitted. Actions and queries are JSON objects: an action is
 `{"cmd": "<name>", ...fields}` and a query is `{"q": "<name>", ...fields}`; the MCP tools
-`newpub_action` and `newpub_query` take the name and the fields separately.
+`newpub_action` and `newpub_query` take the name and the fields separately. Enum and struct types named
+in a field are described in the Types appendix at the end.
 
 ## Document commands
 
@@ -57,7 +60,7 @@ Paste tab-separated text (rows by newline, cells by tab; CRLF and one trailing n
 Caption for a picture (IM-10): a text frame next to it, grouped with it. created = [group, caption frame].
 - `picture`: `Id`
 - `text`: `Option<String>` *(optional)*
-- `position`: `CaptionPosition` *(optional)*
+- `position`: `CaptionPosition` (see Types) *(optional)*
 
 ### `add_word_art`
 Add a WordArt object (TY-19). `style` names a preset from `wordart::styles()`.
@@ -70,6 +73,16 @@ Add a WordArt object (TY-19). `style` names a preset from `wordart::styles()`.
 ### `set_word_art`
 - `id`: `Id`
 - `patch`: `crate::wordart::WordArtPatch`
+  - `text`: `Option<String>`
+  - `font`: `Option<String>`
+  - `bold`: `Option<bool>`
+  - `italic`: `Option<bool>`
+  - `fill`: `Option<Color>` (see Types)
+  - `gradient`: `Option<Gradient>` (see Types)
+  - `no_gradient`: `bool`
+  - `outline`: `Option<Stroke>` (see Types)
+  - `no_outline`: `bool`
+  - `warp`: `Option<Warp>` (see Types)
 
 ### `add_freeform`
 Add a Bézier shape through page points (SH-08). `smooth` makes every point smooth (curve through them). The object's rect is the bounding box of the points and handles.
@@ -78,13 +91,13 @@ Add a Bézier shape through page points (SH-08). `smooth` makes every point smoo
 - `points`: `Vec<[Length; 2]>`
 - `closed`: `bool` *(optional)*
 - `smooth`: `bool` *(optional)*
-- `fill`: `Option<Color>` *(optional)*
-- `stroke`: `Option<Stroke>` *(optional)*
-  - `color`: `Color`
+- `fill`: `Option<Color>` (see Types) *(optional)*
+- `stroke`: `Option<Stroke>` (see Types) *(optional)*
+  - `color`: `Color` (see Types)
   - `width`: `Length`
-  - `dash`: `Dash`
-  - `cap`: `LineCap`
-  - `join`: `LineJoin`
+  - `dash`: `Dash` (see Types)
+  - `cap`: `LineCap` (see Types)
+  - `join`: `LineJoin` (see Types)
 
 ### `move_path_node`
 Move point `index` to page position (x, y); its handles move with it.
@@ -106,7 +119,7 @@ Delete a point; a path keeps at least 2 points (3 when closed).
 ### `set_path_node_kind`
 - `id`: `Id`
 - `index`: `usize`
-- `kind`: `NodeKind`
+- `kind`: `NodeKind` (see Types)
 
 ### `set_business_info`
 - `info`: `BusinessInfo`
@@ -128,7 +141,7 @@ Switch the font scheme (by built-in name); "+major" / "+minor" fonts follow.
 
 ### `set_page_background`
 - `page`: `usize`
-- `color`: `Option<Color>` *(optional)*
+- `color`: `Option<Color>` (see Types) *(optional)*
 
 ### `add_master`
 - `name`: `String`
@@ -165,14 +178,14 @@ Apply `master` (or none) to the given pages (default: all pages).
 - `page`: `Option<usize>` *(optional)*
 - `master`: `Option<Id>` *(optional)*
 - `rect`: `Rect`
-- `kind`: `ShapeKind`
-- `fill`: `Option<Color>` *(optional)*
-- `stroke`: `Option<Stroke>` *(optional)*
-  - `color`: `Color`
+- `kind`: `ShapeKind` (see Types)
+- `fill`: `Option<Color>` (see Types) *(optional)*
+- `stroke`: `Option<Stroke>` (see Types) *(optional)*
+  - `color`: `Color` (see Types)
   - `width`: `Length`
-  - `dash`: `Dash`
-  - `cap`: `LineCap`
-  - `join`: `LineJoin`
+  - `dash`: `Dash` (see Types)
+  - `cap`: `LineCap` (see Types)
+  - `join`: `LineJoin` (see Types)
 
 ### `add_image`
 Picture frame. With `asset: None` this is an empty picture placeholder.
@@ -188,13 +201,13 @@ Picture frame. With `asset: None` this is an empty picture placeholder.
   - `rotation`: `Option<f64>`
   - `flip_h`: `Option<bool>`
   - `flip_v`: `Option<bool>`
-  - `wrap`: `Option<Wrap>`
+  - `wrap`: `Option<Wrap>` (see Types)
   - `alt_text`: `Option<String>`
   - `decorative`: `Option<bool>`
   - `locked`: `Option<bool>`
   - `name`: `Option<String>`
   - `layer`: `Option<Id>`
-  - `shadow`: `Option<Shadow>`
+  - `shadow`: `Option<Shadow>` (see Types)
   - `no_shadow`: `bool` — Remove the shadow.
   - `hidden`: `Option<bool>`
   - `overprint`: `Option<bool>`
@@ -214,7 +227,7 @@ Moves objects to another page (keeping their rects).
 
 ### `set_z`
 - `id`: `Id`
-- `op`: `ZOp`
+- `op`: `ZOp` (see Types)
 
 ### `set_text_frame`
 - `id`: `Id`
@@ -222,10 +235,10 @@ Moves objects to another page (keeping their rects).
   - `columns`: `Option<u32>`
   - `gutter`: `Option<Length>`
   - `insets`: `Option<Insets>`
-  - `valign`: `Option<VAlign>`
-  - `autofit`: `Option<Autofit>`
-  - `fill`: `Option<Color>`
-  - `stroke`: `Option<Stroke>`
+  - `valign`: `Option<VAlign>` (see Types)
+  - `autofit`: `Option<Autofit>` (see Types)
+  - `fill`: `Option<Color>` (see Types)
+  - `stroke`: `Option<Stroke>` (see Types)
   - `continued_on`: `Option<bool>`
   - `continued_from`: `Option<bool>`
   - `vertical`: `Option<bool>`
@@ -233,36 +246,36 @@ Moves objects to another page (keeping their rects).
 ### `set_shape`
 - `id`: `Id`
 - `patch`: `ShapePatch`
-  - `kind`: `Option<ShapeKind>`
-  - `fill`: `Option<Color>`
-  - `stroke`: `Option<Stroke>`
-  - `arrow_start`: `Option<Arrow>`
-  - `arrow_end`: `Option<Arrow>`
-  - `gradient`: `Option<Gradient>`
+  - `kind`: `Option<ShapeKind>` (see Types)
+  - `fill`: `Option<Color>` (see Types)
+  - `stroke`: `Option<Stroke>` (see Types)
+  - `arrow_start`: `Option<Arrow>` (see Types)
+  - `arrow_end`: `Option<Arrow>` (see Types)
+  - `gradient`: `Option<Gradient>` (see Types)
   - `no_fill`: `bool` — Remove the fill.
   - `no_stroke`: `bool` — Remove the stroke.
 
 ### `set_image`
 - `id`: `Id`
 - `patch`: `ImagePatch`
-  - `crop`: `Option<CropFrac>`
-  - `fit`: `Option<Fit>`
+  - `crop`: `Option<CropFrac>` (see Types)
+  - `fit`: `Option<Fit>` (see Types)
   - `asset`: `Option<Id>`
-  - `stroke`: `Option<Stroke>`
-  - `adjust`: `Option<ImageAdjust>`
-  - `mask`: `Option<ImageMask>`
+  - `stroke`: `Option<Stroke>` (see Types)
+  - `adjust`: `Option<ImageAdjust>` (see Types)
+  - `mask`: `Option<ImageMask>` (see Types)
   - `soft_edges`: `Option<Length>`
 
 ### `align_objects`
 Align objects' edges or centres. Locked objects are an error.
 - `ids`: `Vec<Id>`
-- `edge`: `AlignEdge`
-- `relative`: `AlignTo` *(optional)*
+- `edge`: `AlignEdge` (see Types)
+- `relative`: `AlignTo` (see Types) *(optional)*
 
 ### `distribute_objects`
 Space objects evenly between the outermost two (≥ 3 objects), equal gaps along `axis`.
 - `ids`: `Vec<Id>`
-- `axis`: `Axis`
+- `axis`: `Axis` (see Types)
 
 ### `group`
 - `ids`: `Vec<Id>`
@@ -282,19 +295,19 @@ Space objects evenly between the outermost two (≥ 3 objects), equal gaps along
   - `italic`: `Option<bool>`
   - `underline`: `Option<bool>`
   - `strike`: `Option<bool>`
-  - `color`: `Option<Color>`
+  - `color`: `Option<Color>` (see Types)
   - `tracking`: `Option<f64>` — Tracking in 1/1000 em (positive = looser).
   - `scale`: `Option<f64>` — Horizontal glyph scaling in percent (100 = normal).
   - `kerning`: `Option<bool>` — Font kerning (OpenType `kern`).
   - `ligatures`: `Option<bool>` — Standard ligatures (OpenType `liga`, `clig`).
   - `dlig`: `Option<bool>` — Discretionary ligatures (OpenType `dlig`).
   - `features`: `Option<Vec<String>>` — Additional OpenType feature tags, e.g. `["ss01", "onum"]`.
-  - `baseline`: `Option<Baseline>`
-  - `caps`: `Option<Caps>`
+  - `baseline`: `Option<Baseline>` (see Types)
+  - `caps`: `Option<Caps>` (see Types)
   - `lang`: `Option<String>` — BCP-47 language tag for spelling and hyphenation ("zxx" = do not proof).
-  - `link`: `Option<Link>` — Hyperlink on this run (EX-05).
-  - `field`: `Option<crate::field::Field>` — This char is a field (it must be `field::FIELD_CHAR`); see core::field.
-  - `effects`: `Option<TextEffects>` — Text effects (TY-18). `Some(empty)` removes inherited effects.
+  - `link`: `Option<Link>` (see Types) — Hyperlink on this run (EX-05).
+  - `field`: `Option<crate::field::Field>` (see Types) — This char is a field (it must be `field::FIELD_CHAR`); see core::field.
+  - `effects`: `Option<TextEffects>` (see Types) — Text effects (TY-18). `Some(empty)` removes inherited effects.
 
 ### `delete_text`
 - `target`: `Id`
@@ -320,19 +333,19 @@ Replace chars `start..end` with `text`; the new text takes the formatting of the
   - `italic`: `Option<bool>`
   - `underline`: `Option<bool>`
   - `strike`: `Option<bool>`
-  - `color`: `Option<Color>`
+  - `color`: `Option<Color>` (see Types)
   - `tracking`: `Option<f64>` — Tracking in 1/1000 em (positive = looser).
   - `scale`: `Option<f64>` — Horizontal glyph scaling in percent (100 = normal).
   - `kerning`: `Option<bool>` — Font kerning (OpenType `kern`).
   - `ligatures`: `Option<bool>` — Standard ligatures (OpenType `liga`, `clig`).
   - `dlig`: `Option<bool>` — Discretionary ligatures (OpenType `dlig`).
   - `features`: `Option<Vec<String>>` — Additional OpenType feature tags, e.g. `["ss01", "onum"]`.
-  - `baseline`: `Option<Baseline>`
-  - `caps`: `Option<Caps>`
+  - `baseline`: `Option<Baseline>` (see Types)
+  - `caps`: `Option<Caps>` (see Types)
   - `lang`: `Option<String>` — BCP-47 language tag for spelling and hyphenation ("zxx" = do not proof).
-  - `link`: `Option<Link>` — Hyperlink on this run (EX-05).
-  - `field`: `Option<crate::field::Field>` — This char is a field (it must be `field::FIELD_CHAR`); see core::field.
-  - `effects`: `Option<TextEffects>` — Text effects (TY-18). `Some(empty)` removes inherited effects.
+  - `link`: `Option<Link>` (see Types) — Hyperlink on this run (EX-05).
+  - `field`: `Option<crate::field::Field>` (see Types) — This char is a field (it must be `field::FIELD_CHAR`); see core::field.
+  - `effects`: `Option<TextEffects>` (see Types) — Text effects (TY-18). `Some(empty)` removes inherited effects.
 
 ### `clear_char_format`
 Remove run overrides (keep character style unless `keep_style` is false).
@@ -346,16 +359,16 @@ Remove run overrides (keep character style unless `keep_style` is false).
 - `end`: `Option<usize>` *(optional)*
 - `attrs`: `ParaAttrs`
   - `style`: `Option<Id>` — Paragraph style (only meaningful on paragraphs, not inside style definitions).
-  - `align`: `Option<Align>`
-  - `line_spacing`: `Option<LineSpacing>`
+  - `align`: `Option<Align>` (see Types)
+  - `line_spacing`: `Option<LineSpacing>` (see Types)
   - `space_before`: `Option<Length>`
   - `space_after`: `Option<Length>`
   - `indent_left`: `Option<Length>`
   - `indent_right`: `Option<Length>`
   - `indent_first`: `Option<Length>` — First-line indent relative to `indent_left`; negative for hanging indents.
-  - `tabs`: `Option<Vec<TabStop>>`
-  - `list`: `Option<ListStyle>`
-  - `drop_cap`: `Option<DropCap>`
+  - `tabs`: `Option<Vec<TabStop>>` (see Types)
+  - `list`: `Option<ListStyle>` (see Types)
+  - `drop_cap`: `Option<DropCap>` (see Types)
   - `hyphenate`: `Option<bool>`
   - `hyphen_zone`: `Option<Length>` — Hyphenation zone: only hyphenate if the line would otherwise be this much short.
   - `keep_with_next`: `Option<bool>`
@@ -376,20 +389,20 @@ Break the chain after `frame`. Frames after it get a new, empty story; the text 
 ### `define_para_style`
 Create a paragraph style, or update the one with this name.
 - `name`: `String`
-- `based_on`: `Option<StyleRef>` *(optional)*
-- `next`: `Option<StyleRef>` *(optional)*
+- `based_on`: `Option<StyleRef>` (see Types) *(optional)*
+- `next`: `Option<StyleRef>` (see Types) *(optional)*
 - `para`: `ParaAttrs` *(optional)*
   - `style`: `Option<Id>` — Paragraph style (only meaningful on paragraphs, not inside style definitions).
-  - `align`: `Option<Align>`
-  - `line_spacing`: `Option<LineSpacing>`
+  - `align`: `Option<Align>` (see Types)
+  - `line_spacing`: `Option<LineSpacing>` (see Types)
   - `space_before`: `Option<Length>`
   - `space_after`: `Option<Length>`
   - `indent_left`: `Option<Length>`
   - `indent_right`: `Option<Length>`
   - `indent_first`: `Option<Length>` — First-line indent relative to `indent_left`; negative for hanging indents.
-  - `tabs`: `Option<Vec<TabStop>>`
-  - `list`: `Option<ListStyle>`
-  - `drop_cap`: `Option<DropCap>`
+  - `tabs`: `Option<Vec<TabStop>>` (see Types)
+  - `list`: `Option<ListStyle>` (see Types)
+  - `drop_cap`: `Option<DropCap>` (see Types)
   - `hyphenate`: `Option<bool>`
   - `hyphen_zone`: `Option<Length>` — Hyphenation zone: only hyphenate if the line would otherwise be this much short.
   - `keep_with_next`: `Option<bool>`
@@ -405,23 +418,23 @@ Create a paragraph style, or update the one with this name.
   - `italic`: `Option<bool>`
   - `underline`: `Option<bool>`
   - `strike`: `Option<bool>`
-  - `color`: `Option<Color>`
+  - `color`: `Option<Color>` (see Types)
   - `tracking`: `Option<f64>` — Tracking in 1/1000 em (positive = looser).
   - `scale`: `Option<f64>` — Horizontal glyph scaling in percent (100 = normal).
   - `kerning`: `Option<bool>` — Font kerning (OpenType `kern`).
   - `ligatures`: `Option<bool>` — Standard ligatures (OpenType `liga`, `clig`).
   - `dlig`: `Option<bool>` — Discretionary ligatures (OpenType `dlig`).
   - `features`: `Option<Vec<String>>` — Additional OpenType feature tags, e.g. `["ss01", "onum"]`.
-  - `baseline`: `Option<Baseline>`
-  - `caps`: `Option<Caps>`
+  - `baseline`: `Option<Baseline>` (see Types)
+  - `caps`: `Option<Caps>` (see Types)
   - `lang`: `Option<String>` — BCP-47 language tag for spelling and hyphenation ("zxx" = do not proof).
-  - `link`: `Option<Link>` — Hyperlink on this run (EX-05).
-  - `field`: `Option<crate::field::Field>` — This char is a field (it must be `field::FIELD_CHAR`); see core::field.
-  - `effects`: `Option<TextEffects>` — Text effects (TY-18). `Some(empty)` removes inherited effects.
+  - `link`: `Option<Link>` (see Types) — Hyperlink on this run (EX-05).
+  - `field`: `Option<crate::field::Field>` (see Types) — This char is a field (it must be `field::FIELD_CHAR`); see core::field.
+  - `effects`: `Option<TextEffects>` (see Types) — Text effects (TY-18). `Some(empty)` removes inherited effects.
 
 ### `define_char_style`
 - `name`: `String`
-- `based_on`: `Option<StyleRef>` *(optional)*
+- `based_on`: `Option<StyleRef>` (see Types) *(optional)*
 - `chars`: `CharAttrs` *(optional)*
   - `style`: `Option<Id>` — Character style applied to the run (only meaningful on runs, not inside style definitions).
   - `font`: `Option<String>`
@@ -430,41 +443,41 @@ Create a paragraph style, or update the one with this name.
   - `italic`: `Option<bool>`
   - `underline`: `Option<bool>`
   - `strike`: `Option<bool>`
-  - `color`: `Option<Color>`
+  - `color`: `Option<Color>` (see Types)
   - `tracking`: `Option<f64>` — Tracking in 1/1000 em (positive = looser).
   - `scale`: `Option<f64>` — Horizontal glyph scaling in percent (100 = normal).
   - `kerning`: `Option<bool>` — Font kerning (OpenType `kern`).
   - `ligatures`: `Option<bool>` — Standard ligatures (OpenType `liga`, `clig`).
   - `dlig`: `Option<bool>` — Discretionary ligatures (OpenType `dlig`).
   - `features`: `Option<Vec<String>>` — Additional OpenType feature tags, e.g. `["ss01", "onum"]`.
-  - `baseline`: `Option<Baseline>`
-  - `caps`: `Option<Caps>`
+  - `baseline`: `Option<Baseline>` (see Types)
+  - `caps`: `Option<Caps>` (see Types)
   - `lang`: `Option<String>` — BCP-47 language tag for spelling and hyphenation ("zxx" = do not proof).
-  - `link`: `Option<Link>` — Hyperlink on this run (EX-05).
-  - `field`: `Option<crate::field::Field>` — This char is a field (it must be `field::FIELD_CHAR`); see core::field.
-  - `effects`: `Option<TextEffects>` — Text effects (TY-18). `Some(empty)` removes inherited effects.
+  - `link`: `Option<Link>` (see Types) — Hyperlink on this run (EX-05).
+  - `field`: `Option<crate::field::Field>` (see Types) — This char is a field (it must be `field::FIELD_CHAR`); see core::field.
+  - `effects`: `Option<TextEffects>` (see Types) — Text effects (TY-18). `Some(empty)` removes inherited effects.
 
 ### `delete_style`
-- `style`: `StyleRef`
+- `style`: `StyleRef` (see Types)
 
 ### `apply_para_style`
 - `target`: `Id`
 - `start`: `Option<usize>` *(optional)*
 - `end`: `Option<usize>` *(optional)*
-- `style`: `Option<StyleRef>` *(optional)*
+- `style`: `Option<StyleRef>` (see Types) *(optional)*
 - `clear_overrides`: `bool` *(optional)* — Also clear paragraph and run overrides.
 
 ### `apply_char_style`
 - `target`: `Id`
 - `start`: `Option<usize>` *(optional)*
 - `end`: `Option<usize>` *(optional)*
-- `style`: `Option<StyleRef>` *(optional)*
+- `style`: `Option<StyleRef>` (see Types) *(optional)*
 
 ### `add_guide`
 Ruler guide on a page or a master. Created id is the guide id.
 - `page`: `Option<usize>` *(optional)*
 - `master`: `Option<Id>` *(optional)*
-- `orientation`: `Orientation`
+- `orientation`: `Orientation` (see Types)
 - `pos`: `Length`
 
 ### `move_guide`
@@ -510,7 +523,7 @@ Accessibility reading order of the given page's objects (others follow in z-orde
 Insert a field character at `at` (default end).
 - `target`: `Id`
 - `at`: `Option<usize>` *(optional)*
-- `field`: `crate::field::Field`
+- `field`: `crate::field::Field` (see Types)
 
 ### `insert_merge_field`
 Insert a mail-merge field (data-source column name) at `at` (default end).
@@ -526,7 +539,7 @@ Make a picture frame a mail-merge picture field (None clears it).
 ### `set_section`
 - `page`: `usize`
 - `start_at`: `u32` *(optional)*
-- `format`: `NumberFormat` *(optional)*
+- `format`: `NumberFormat` (see Types) *(optional)*
 
 ### `remove_section`
 - `page`: `usize`
@@ -541,7 +554,7 @@ No fields.
 ### `insert_special_char`
 - `target`: `Id`
 - `at`: `Option<usize>` *(optional)*
-- `char`: `SpecialChar`
+- `char`: `SpecialChar` (see Types)
 
 ### `add_shape_text`
 Give a shape a story so it holds text; created id is the story.
@@ -605,8 +618,11 @@ Fill and borders for a block of cells.
 - `col`: `usize`
 - `rows`: `usize` *(optional)*
 - `cols`: `usize` *(optional)*
-- `fill`: `Option<Color>` *(optional)*
+- `fill`: `Option<Color>` (see Types) *(optional)*
 - `borders`: `Option<crate::table::BorderSpec>` *(optional)*
+  - `all`: `Option<BorderValue>` (see Types)
+  - `outer`: `Option<BorderValue>` (see Types)
+  - `inner`: `Option<BorderValue>` (see Types)
 
 ### `apply_table_format`
 Apply a named preset table format (see `crate::table::FORMATS`).
@@ -695,9 +711,9 @@ Flow overflow text: add pages with linked frames (same position as `frame`) unti
 - `options`: `PdfOptions` *(optional)*
   - `bleed`: `bool` — Include the document bleed around each page.
   - `crop_marks`: `bool` — Draw crop marks outside the trim (and bleed).
-  - `imposition`: `Imposition`
+  - `imposition`: `Imposition` (see Types)
   - `pages`: `Option<Vec<usize>>` — 0-based page indices to export (default all).
-  - `standard`: `Option<PdfStandard>` — PDF/X-4 or PDF/UA-1 output.
+  - `standard`: `Option<PdfStandard>` (see Types) — PDF/X-4 or PDF/UA-1 output.
   - `separations`: `bool` — Colour separations (PR-08): one page per ink plate (see `separations.rs`).
 
 ### `export_png`
@@ -710,7 +726,7 @@ Export one page as an image file (PNG or JPEG) at `dpi`, white background, trim 
 - `path`: `String`
 - `page`: `usize`
 - `dpi`: `f64` *(optional)*
-- `format`: `ImageFormat` *(optional)*
+- `format`: `ImageFormat` (see Types) *(optional)*
 - `quality`: `u8` *(optional)* — JPEG quality 1–100.
 
 ### `set_snapping`
@@ -719,7 +735,7 @@ Turn snapping on or off (default on).
 
 ### `set_units`
 Display unit for geometry shown to the user.
-- `units`: `Units`
+- `units`: `Units` (see Types)
 
 ### `set_geometry`
 Set geometry from text in any unit ("2in", "50 mm", "6p", "12pt"); omitted fields keep their value.
@@ -794,7 +810,7 @@ Show record `record` (index into the filtered, sorted list) in place of the fiel
 ### `set_merge_filter`
 Filter the recipient list; with no field the filter is cleared.
 - `field`: `Option<String>` *(optional)*
-- `op`: `Option<newpub_core::FilterOp>` *(optional)*
+- `op`: `Option<newpub_core::FilterOp>` (see Types) *(optional)*
 - `value`: `Option<String>` *(optional)*
 
 ### `set_merge_sort`
@@ -811,10 +827,14 @@ Export one copy of the publication per record to a single PDF.
 - `options`: `Option<PdfOptions>` *(optional)*
   - `bleed`: `bool` — Include the document bleed around each page.
   - `crop_marks`: `bool` — Draw crop marks outside the trim (and bleed).
-  - `imposition`: `Imposition`
+  - `imposition`: `Imposition` (see Types)
   - `pages`: `Option<Vec<usize>>` — 0-based page indices to export (default all).
-  - `standard`: `Option<PdfStandard>` — PDF/X-4 or PDF/UA-1 output.
+  - `standard`: `Option<PdfStandard>` (see Types) — PDF/X-4 or PDF/UA-1 output.
   - `separations`: `bool` — Colour separations (PR-08): one page per ink plate (see `separations.rs`).
+
+### `merge_to_publication`
+Replace the publication with one copy of its pages per record, fields replaced by text. Undoable.
+No fields.
 
 ### `save_building_block`
 Save the objects as a user building block in the library (replaces a block of the same name).
@@ -851,6 +871,13 @@ Catalog merge (MM-05): the first item's cell on `page`; objects lying inside it 
 - `down`: `u32`
 - `gap`: `Length` *(optional)*
 
+### `clear_catalog_area`
+No fields.
+
+### `save_business_info_set`
+Save the publication's business information set to the user library (by its name).
+No fields.
+
 ### `apply_business_info_set`
 Apply a saved set to the publication (undoable).
 - `name`: `String`
@@ -866,19 +893,19 @@ Replace all matches of text and/or formatting (FR-03). `find`/`replace` understa
   - `italic`: `Option<bool>`
   - `underline`: `Option<bool>`
   - `strike`: `Option<bool>`
-  - `color`: `Option<Color>`
+  - `color`: `Option<Color>` (see Types)
   - `tracking`: `Option<f64>` — Tracking in 1/1000 em (positive = looser).
   - `scale`: `Option<f64>` — Horizontal glyph scaling in percent (100 = normal).
   - `kerning`: `Option<bool>` — Font kerning (OpenType `kern`).
   - `ligatures`: `Option<bool>` — Standard ligatures (OpenType `liga`, `clig`).
   - `dlig`: `Option<bool>` — Discretionary ligatures (OpenType `dlig`).
   - `features`: `Option<Vec<String>>` — Additional OpenType feature tags, e.g. `["ss01", "onum"]`.
-  - `baseline`: `Option<Baseline>`
-  - `caps`: `Option<Caps>`
+  - `baseline`: `Option<Baseline>` (see Types)
+  - `caps`: `Option<Caps>` (see Types)
   - `lang`: `Option<String>` — BCP-47 language tag for spelling and hyphenation ("zxx" = do not proof).
-  - `link`: `Option<Link>` — Hyperlink on this run (EX-05).
-  - `field`: `Option<crate::field::Field>` — This char is a field (it must be `field::FIELD_CHAR`); see core::field.
-  - `effects`: `Option<TextEffects>` — Text effects (TY-18). `Some(empty)` removes inherited effects.
+  - `link`: `Option<Link>` (see Types) — Hyperlink on this run (EX-05).
+  - `field`: `Option<crate::field::Field>` (see Types) — This char is a field (it must be `field::FIELD_CHAR`); see core::field.
+  - `effects`: `Option<TextEffects>` (see Types) — Text effects (TY-18). `Some(empty)` removes inherited effects.
 - `replace`: `Option<String>` *(optional)*
 - `replace_format`: `Option<CharAttrs>` *(optional)*
   - `style`: `Option<Id>` — Character style applied to the run (only meaningful on runs, not inside style definitions).
@@ -888,19 +915,19 @@ Replace all matches of text and/or formatting (FR-03). `find`/`replace` understa
   - `italic`: `Option<bool>`
   - `underline`: `Option<bool>`
   - `strike`: `Option<bool>`
-  - `color`: `Option<Color>`
+  - `color`: `Option<Color>` (see Types)
   - `tracking`: `Option<f64>` — Tracking in 1/1000 em (positive = looser).
   - `scale`: `Option<f64>` — Horizontal glyph scaling in percent (100 = normal).
   - `kerning`: `Option<bool>` — Font kerning (OpenType `kern`).
   - `ligatures`: `Option<bool>` — Standard ligatures (OpenType `liga`, `clig`).
   - `dlig`: `Option<bool>` — Discretionary ligatures (OpenType `dlig`).
   - `features`: `Option<Vec<String>>` — Additional OpenType feature tags, e.g. `["ss01", "onum"]`.
-  - `baseline`: `Option<Baseline>`
-  - `caps`: `Option<Caps>`
+  - `baseline`: `Option<Baseline>` (see Types)
+  - `caps`: `Option<Caps>` (see Types)
   - `lang`: `Option<String>` — BCP-47 language tag for spelling and hyphenation ("zxx" = do not proof).
-  - `link`: `Option<Link>` — Hyperlink on this run (EX-05).
-  - `field`: `Option<crate::field::Field>` — This char is a field (it must be `field::FIELD_CHAR`); see core::field.
-  - `effects`: `Option<TextEffects>` — Text effects (TY-18). `Some(empty)` removes inherited effects.
+  - `link`: `Option<Link>` (see Types) — Hyperlink on this run (EX-05).
+  - `field`: `Option<crate::field::Field>` (see Types) — This char is a field (it must be `field::FIELD_CHAR`); see core::field.
+  - `effects`: `Option<TextEffects>` (see Types) — Text effects (TY-18). `Some(empty)` removes inherited effects.
 - `match_case`: `bool` *(optional)*
 - `whole_word`: `bool` *(optional)*
 
@@ -1134,19 +1161,19 @@ Matches of text and/or formatting (FR-03), same shape as Find: `[{story, start, 
   - `italic`: `Option<bool>`
   - `underline`: `Option<bool>`
   - `strike`: `Option<bool>`
-  - `color`: `Option<Color>`
+  - `color`: `Option<Color>` (see Types)
   - `tracking`: `Option<f64>` — Tracking in 1/1000 em (positive = looser).
   - `scale`: `Option<f64>` — Horizontal glyph scaling in percent (100 = normal).
   - `kerning`: `Option<bool>` — Font kerning (OpenType `kern`).
   - `ligatures`: `Option<bool>` — Standard ligatures (OpenType `liga`, `clig`).
   - `dlig`: `Option<bool>` — Discretionary ligatures (OpenType `dlig`).
   - `features`: `Option<Vec<String>>` — Additional OpenType feature tags, e.g. `["ss01", "onum"]`.
-  - `baseline`: `Option<Baseline>`
-  - `caps`: `Option<Caps>`
+  - `baseline`: `Option<Baseline>` (see Types)
+  - `caps`: `Option<Caps>` (see Types)
   - `lang`: `Option<String>` — BCP-47 language tag for spelling and hyphenation ("zxx" = do not proof).
-  - `link`: `Option<Link>` — Hyperlink on this run (EX-05).
-  - `field`: `Option<crate::field::Field>` — This char is a field (it must be `field::FIELD_CHAR`); see core::field.
-  - `effects`: `Option<TextEffects>` — Text effects (TY-18). `Some(empty)` removes inherited effects.
+  - `link`: `Option<Link>` (see Types) — Hyperlink on this run (EX-05).
+  - `field`: `Option<crate::field::Field>` (see Types) — This char is a field (it must be `field::FIELD_CHAR`); see core::field.
+  - `effects`: `Option<TextEffects>` (see Types) — Text effects (TY-18). `Some(empty)` removes inherited effects.
 - `match_case`: `bool` *(optional)*
 - `whole_word`: `bool` *(optional)*
 
@@ -1254,3 +1281,402 @@ Autosave files in a directory.
 ### `text_bounds`
 Bounding box of all glyphs in a frame, page coordinates: `{x, y, w, h}` or null.
 - `frame`: `Id`
+
+## Types
+
+Enums and structs used by the fields above, as they deserialize from JSON. Unit enum variants are
+strings; tagged enums are objects carrying the tag field; untagged enums accept any of their forms.
+Struct fields marked *optional* may be omitted.
+
+### `Align`
+Enum.
+- `"left"`
+- `"center"`
+- `"right"`
+- `"justify"`
+- `"justify_all"` — Justify including the last line.
+
+### `AlignEdge`
+Enum.
+- `"left"`
+- `"center"`
+- `"right"`
+- `"top"`
+- `"middle"`
+- `"bottom"`
+
+### `AlignTo`
+Enum.
+What `align_objects` aligns against.
+- `"selection"` — The bounding box of the given objects.
+- `"page"` — The page edges.
+- `"margins"` — The page margin guides.
+
+### `Arrow`
+Enum.
+- `"none"`
+- `"triangle"`
+- `"open"`
+- `"stealth"`
+- `"diamond"`
+- `"oval"`
+
+### `Autofit`
+Enum.
+- `"none"`
+- `"shrink_on_overflow"` — Shrink text size until the story fits.
+- `"best_fit"` — Grow or shrink text to fill the frame.
+- `"grow_frame"` — Grow the frame height to fit the text.
+
+### `Axis`
+Enum.
+- `"horizontal"`
+- `"vertical"`
+
+### `Baseline`
+Enum.
+- `"normal"`
+- `"superscript"`
+- `"subscript"`
+
+### `BezierNode`
+Struct.
+A Bézier path point with optional handles (rect-relative unit coordinates).
+- `at`: `[f64; 2]`
+- `ctrl_in`: `Option<[f64; 2]>` *(optional)* — Handle controlling the curve arriving at this point.
+- `ctrl_out`: `Option<[f64; 2]>` *(optional)* — Handle controlling the curve leaving this point.
+- `smooth`: `bool` *(optional)*
+
+### `BorderValue`
+Enum (untagged): any one of the forms below.
+- `String` — "none"
+- `Stroke`
+
+### `Caps`
+Enum.
+- `"normal"`
+- `"small_caps"`
+- `"all_caps"`
+
+### `CaptionPosition`
+Enum.
+- `"below"`
+- `"above"`
+- `"overlay"` — Over the bottom of the picture.
+
+### `Color`
+Enum, tagged by `"space"`.
+- `{"space": "rgb", "r": u8, "g": u8, "b": u8, "a": f32}` — sRGB components 0–255 and alpha 0–1.
+- `{"space": "cmyk", "c": f32, "m": f32, "y": f32, "k": f32, "a": f32}` — Process CMYK, components 0–1.
+- `{"space": "spot", "name": String, "c": f32, "m": f32, "y": f32, "k": f32, "tint": f32, "a": f32}` — Named spot colour with a CMYK alternate and a tint 0–1.
+- `{"space": "scheme", "slot": SchemeSlot, "a": f32}` — A slot of the publication's colour scheme (BB-04); written `{scheme: accent1}` for short.
+  - `slot`: `SchemeSlot` (see Types)
+Also accepts a string: `"#rrggbb"`, `"#rrggbbaa"`, `"cmyk(c,m,y,k)"` with 0–100 components, or `black`, `white`, `red`, `green`, `blue`, `none`/`transparent`; and the short scheme form `{"scheme": "accent1"}` (optional `"a"`). In the object forms `a` and `tint` may be omitted and default to 1.
+
+### `CropFrac`
+Struct.
+- `left`: `f64` *(optional)*
+- `top`: `f64` *(optional)*
+- `right`: `f64` *(optional)*
+- `bottom`: `f64` *(optional)*
+
+### `Dash`
+Enum.
+- `"solid"`
+- `"dash"`
+- `"dot"`
+- `"dash_dot"`
+- `"long_dash"`
+
+### `DateFormat`
+Enum.
+How a date field shows the date.
+- `"long"` — "May 1, 2026"
+- `"short"` — "5/1/2026"
+- `"iso"` — "2026-05-01"
+- `"day_month_year"` — "1 May 2026"
+
+### `DropCap`
+Struct.
+- `lines`: `u32` — Number of lines the drop cap spans.
+- `chars`: `u32` *(optional)* — Number of characters dropped.
+- `font`: `Option<String>` *(optional)*
+- `color`: `Option<Color>` (see Types) *(optional)*
+
+### `Field`
+Enum.
+- `"page_number"` — Label of the page showing the field (respects sections).
+- `"page_count"` — Total number of pages.
+- `"section_page_count"` — Number of pages in the current section.
+- `{"merge": String}` — Mail-merge field by column name.
+- `{"business": String}` — Business information field by key (BB-05), e.g. `organization`, `phone`.
+- `{"date": DateFormat}` — Today's date when the publication is laid out, printed or exported.
+
+### `FilterOp`
+Enum.
+- `"equals"`
+- `"not_equals"`
+- `"contains"`
+- `"is_blank"`
+- `"is_not_blank"`
+
+### `Fit`
+Enum.
+- `"stretch"` — Image scaled to the frame exactly (the frame keeps the image's aspect on insert).
+- `"fit"` — Whole image visible, letterboxed.
+- `"fill"` — Frame filled, excess cropped.
+
+### `Gradient`
+Struct.
+- `kind`: `GradientKind` (see Types) *(optional)*
+- `angle`: `f64` *(optional)* — Degrees; 0 = left to right, 90 = top to bottom (linear only).
+- `stops`: `Vec<GradientStop>` (see Types)
+
+### `GradientKind`
+Enum.
+- `"linear"`
+- `"radial"`
+
+### `GradientStop`
+Struct.
+- `at`: `f64` — Position 0–1 along the gradient.
+- `color`: `Color` (see Types)
+
+### `ImageAdjust`
+Struct (every field optional).
+- `greyscale`: `bool`
+- `brightness`: `f64` — −1..1: c' = c + (255 − c)·b for b > 0, c·(1 + b) for b < 0.
+- `contrast`: `f64` — −1..1: c' = 128 + (c − 128)·(1 + k).
+- `recolor`: `Option<Color>` (see Types) — Recolour: luminance L (0–1) maps to the colour scaled by L.
+
+### `ImageFormat`
+Enum.
+- `"png"`
+- `"jpeg"`
+
+### `ImageMask`
+Enum.
+- `"rect"`
+- `"ellipse"`
+- `"round_rect"`
+
+### `Imposition`
+Enum.
+- `"none"` — One page per PDF page.
+- `"booklet"` — Saddle-stitch booklet: two pages side by side per sheet side, in fold order.
+- `{"n_up": {"sheet_width": Length, "sheet_height": Length, "gap": Length, "repeat": bool}}` — Several pages per sheet in a grid (PR-04), see `impose.rs`.
+  - `gap`: `Length` *(optional)*
+  - `repeat`: `bool` *(optional)* — Repeat each page across a whole sheet (business cards) instead of filling slots in order.
+- `"document_sheet"` — The document's own sheet layout (`Document.sheet`, PG-11): every page repeated across one sheet, items at `left + c × (page width + col_gap)`, `top + r × (page height + row_gap)`. Error without a sheet.
+
+### `LineCap`
+Enum.
+- `"butt"`
+- `"round"`
+- `"square"`
+
+### `LineJoin`
+Enum.
+- `"miter"`
+- `"round"`
+- `"bevel"`
+
+### `LineSpacing`
+Enum.
+- `{"multiple": f64}` — Multiple of the font's natural line height (1.0 = single).
+- `{"exactly": Length}` — Exact baseline-to-baseline distance.
+- `{"at_least": Length}` — At least this distance.
+
+### `Link`
+Enum.
+- `{"url": String}`
+- `{"page": Id}` — Target page id.
+
+### `ListStyle`
+Enum, tagged by `"kind"`.
+- `{"kind": "none"}`
+- `{"kind": "bullet", "bullet": char, "indent": Length}`
+  - `bullet`: `char` *(optional)*
+  - `indent`: `Length` *(optional)*
+- `{"kind": "numbered", "format": NumberFormat, "start": u32, "suffix": String, "indent": Length}`
+  - `format`: `NumberFormat` (see Types) *(optional)*
+  - `start`: `u32` *(optional)*
+  - `suffix`: `String` *(optional)* — Text after the number, e.g. "." or ")".
+  - `indent`: `Length` *(optional)*
+
+### `NodeKind`
+Enum.
+- `"corner"` — No handles: straight segments meet at an angle.
+- `"smooth"` — Symmetric handles along the direction from the previous to the next point (a third of each distance).
+
+### `NumberFormat`
+Enum.
+- `"decimal"`
+- `"lower_alpha"`
+- `"upper_alpha"`
+- `"lower_roman"`
+- `"upper_roman"`
+
+### `Orientation`
+Enum.
+- `"horizontal"`
+- `"vertical"`
+
+### `PdfStandard`
+Enum.
+Output standard (EX-03, AX-03), applied by `standards.rs`.
+- `"pdf_x4"`
+- `"pdf_ua1"`
+
+### `SchemeSlot`
+Enum.
+- `"main"` — Main (text) colour.
+- `"accent1"`
+- `"accent2"`
+- `"accent3"`
+- `"accent4"`
+- `"accent5"`
+- `"hyperlink"`
+- `"followed_hyperlink"`
+
+### `Shadow`
+Struct.
+Drop shadow behind an object (SH-07, IM-07).
+- `dx`: `Length` *(optional)*
+- `dy`: `Length` *(optional)*
+- `blur`: `Length` *(optional)*
+- `color`: `Color` (see Types)
+
+### `ShapeKind`
+Enum.
+- `"rect"`
+- `{"round_rect": {"radius": Length}}`
+- `"ellipse"`
+- `"line"` — Straight line from the rect's top-left to bottom-right (or flipped via `flip_*`).
+- `"triangle"`
+- `{"star": {"points": u32, "inner": f64}}`
+- `{"polygon": {"sides": u32}}`
+- `"arrow"`
+- `{"callout": {"tail": [f64; 2]}}` — Speech-bubble rectangle with a tail ending at `tail` (rect-relative; may lie outside 0..1).
+- `{"path": {"points": Vec<[f64; 2]>, "closed": bool}}` — Free-form path in rect-relative unit coordinates (0..1).
+- `{"bezier": {"nodes": Vec<BezierNode>, "closed": bool}}` — Bézier path (SH-08) in rect-relative unit coordinates (0..1); see core::freeform.
+  - `nodes`: `Vec<BezierNode>` (see Types)
+  - `closed`: `bool` *(optional)*
+
+### `SpecialChar`
+Enum.
+- `"non_breaking_space"`
+- `"em_space"`
+- `"en_space"`
+- `"em_dash"`
+- `"en_dash"`
+- `"optional_hyphen"`
+- `"non_breaking_hyphen"`
+- `"line_break"`
+- `"tab"`
+
+### `Stroke`
+Struct.
+- `color`: `Color` (see Types)
+- `width`: `Length` *(optional)*
+- `dash`: `Dash` (see Types) *(optional)*
+- `cap`: `LineCap` (see Types) *(optional)*
+- `join`: `LineJoin` (see Types) *(optional)*
+
+### `StyleRef`
+Enum (untagged): any one of the forms below.
+Reference to a style by id or by name.
+- `Id`
+- `String`
+
+### `TabAlign`
+Enum.
+- `"left"`
+- `"center"`
+- `"right"`
+- `"decimal"`
+
+### `TabStop`
+Struct.
+- `pos`: `Length`
+- `align`: `TabAlign` (see Types) *(optional)*
+- `leader`: `Option<char>` *(optional)* — Leader character, e.g. "." or "_".
+
+### `TextEffects`
+Struct (every field optional).
+Text effects drawn with the glyphs (TY-18). Lengths in points.
+- `shadow`: `Option<TextShadow>` (see Types) — Copy of the glyphs drawn behind them, offset by (dx, dy), optionally blurred.
+- `outline`: `Option<TextOutline>` (see Types) — Stroke around each glyph outline (centred on the outline).
+- `glow`: `Option<TextGlow>` (see Types) — Soft halo around the glyphs: opacity 0.8 at the outline falling to 0 at `radius`.
+- `reflection`: `Option<f64>` — Mirror image below the baseline (gap at most 1 pt) whose opacity starts at this value (0–1) and fades to 0 over the glyph height.
+- `emboss`: `bool` — Raised look: a 1 pt dark copy offset down-right and a light copy offset up-left behind the glyphs.
+- `engrave`: `bool` — Sunken look: the emboss copies swapped (light down-right, dark up-left).
+
+### `TextGlow`
+Struct.
+- `radius`: `f64`
+- `color`: `Color` (see Types)
+
+### `TextOutline`
+Struct.
+- `width`: `f64`
+- `color`: `Color` (see Types)
+
+### `TextShadow`
+Struct.
+- `dx`: `f64`
+- `dy`: `f64`
+- `blur`: `f64` *(optional)*
+- `color`: `Color` (see Types)
+
+### `Units`
+Enum.
+- `"in"`
+- `"cm"`
+- `"mm"`
+- `"pt"`
+- `"pi"`
+
+### `VAlign`
+Enum.
+- `"top"`
+- `"middle"`
+- `"bottom"`
+
+### `Warp`
+Enum.
+How the text is bent inside its rect (rect-relative; `h` = rect height).
+- `none`: one line, glyphs stretched to fill the whole rect.
+- `arch_up`: glyph height 0.6 h; the baseline is an upward arc — the middle glyphs' tops touch the rect top,
+the end glyphs' bottoms touch the rect bottom.
+- `arch_down`: the mirror: end glyphs' tops at the rect top, the middle glyphs' bottoms at the rect bottom.
+- `wave`: glyph height 0.7 h; the baseline is one sine period over the width (amplitude 0.15 h).
+- `slant_up` / `slant_down`: glyph height 0.7 h; the baseline rises / falls linearly across the width.
+- `inflate`: glyph heights grow from 0.5 h at the ends to h in the middle, vertically centred.
+- `"none"`
+- `"arch_up"`
+- `"arch_down"`
+- `"wave"`
+- `"slant_up"`
+- `"slant_down"`
+- `"inflate"`
+
+### `Wrap`
+Struct.
+- `mode`: `WrapMode` (see Types) *(optional)*
+- `distance`: `Length` *(optional)* — Distance between the object and wrapped text.
+
+### `WrapMode`
+Enum.
+- `"none"` — Text ignores the object.
+- `"square"` — Text wraps around the bounding box.
+- `"tight"` — Text wraps around the object outline.
+- `"top_bottom"` — Text stops above and resumes below the object.
+- `"through"` — Like tight but text may fill open areas inside the shape.
+
+### `ZOp`
+Enum.
+- `"front"`
+- `"back"`
+- `"forward"`
+- `"backward"`

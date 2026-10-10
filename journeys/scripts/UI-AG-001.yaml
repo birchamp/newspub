@@ -43,8 +43,22 @@ steps:
   - expect: {query: {q: page_count}, equals: 1}
   - click: {label: "Redo"}
   - expect: {query: {q: page_count}, equals: 2}
-  # the agent looks at the page and saves; the window's title state follows
+  # the agent looks at the page; it may not replace the person's unsaved work
   - agent: {tool: newpub_render_page, args: {page: 0}, path: /width, check: {equals: 612}}
+  - expect: {query: {q: session}, path: /dirty, equals: true}
+  - agent: {tool: newpub_new, args: {}, error: true, path: /text, check: {contains: "unsaved changes"}}
+  - agent: {tool: newpub_action, args: {action: new_document, args: {width: "8.5in", height: "11in"}}, error: true, path: /text, check: {contains: "unsaved changes"}}
+  - expect: {query: {q: page_count}, equals: 2}
+  - expect: {query: {q: story_text, target: $a}, equals: "Draft by a person, finished by an agent"}
+  # once saved, a new publication is fine: the view goes back to page 1 with nothing selected
   - agent: {tool: newpub_save, args: {path: "agent-ui.newspub"}, path: /ok, check: {equals: true}}
   - expect: {query: {q: session}, path: /dirty, equals: false}
   - expect_roundtrip: {}
+  - click: {label: "Page 2"}
+  - expect: {query: {q: view}, path: /page, equals: 1}
+  - agent: {tool: newpub_new, args: {template: flyer}, path: /page_count, check: {gt: 0}}
+  - expect: {query: {q: view}, path: /page, equals: 0}
+  - expect: {query: {q: view}, path: /selection, len: 0}
+  - expect_ui: {label: "Agent: new publication"}
+  - agent: {tool: newpub_open, args: {path: "agent-ui.newspub"}, path: /page_count, check: {equals: 2}}
+  - expect: {query: {q: story_text, target: $a}, equals: "Draft by a person, finished by an agent"}

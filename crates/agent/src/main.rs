@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, bail};
 use clap::{Parser, Subcommand};
 use newpub_engine::Session;
 use newpub_engine::layout::FontStore;
@@ -32,8 +32,8 @@ enum Cmd {
         /// The publication to open first (omit to start blank).
         #[arg(long)]
         file: Option<PathBuf>,
-        /// Save afterwards, to this path or (with no value) back to --file.
-        #[arg(long, num_args = 0..=1, default_missing_value = "")]
+        /// Save afterwards: `--save` writes back to --file, `--save=other.newspub` elsewhere.
+        #[arg(long, require_equals = true, num_args = 0..=1, default_missing_value = "")]
         save: Option<String>,
         /// Actions, each a JSON object with a "cmd" field.
         actions: Vec<String>,
@@ -73,16 +73,22 @@ fn session(bundled: bool) -> Session {
 
 fn open(s: &mut Session, file: &Option<PathBuf>) -> Result<()> {
     if let Some(f) = file {
-        let r = newpub_agent::call_tool(s, "newpub_open", &serde_json::json!({"path": f.to_string_lossy()}));
+        let r = tool(s, "newpub_open", serde_json::json!({"path": f.to_string_lossy()}))?;
         if r.is_error {
-            return Err(anyhow!("{}", text_of(&r)));
+            return Err(anyhow!("{}", r.text_of()));
         }
     }
     Ok(())
 }
 
-fn text_of(r: &newpub_agent::ToolResult) -> String {
-    r.content.iter().filter_map(|c| c.get("text").and_then(|t| t.as_str())).collect::<Vec<_>>().join("\n")
+/// Runs a tool; a failure is printed to stderr and ends the program with exit status 1.
+fn tool(s: &mut Session, name: &str, args: Value) -> Result<newpub_agent::ToolResult> {
+    let r = newpub_agent::call_tool(s, name, &args)?;
+    if r.is_error {
+        eprintln!("{}", r.text_of());
+        std::process::exit(1);
+    }
+    Ok(r)
 }
 
 fn main() -> Result<()> {
@@ -101,41 +107,30 @@ fn main() -> Result<()> {
                 let (name, args): (String, Value) = if a.trim_start().starts_with('{') {
                     let v: Value = serde_json::from_str(a)?;
                     let name = v.get("cmd").and_then(|c| c.as_str()).ok_or_else(|| anyhow!("{a}: no \"cmd\""))?;
-                    (name.to_string(), v.clone())
+                    (name.to_string(), strip(v, "cmd"))
                 } else {
-                    // "name" then optional fields JSON.
-                    let next = actions.get(i + 1).filter(|n| n.trim_start().starts_with('{'));
+                    // "name" then, optionally, its fields as a JSON object.
+                    let next = actions.get(i + 1).filter(|n| !n.trim_start().starts_with(|c: char| c.is_alphabetic()));
                     let args = match next {
                         Some(n) => {
                             i += 1;
-                            serde_json::from_str(n)?
+                            let v: Value = serde_json::from_str(n)?;
+                            if !v.is_object() {
+                                bail!("the fields of {a} must be a JSON object, got {n}");
+                            }
+                            v
                         }
                         None => Value::Null,
                     };
                     (a.clone(), args)
                 };
-                let r = newpub_agent::call_tool(
-                    &mut s,
-                    "newpub_action",
-                    &serde_json::json!({"action": name, "args": strip_cmd(args)}),
-                );
-                println!("{}", text_of(&r));
-                if r.is_error {
-                    std::process::exit(1);
-                }
+                let r = tool(&mut s, "newpub_action", serde_json::json!({"action": name, "args": args}))?;
+                println!("{}", r.text_of());
                 i += 1;
             }
             if let Some(path) = save {
-                let path = if path.is_empty() { None } else { Some(path) };
-                let args = match path {
-                    Some(p) => serde_json::json!({"path": p}),
-                    None => serde_json::json!({}),
-                };
-                let r = newpub_agent::call_tool(&mut s, "newpub_save", &args);
-                println!("{}", text_of(&r));
-                if r.is_error {
-                    std::process::exit(1);
-                }
+                let args = if path.is_empty() { serde_json::json!({}) } else { serde_json::json!({"path": path}) };
+                println!("{}", tool(&mut s, "newpub_save", args)?.text_of());
             }
             Ok(())
         }
@@ -143,22 +138,18 @@ fn main() -> Result<()> {
             open(&mut s, &file)?;
             let v: Value = serde_json::from_str(&query)?;
             let name = v.get("q").and_then(|q| q.as_str()).ok_or_else(|| anyhow!("{query}: no \"q\""))?.to_string();
-            let r = newpub_agent::call_tool(
-                &mut s,
-                "newpub_query",
-                &serde_json::json!({"query": name, "args": strip_q(v)}),
-            );
+            let r = tool(&mut s, "newpub_query", serde_json::json!({"query": name, "args": strip(v, "q")}))?;
             match &r.structured {
-                Some(v) if !r.is_error => println!("{}", serde_json::to_string_pretty(v)?),
-                _ => println!("{}", text_of(&r)),
-            }
-            if r.is_error {
-                std::process::exit(1);
+                Some(v) => println!("{}", serde_json::to_string_pretty(v)?),
+                None => println!("{}", r.text_of()),
             }
             Ok(())
         }
         Cmd::Render { file, page, dpi, out } => {
             open(&mut s, &Some(file))?;
+            if !(newpub_agent::MIN_DPI..=newpub_agent::MAX_DPI).contains(&dpi) {
+                bail!("--dpi must be between {} and {}", newpub_agent::MIN_DPI, newpub_agent::MAX_DPI);
+            }
             let png = s.page_png(page, dpi).map_err(|e| anyhow!("{e}"))?;
             std::fs::write(&out, png)?;
             println!("wrote {}", out.display());
@@ -174,22 +165,15 @@ fn main() -> Result<()> {
                 Some(w) => serde_json::json!({"search": w}),
                 None => serde_json::json!({}),
             };
-            println!("{}", text_of(&newpub_agent::call_tool(&mut s, "newpub_reference", &args)));
+            println!("{}", tool(&mut s, "newpub_reference", args)?.text_of());
             Ok(())
         }
     }
 }
 
-fn strip_cmd(mut v: Value) -> Value {
+fn strip(mut v: Value, key: &str) -> Value {
     if let Some(m) = v.as_object_mut() {
-        m.remove("cmd");
-    }
-    v
-}
-
-fn strip_q(mut v: Value) -> Value {
-    if let Some(m) = v.as_object_mut() {
-        m.remove("q");
+        m.remove(key);
     }
     v
 }

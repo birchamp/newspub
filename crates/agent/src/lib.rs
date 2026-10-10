@@ -4,17 +4,18 @@
 //! (ARCHITECTURE.md §4). This crate puts an MCP server (Model Context Protocol, JSON-RPC 2.0 over stdio)
 //! and a command line in front of that interface, so an agent can open, build, inspect, render, check,
 //! save and export publications with the same vocabulary the journeys use. The desktop app can host the
-//! same server (`newpub --agent`), so a person watches the agent work on the open publication.
+//! same server (`newpub --agent`), so a person watches the agent work.
 //!
 //! The tool dispatch is generic over a [`Host`]: the headless server uses a bare `Session`, the app
-//! implements `Host` on itself to keep its view in step.
+//! implements `Host` on itself to keep its view in step and to protect the person's unsaved work.
 
 use std::io::{BufRead, Write};
 use std::sync::{Arc, Mutex, mpsc};
 
 use anyhow::{Result, anyhow, bail};
 use base64::Engine as _;
-use newpub_core::{Id, ObjectKind};
+use newpub_core::{Document, Id, ObjectKind};
+use newpub_engine::layout::DocLayout;
 use newpub_engine::{Action, Query, Session, SessionAction};
 use serde_json::{Map, Value, json};
 
@@ -27,12 +28,32 @@ pub const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const PROTOCOL_VERSIONS: &[&str] = &["2025-06-18", "2025-03-26", "2024-11-05"];
 /// URI of the reference resource.
 pub const REFERENCE_URI: &str = "newpub://reference";
-/// Highest resolution `newpub_render_page` renders at.
-const MAX_DPI: f64 = 300.0;
+/// Resolution bounds of `newpub_render_page` (and the command line's `render`).
+pub const MIN_DPI: f64 = 18.0;
+pub const MAX_DPI: f64 = 300.0;
+/// Actions that replace the whole publication (and its undo history).
+pub const REPLACING: &[&str] = &[
+    "new_document",
+    "open",
+    "import_pub",
+    "new_from_template",
+    "new_from_builtin",
+    "new_from_publication_type",
+    "recover_autosave",
+];
+/// Actions that steer the undo history themselves, so a batch (one undo group) cannot contain them.
+const HISTORY: &[&str] = &["begin_group", "end_group", "undo", "redo"];
 
 /// What the tools act on: the headless server's session, or the running app.
 pub trait Host {
     fn session(&mut self) -> &mut Session;
+    /// Called before an action replaces the publication (`new_document`, `open`, …). The app refuses while the
+    /// person has unsaved changes.
+    fn before_replace(&mut self) -> Result<()> {
+        Ok(())
+    }
+    /// Called after the publication was replaced (the app goes to page 1 and forgets its selection).
+    fn after_replace(&mut self) {}
     /// Called after a tool ran one or more actions, with a one-line summary (the app shows it in its status bar
     /// and brings its view in step with the document).
     fn after_actions(&mut self, _summary: &str) {}
@@ -49,7 +70,7 @@ impl Host for Session {
 pub struct ToolResult {
     /// Content blocks (`{type: "text", text}` or `{type: "image", data, mimeType}`).
     pub content: Vec<Value>,
-    /// Machine-readable result, when the tool has one.
+    /// Machine-readable result, always a JSON object (a scalar or array answer is wrapped as `{"result": …}`).
     pub structured: Option<Value>,
     pub is_error: bool,
 }
@@ -60,12 +81,18 @@ impl ToolResult {
     }
 
     fn data(summary: impl Into<String>, value: Value) -> ToolResult {
+        let value = objectify(value);
         let text = format!("{}\n{}", summary.into(), pretty(&value));
         ToolResult { content: vec![json!({"type": "text", "text": text})], structured: Some(value), is_error: false }
     }
 
     fn error(e: impl std::fmt::Display) -> ToolResult {
         ToolResult { content: vec![json!({"type": "text", "text": e.to_string()})], structured: None, is_error: true }
+    }
+
+    /// The text blocks, joined.
+    pub fn text_of(&self) -> String {
+        self.content.iter().filter_map(|c| c.get("text").and_then(|t| t.as_str())).collect::<Vec<_>>().join("\n")
     }
 
     /// The MCP `tools/call` result object.
@@ -75,6 +102,14 @@ impl ToolResult {
             v["structuredContent"] = s.clone();
         }
         v
+    }
+}
+
+/// MCP's `structuredContent` must be an object: anything else goes under `result`.
+fn objectify(v: Value) -> Value {
+    match v {
+        Value::Object(_) => v,
+        other => json!({"result": other}),
     }
 }
 
@@ -91,9 +126,10 @@ pub fn tools() -> Vec<Value> {
         json!({
             "name": "newpub_reference",
             "description": "The vocabulary of newpub_action and newpub_query: every action (document commands and \
-                session actions) and every query with its fields. Call it with `search` for the entries whose name \
-                or description mention a word (e.g. \"link\", \"table\", \"export\"), with `names_only` for the bare \
-                list, or with nothing for the whole reference (about 28 KB).",
+                session actions) and every query with its fields, plus the accepted values of every enum type. \
+                Call it with `search` for the entries whose name or description mention a word (e.g. \"link\", \
+                \"table\", \"export\"), with `names_only` for the bare list, or with nothing for the whole \
+                reference (large).",
             "inputSchema": obj(json!({
                 "search": {"type": "string", "description": "Case-insensitive word or phrase to look for."},
                 "names_only": {"type": "boolean", "description": "Return only the action and query names."}
@@ -102,8 +138,9 @@ pub fn tools() -> Vec<Value> {
         json!({
             "name": "newpub_status",
             "description": "Where things stand: the file, unsaved changes, page size, every page with its objects \
-                (id, kind, name, rect, text preview, overflow), undo availability, and warnings such as overflowing \
-                stories and missing fonts. Call it first, and after a batch of changes.",
+                (id, kind, name, rect, text preview, chain, overflow, hidden, locked; group members nested), the \
+                master pages, undo availability, and warnings such as overflowing stories and missing fonts. Call \
+                it first, and after a batch of changes.",
             "inputSchema": obj(json!({}), &[]),
         }),
         json!({
@@ -111,7 +148,9 @@ pub fn tools() -> Vec<Value> {
             "description": "Run one action: a document command or a session action by name (see newpub_reference), \
                 e.g. action \"add_text_frame\" with args {\"page\": 0, \"rect\": {\"x\": 72, \"y\": 72, \"w\": 300, \
                 \"h\": 200}}. Lengths may be numbers of points or strings with units (\"2in\", \"50mm\"). Returns \
-                the ids it created. Every action is one undo step (\"undo\" and \"redo\" are actions too).",
+                the ids it created. Every action is one undo step (\"undo\" and \"redo\" are actions too). In the \
+                app, actions that replace the publication (new_document, open, …) are refused while the person has \
+                unsaved changes.",
             "inputSchema": obj(json!({
                 "action": {"type": "string", "description": "The action name (the `cmd` tag)."},
                 "args": {"type": "object", "description": "The action's fields."}
@@ -121,7 +160,9 @@ pub fn tools() -> Vec<Value> {
             "name": "newpub_actions",
             "description": "Run several actions in order as ONE undo step (an undo group), stopping at the first \
                 failure. Each item is {\"action\": name, \"args\": {...}}. Use it for a whole edit such as \"add a \
-                frame, put text in it, format it\".",
+                frame, put text in it, format it\". A grouped batch may not contain undo, redo, begin_group, \
+                end_group, or an action that replaces the publication (new_document, open, …): run those on their \
+                own with newpub_action, or pass undo_group false.",
             "inputSchema": obj(json!({
                 "actions": {"type": "array", "items": {"type": "object", "properties": {
                     "action": {"type": "string"}, "args": {"type": "object"}}, "required": ["action"]}},
@@ -132,7 +173,8 @@ pub fn tools() -> Vec<Value> {
             "name": "newpub_query",
             "description": "Ask a read-only question by name (see newpub_reference), e.g. query \"story_text\" with \
                 args {\"target\": 12}, \"frame_lines\" for measured line positions, \"overflow\", \"page_objects\", \
-                \"document\" for the whole model, \"accessibility_check\", \"find\". Returns JSON.",
+                \"document\" for the whole model, \"accessibility_check\", \"find\". Returns the answer as JSON; \
+                a scalar or list answer comes back as {\"result\": …}.",
             "inputSchema": obj(json!({
                 "query": {"type": "string", "description": "The query name (the `q` tag)."},
                 "args": {"type": "object", "description": "The query's fields."}
@@ -141,17 +183,18 @@ pub fn tools() -> Vec<Value> {
         json!({
             "name": "newpub_render_page",
             "description": "Render a page to a PNG image so you can look at it. `page` is 0-based; `dpi` defaults to \
-                72 (one point per pixel) and may go up to 300.",
+                72 (one point per pixel) and may go from 18 to 300.",
             "inputSchema": obj(json!({
                 "page": {"type": "integer", "minimum": 0},
-                "dpi": {"type": "number", "minimum": 18, "maximum": MAX_DPI}
+                "dpi": {"type": "number", "minimum": MIN_DPI, "maximum": MAX_DPI}
             }), &[]),
         }),
         json!({
             "name": "newpub_new",
             "description": "Start a new publication: from a built-in template (`template`: see query \
                 builtin_templates, e.g. \"newsletter\", \"flyer\", \"bulletin\", \"booklet\") or blank with a page \
-                size (`width`/`height`, default US Letter portrait; `facing` for a two-page spread layout).",
+                size (`width`/`height`, default US Letter portrait; `facing` for a two-page spread layout). In the \
+                app this is refused while the person has unsaved changes.",
             "inputSchema": obj(json!({
                 "template": {"type": "string"},
                 "width": {"type": ["string", "number"]},
@@ -163,7 +206,8 @@ pub fn tools() -> Vec<Value> {
         json!({
             "name": "newpub_open",
             "description": "Open a publication: a newpub file (.newspub / .npub), a Microsoft Publisher .pub file \
-                (imported as a new, unsaved publication) or a predecessor NewsPub .newspub file.",
+                (imported as a new, unsaved publication) or a predecessor NewsPub .newspub file. In the app this \
+                is refused while the person has unsaved changes.",
             "inputSchema": obj(json!({"path": {"type": "string"}}), &["path"]),
         }),
         json!({
@@ -173,9 +217,10 @@ pub fn tools() -> Vec<Value> {
         }),
         json!({
             "name": "newpub_export_pdf",
-            "description": "Export a PDF. `standard` may be \"pdf_x4\" or \"pdf_ua1\"; `pages` is a list of 0-based \
-                page indexes (default all); `booklet` imposes a saddle-stitched booklet; `bleed` and `crop_marks` \
-                add print marks. Other exports (PNG, HTML, EPUB, XPS, Pack and Go) are actions: see newpub_reference.",
+            "description": "Export a PDF. `standard` may be \"pdf_x4\" or \"pdf_ua1\" (PDF/UA needs a document \
+                title: action set_meta); `pages` is a list of 0-based page indexes (default all); `booklet` \
+                imposes a saddle-stitched booklet; `bleed` and `crop_marks` add print marks. Other exports (PNG, \
+                HTML, EPUB, XPS, Pack and Go) are actions: see newpub_reference.",
             "inputSchema": obj(json!({
                 "path": {"type": "string"},
                 "standard": {"type": "string", "enum": ["pdf_x4", "pdf_ua1"]},
@@ -193,13 +238,16 @@ pub fn tool_names() -> Vec<String> {
     tools().iter().filter_map(|t| t.get("name").and_then(|n| n.as_str()).map(str::to_string)).collect()
 }
 
-/// Runs one tool. Errors come back as results with `is_error`, never as JSON-RPC errors, so the agent can read
-/// and act on them.
-pub fn call_tool(host: &mut dyn Host, name: &str, args: &Value) -> ToolResult {
-    match call(host, name, args) {
+/// Runs one tool. Failures come back as results with `is_error`, never as JSON-RPC errors, so the agent can read
+/// and act on them. An unknown tool name is the one exception (`Err`), which MCP reports as invalid params.
+pub fn call_tool(host: &mut dyn Host, name: &str, args: &Value) -> Result<ToolResult> {
+    if !tool_names().iter().any(|n| n == name) {
+        bail!("unknown tool {name}; the tools are {}", tool_names().join(", "));
+    }
+    Ok(match call(host, name, args) {
         Ok(r) => r,
         Err(e) => ToolResult::error(format!("{name}: {e:#}")),
-    }
+    })
 }
 
 fn call(host: &mut dyn Host, name: &str, args: &Value) -> Result<ToolResult> {
@@ -214,16 +262,20 @@ fn call(host: &mut dyn Host, name: &str, args: &Value) -> Result<ToolResult> {
         "newpub_action" => {
             let name = str_arg(&args, "action")?;
             let a = to_action(name, args.get("args").unwrap_or(&Value::Null))?;
+            let replacing = REPLACING.contains(&name);
+            if replacing {
+                host.before_replace()?;
+            }
             let out = host.session().run(&a).map_err(|e| anyhow!("{e}\n(newpub_reference search: \"{name}\")"))?;
+            if replacing {
+                host.after_replace();
+            }
             host.after_actions(&format!("Agent: {name}"));
             let created: Vec<Id> = out.created;
             let summary = if created.is_empty() {
                 format!("{name}: done")
             } else {
-                format!(
-                    "{name}: done, created {}",
-                    created.iter().map(|i| i.0.to_string()).collect::<Vec<_>>().join(", ")
-                )
+                format!("{name}: done, created {}", ids(&created))
             };
             Ok(ToolResult::data(summary, json!({"ok": true, "created": created})))
         }
@@ -246,6 +298,11 @@ fn call(host: &mut dyn Host, name: &str, args: &Value) -> Result<ToolResult> {
             let a = match args.get("template").and_then(|t| t.as_str()) {
                 Some(id) => Action::Session(SessionAction::NewFromBuiltin { id: id.to_string() }),
                 None => {
+                    if let Some(p) = args.get("pages")
+                        && !p.as_u64().is_some_and(|n| n >= 1)
+                    {
+                        bail!("`pages` must be a whole number of at least 1");
+                    }
                     let mut m = Map::new();
                     m.insert("cmd".into(), "new_document".into());
                     m.insert("width".into(), args.get("width").cloned().unwrap_or_else(|| "8.5in".into()));
@@ -258,7 +315,9 @@ fn call(host: &mut dyn Host, name: &str, args: &Value) -> Result<ToolResult> {
                     serde_json::from_value(Value::Object(m))?
                 }
             };
+            host.before_replace()?;
             host.session().run(&a).map_err(|e| anyhow!("{e}"))?;
+            host.after_replace();
             host.after_actions("Agent: new publication");
             Ok(ToolResult::data("New publication", status(host.session())))
         }
@@ -269,7 +328,9 @@ fn call(host: &mut dyn Host, name: &str, args: &Value) -> Result<ToolResult> {
             } else {
                 SessionAction::Open { path: path.clone() }
             };
+            host.before_replace()?;
             host.session().run(&a.into()).map_err(|e| anyhow!("{e}"))?;
+            host.after_replace();
             host.after_actions(&format!("Agent: opened {path}"));
             Ok(ToolResult::data(format!("Opened {path}"), status(host.session())))
         }
@@ -310,12 +371,24 @@ fn call(host: &mut dyn Host, name: &str, args: &Value) -> Result<ToolResult> {
             host.after_actions(&format!("Agent: exported {path}"));
             Ok(ToolResult::data(format!("Exported {path}"), json!({"ok": true, "path": path})))
         }
-        other => bail!("unknown tool {other}; the tools are {}", tool_names().join(", ")),
+        other => bail!("unknown tool {other}"),
     }
+}
+
+fn ids(list: &[Id]) -> String {
+    list.iter().map(|i| i.0.to_string()).collect::<Vec<_>>().join(", ")
 }
 
 fn str_arg<'a>(args: &'a Map<String, Value>, key: &str) -> Result<&'a str> {
     args.get(key).and_then(|v| v.as_str()).ok_or_else(|| anyhow!("`{key}` (a string) is required"))
+}
+
+/// A whole-number argument (an integer JSON number; floats, strings and negatives are refused).
+fn uint_arg(args: &Map<String, Value>, key: &str, default: u64) -> Result<u64> {
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(default),
+        Some(v) => v.as_u64().ok_or_else(|| anyhow!("`{key}` must be a whole number of 0 or more, got {v}")),
+    }
 }
 
 /// An action from its `cmd` name and fields, as journeys build them.
@@ -333,7 +406,7 @@ fn actions(host: &mut dyn Host, args: &Map<String, Value>) -> Result<ToolResult>
     let list =
         args.get("actions").and_then(|a| a.as_array()).ok_or_else(|| anyhow!("`actions` (a list) is required"))?;
     let group = args.get("undo_group").and_then(|g| g.as_bool()).unwrap_or(true);
-    // Parse everything first: a typo in step 3 should not run steps 1 and 2.
+    // Parse and vet everything first: a typo in step 3 must not run steps 1 and 2.
     let parsed: Vec<(String, Action)> = list
         .iter()
         .enumerate()
@@ -342,18 +415,34 @@ fn actions(host: &mut dyn Host, args: &Map<String, Value>) -> Result<ToolResult>
                 .get("action")
                 .and_then(|a| a.as_str())
                 .ok_or_else(|| anyhow!("actions[{i}] needs an \"action\" name"))?;
+            if matches!(name, "begin_group" | "end_group") {
+                bail!("actions[{i}] {name}: a batch is already an undo group");
+            }
+            if group && (HISTORY.contains(&name) || REPLACING.contains(&name)) {
+                bail!(
+                    "actions[{i}] {name}: cannot be part of one undo step; run it on its own with newpub_action, or \
+                     pass undo_group false"
+                );
+            }
             Ok((name.to_string(), to_action(name, item.get("args").unwrap_or(&Value::Null))?))
         })
         .collect::<Result<_>>()?;
+    if parsed.iter().any(|(n, _)| REPLACING.contains(&n.as_str())) {
+        host.before_replace()?;
+    }
     let s = host.session();
     if group {
         s.run(&SessionAction::BeginGroup.into()).map_err(|e| anyhow!("{e}"))?;
     }
     let mut results = Vec::new();
     let mut failure = None;
+    let mut replaced = false;
     for (i, (name, a)) in parsed.iter().enumerate() {
         match s.run(a) {
-            Ok(out) => results.push(json!({"action": name, "created": out.created})),
+            Ok(out) => {
+                results.push(json!({"action": name, "created": out.created}));
+                replaced |= REPLACING.contains(&name.as_str());
+            }
             Err(e) => {
                 failure = Some(format!("actions[{i}] {name}: {e}"));
                 break;
@@ -362,6 +451,9 @@ fn actions(host: &mut dyn Host, args: &Map<String, Value>) -> Result<ToolResult>
     }
     if group {
         s.run(&SessionAction::EndGroup.into()).map_err(|e| anyhow!("{e}"))?;
+    }
+    if replaced {
+        host.after_replace();
     }
     host.after_actions(&format!("Agent: {} actions", results.len()));
     let value = json!({"ok": failure.is_none(), "ran": results.len(), "results": results, "error": failure});
@@ -380,8 +472,14 @@ fn actions(host: &mut dyn Host, args: &Map<String, Value>) -> Result<ToolResult>
 }
 
 fn render_page(s: &mut Session, args: &Map<String, Value>) -> Result<ToolResult> {
-    let page = args.get("page").and_then(|p| p.as_u64()).unwrap_or(0) as usize;
-    let dpi = args.get("dpi").and_then(|d| d.as_f64()).unwrap_or(72.0).clamp(18.0, MAX_DPI);
+    let page = uint_arg(args, "page", 0)? as usize;
+    let dpi = match args.get("dpi") {
+        None | Some(Value::Null) => 72.0,
+        Some(v) => v.as_f64().ok_or_else(|| anyhow!("`dpi` must be a number, got {v}"))?,
+    };
+    if !(MIN_DPI..=MAX_DPI).contains(&dpi) {
+        bail!("`dpi` must be between {MIN_DPI} and {MAX_DPI}, got {dpi}");
+    }
     let n = s.doc().pages.len();
     if page >= n {
         bail!("page {page} does not exist: the publication has {n} page(s), numbered from 0");
@@ -436,61 +534,25 @@ fn reference(args: &Map<String, Value>) -> ToolResult {
 pub fn status(s: &mut Session) -> Value {
     let layout = s.layout();
     let doc = s.doc();
-    let kind_name = |k: &ObjectKind| match k {
-        ObjectKind::Text(_) => "text",
-        ObjectKind::Shape(_) => "shape",
-        ObjectKind::Image(_) => "picture",
-        ObjectKind::Table(_) => "table",
-        ObjectKind::Group { .. } => "group",
-        ObjectKind::WordArt(_) => "wordart",
-    };
     let mut overflowing = Vec::new();
     let pages: Vec<Value> = doc
         .pages
         .iter()
         .enumerate()
         .map(|(i, p)| {
-            let objects: Vec<Value> = p
-                .objects
-                .iter()
-                .filter_map(|id| doc.objects.get(id))
-                .map(|o| {
-                    let mut v = json!({
-                        "id": o.id,
-                        "kind": kind_name(&o.kind),
-                        "name": o.name,
-                        "rect": {"x": o.rect.x, "y": o.rect.y, "w": o.rect.w, "h": o.rect.h},
-                    });
-                    if let ObjectKind::Text(t) = &o.kind {
-                        if let Ok(st) = doc.story(t.story) {
-                            let preview: String =
-                                st.text.chars().take(60).map(|c| if c == '\n' { ' ' } else { c }).collect();
-                            v["story"] = json!(t.story);
-                            v["text"] = json!(preview);
-                            v["chars"] = json!(st.text.chars().count());
-                            if st.frames.len() > 1 {
-                                v["chain"] = json!(st.frames);
-                            }
-                        }
-                        if layout.frames.get(&o.id).is_some_and(|f| f.overflow) {
-                            v["overflow"] = json!(true);
-                            overflowing.push(o.id);
-                        }
-                    }
-                    if o.locked {
-                        v["locked"] = json!(true);
-                    }
-                    v
-                })
-                .collect();
-            json!({"page": i, "master": p.master, "objects": objects})
+            json!({"page": i, "master": p.master, "objects": describe(doc, &layout, &p.objects, &mut overflowing)})
         })
+        .collect();
+    let masters: Vec<Value> = doc
+        .masters
+        .iter()
+        .map(|m| json!({"id": m.id, "name": m.name, "objects": describe(doc, &layout, &m.objects, &mut overflowing)}))
         .collect();
     let mut warnings = Vec::new();
     if !overflowing.is_empty() {
         warnings.push(format!(
             "text overflows in text box(es) {}: link them to another box, autoflow, or shrink the text",
-            overflowing.iter().map(|i| i.0.to_string()).collect::<Vec<_>>().join(", ")
+            ids(&overflowing)
         ));
     }
     let path = s.path.as_ref().map(|p| p.to_string_lossy().to_string());
@@ -512,14 +574,71 @@ pub fn status(s: &mut Session) -> Value {
         "page_size_pt": {"width": w, "height": h},
         "page_count": page_count,
         "pages": pages,
+        "masters": masters,
         "warnings": warnings,
     })
 }
 
+/// One entry per object, group members nested under `children`.
+fn describe(doc: &Document, layout: &DocLayout, ids: &[Id], overflowing: &mut Vec<Id>) -> Vec<Value> {
+    ids.iter()
+        .filter_map(|id| doc.objects.get(id))
+        .map(|o| {
+            let kind = match &o.kind {
+                ObjectKind::Text(_) => "text",
+                ObjectKind::Shape(_) => "shape",
+                ObjectKind::Image(_) => "picture",
+                ObjectKind::Table(_) => "table",
+                ObjectKind::Group { .. } => "group",
+                ObjectKind::WordArt(_) => "wordart",
+            };
+            let mut v = json!({
+                "id": o.id,
+                "kind": kind,
+                "name": o.name,
+                "rect": {"x": o.rect.x, "y": o.rect.y, "w": o.rect.w, "h": o.rect.h},
+            });
+            match &o.kind {
+                ObjectKind::Text(t) => {
+                    if let Ok(st) = doc.story(t.story) {
+                        let preview: String =
+                            st.text.chars().take(60).map(|c| if c == '\n' { ' ' } else { c }).collect();
+                        v["story"] = json!(t.story);
+                        v["text"] = json!(preview);
+                        v["chars"] = json!(st.text.chars().count());
+                        if st.frames.len() > 1 {
+                            v["chain"] = json!(st.frames);
+                        }
+                    }
+                    if layout.frames.get(&o.id).is_some_and(|f| f.overflow) {
+                        v["overflow"] = json!(true);
+                        overflowing.push(o.id);
+                    }
+                }
+                ObjectKind::Group { children } => {
+                    v["children"] = Value::Array(describe(doc, layout, children, overflowing));
+                }
+                _ => {}
+            }
+            if o.locked {
+                v["locked"] = json!(true);
+            }
+            if o.hidden {
+                v["hidden"] = json!(true);
+            }
+            v
+        })
+        .collect()
+}
+
 // ---- JSON-RPC / MCP -----------------------------------------------------------------------------------------
 
-/// Handles one JSON-RPC message. Notifications get `None`; requests get a response object.
+/// Handles one JSON-RPC message (or a batch of them). Notifications get `None`; requests get a response.
 pub fn handle(host: &mut dyn Host, msg: &Value) -> Option<Value> {
+    if let Value::Array(batch) = msg {
+        let replies: Vec<Value> = batch.iter().filter_map(|m| handle(host, m)).collect();
+        return if replies.is_empty() { None } else { Some(Value::Array(replies)) };
+    }
     let id = msg.get("id").cloned();
     let method = msg.get("method").and_then(|m| m.as_str()).unwrap_or("");
     let params = msg.get("params").cloned().unwrap_or(Value::Null);
@@ -533,7 +652,11 @@ pub fn handle(host: &mut dyn Host, msg: &Value) -> Option<Value> {
             let version = PROTOCOL_VERSIONS.iter().find(|v| **v == asked).unwrap_or(&PROTOCOL_VERSIONS[0]);
             reply(json!({
                 "protocolVersion": version,
-                "capabilities": {"tools": {"listChanged": false}, "resources": {"subscribe": false, "listChanged": false}},
+                "capabilities": {
+                    "tools": {"listChanged": false},
+                    "resources": {"subscribe": false, "listChanged": false},
+                    "prompts": {"listChanged": false},
+                },
                 "serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION},
                 "instructions": INSTRUCTIONS,
             }))
@@ -541,9 +664,14 @@ pub fn handle(host: &mut dyn Host, msg: &Value) -> Option<Value> {
         "ping" => reply(json!({})),
         "tools/list" => reply(json!({"tools": tools()})),
         "tools/call" => {
-            let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
+            let Some(name) = params.get("name").and_then(|n| n.as_str()) else {
+                return error(-32602, "tools/call needs params.name".into());
+            };
             let args = params.get("arguments").cloned().unwrap_or(Value::Null);
-            reply(call_tool(host, name, &args).to_json())
+            match call_tool(host, name, &args) {
+                Ok(r) => reply(r.to_json()),
+                Err(e) => error(-32602, e.to_string()),
+            }
         }
         "resources/list" => reply(json!({"resources": [{
             "uri": REFERENCE_URI, "name": "newpub action and query reference", "mimeType": "text/markdown",
@@ -552,17 +680,13 @@ pub fn handle(host: &mut dyn Host, msg: &Value) -> Option<Value> {
         "resources/read" => match params.get("uri").and_then(|u| u.as_str()) {
             Some(REFERENCE_URI) => reply(json!({"contents": [{
                 "uri": REFERENCE_URI, "mimeType": "text/markdown", "text": REFERENCE}]})),
-            Some(other) => error(-32602, format!("unknown resource {other}")),
-            None => error(-32602, "resources/read needs a uri".into()),
+            Some(other) => error(-32002, format!("resource not found: {other}")),
+            None => error(-32602, "resources/read needs params.uri".into()),
         },
         "prompts/list" => reply(json!({"prompts": []})),
         m if m.starts_with("notifications/") => None,
         "" => error(-32600, "message has no method".into()),
-        other if id.is_none() => {
-            // An unknown notification: nothing to answer.
-            let _ = other;
-            None
-        }
+        _ if id.is_none() => None, // an unknown notification: nothing to answer
         other => error(-32601, format!("method not found: {other}")),
     }
 }
@@ -571,11 +695,17 @@ pub fn handle(host: &mut dyn Host, msg: &Value) -> Option<Value> {
 const INSTRUCTIONS: &str = "newpub is a desktop publishing program (Microsoft Publisher parity) for newsletters, \
 bulletins, flyers and booklets. Start with newpub_status (or newpub_new / newpub_open). Make changes with \
 newpub_action and newpub_actions using the names from newpub_reference (search it by topic: \"text frame\", \
-\"link\", \"picture\", \"table\", \"style\", \"export\"). Ask questions with newpub_query (story_text, frame_lines, \
-overflow, page_objects, accessibility_check, find, ...). Look at the result with newpub_render_page. Geometry is \
-in points (72 per inch) from the page's top-left corner; lengths also accept strings such as \"2in\" or \"50mm\"; \
-pages are numbered from 0. Every action is one undo step: newpub_action \"undo\" reverts it. Save with \
-newpub_save and export with newpub_export_pdf.";
+\"link\", \"picture\", \"table\", \"style\", \"export\"; its Types section lists the accepted values of every \
+enum). Ask questions with newpub_query (story_text, frame_lines, overflow, page_objects, accessibility_check, \
+find, ...). Look at the result with newpub_render_page. Geometry is in points (72 per inch) from the page's \
+top-left corner; lengths also accept strings such as \"2in\" or \"50mm\"; pages are numbered from 0. Every action \
+is one undo step: newpub_action \"undo\" reverts it. Save with newpub_save and export with newpub_export_pdf. When \
+the server runs inside the newpub window, a person may be working too: actions that replace the publication are \
+refused while they have unsaved changes.";
+
+fn parse_error(e: impl std::fmt::Display) -> Value {
+    json!({"jsonrpc": "2.0", "id": null, "error": {"code": -32700, "message": format!("parse error: {e}")}})
+}
 
 /// Serves MCP on stdin/stdout until stdin closes. Diagnostics go to stderr; stdout carries only JSON-RPC.
 pub fn serve_stdio(host: &mut dyn Host) -> Result<()> {
@@ -588,9 +718,7 @@ pub fn serve_stdio(host: &mut dyn Host) -> Result<()> {
         }
         let reply = match serde_json::from_str::<Value>(&line) {
             Ok(msg) => handle(host, &msg),
-            Err(e) => Some(
-                json!({"jsonrpc": "2.0", "id": null, "error": {"code": -32700, "message": format!("parse error: {e}")}}),
-            ),
+            Err(e) => Some(parse_error(e)),
         };
         if let Some(r) = reply {
             writeln!(out, "{r}")?;
@@ -603,12 +731,24 @@ pub fn serve_stdio(host: &mut dyn Host) -> Result<()> {
 /// What wakes the host's thread when a request is queued (the app sets it to `Context::request_repaint`).
 pub type Waker = Arc<Mutex<Option<Box<dyn Fn() + Send>>>>;
 
-/// A stdio MCP connection for a host that lives on another thread (the app's UI thread): requests arrive on
-/// `requests`, replies go back through `reply`. `wake` is called whenever a request is queued.
-pub struct Link {
-    pub requests: mpsc::Receiver<Value>,
-    out: Arc<Mutex<std::io::Stdout>>,
+/// What one `pump` did.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Pumped {
+    /// Messages answered.
+    pub handled: usize,
+    /// The client closed the connection: no more requests will come.
+    pub closed: bool,
 }
+
+/// An MCP connection for a host that lives on another thread (the app's UI thread): a reader thread queues
+/// requests, the host answers them with [`Link::pump`], and replies go back through the shared writer.
+pub struct Link {
+    requests: mpsc::Receiver<Value>,
+    out: Arc<Mutex<Box<dyn Write + Send>>>,
+}
+
+/// Queued by the reader thread when the input ends.
+const EOF: &str = "newpub/eof";
 
 impl Link {
     pub fn reply(&self, v: &Value) {
@@ -619,28 +759,44 @@ impl Link {
     }
 
     /// Answers every queued request through `host`.
-    pub fn pump(&self, host: &mut dyn Host) -> usize {
-        let mut n = 0;
+    pub fn pump(&self, host: &mut dyn Host) -> Pumped {
+        let mut p = Pumped::default();
         while let Ok(msg) = self.requests.try_recv() {
-            n += 1;
+            if msg.get("method").and_then(|m| m.as_str()) == Some(EOF) {
+                p.closed = true;
+                break;
+            }
+            p.handled += 1;
             if let Some(r) = handle(host, &msg) {
                 self.reply(&r);
             }
         }
-        n
+        p
     }
 }
 
-/// Starts the stdin reader thread of a [`Link`]. `wake` runs on that thread after each queued message.
+/// Starts the stdin reader thread of a [`Link`] writing to stdout.
 pub fn stdio_link(wake: Waker) -> Link {
+    link_from(std::io::BufReader::new(std::io::stdin()), Box::new(std::io::stdout()), wake)
+}
+
+/// A [`Link`] over any reader and writer. `wake` runs on the reader thread after each queued message and at the
+/// end of the input.
+pub fn link_from(reader: impl BufRead + Send + 'static, out: Box<dyn Write + Send>, wake: Waker) -> Link {
     let (tx, rx) = mpsc::channel();
-    let out = Arc::new(Mutex::new(std::io::stdout()));
+    let out = Arc::new(Mutex::new(out));
     let errors = out.clone();
     std::thread::Builder::new()
-        .name("newpub-agent-stdin".into())
+        .name("newpub-agent-reader".into())
         .spawn(move || {
-            let stdin = std::io::stdin();
-            for line in stdin.lock().lines() {
+            let wake_host = || {
+                if let Ok(w) = wake.lock()
+                    && let Some(f) = w.as_ref()
+                {
+                    f();
+                }
+            };
+            for line in reader.lines() {
                 let Ok(line) = line else { break };
                 if line.trim().is_empty() {
                     continue;
@@ -648,23 +804,123 @@ pub fn stdio_link(wake: Waker) -> Link {
                 match serde_json::from_str::<Value>(&line) {
                     Ok(msg) => {
                         if tx.send(msg).is_err() {
-                            break;
+                            return;
                         }
                     }
                     Err(e) => {
                         if let Ok(mut o) = errors.lock() {
-                            let _ = writeln!(o, "{}", json!({"jsonrpc": "2.0", "id": null, "error": {"code": -32700, "message": format!("parse error: {e}")}}));
+                            let _ = writeln!(o, "{}", parse_error(e));
                             let _ = o.flush();
                         }
                     }
                 }
-                if let Ok(w) = wake.lock()
-                    && let Some(f) = w.as_ref()
-                {
-                    f();
-                }
+                wake_host();
             }
+            let _ = tx.send(json!({"method": EOF}));
+            wake_host();
         })
-        .expect("spawn the agent stdin thread");
+        .expect("spawn the agent reader thread");
     Link { requests: rx, out }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A writer the test can read back.
+    #[derive(Clone, Default)]
+    struct Sink(Arc<Mutex<Vec<u8>>>);
+
+    impl Write for Sink {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn link_pumps_requests_and_reports_eof() {
+        let input = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\n\
+                     not json\n\
+                     {\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n\
+                     {\"jsonrpc\":\"2.0\",\"id\":\"two\",\"method\":\"tools/call\",\"params\":{\"name\":\"newpub_query\",\"arguments\":{\"query\":\"page_count\"}}}\n";
+        let sink = Sink::default();
+        let woken = Arc::new(Mutex::new(0usize));
+        let w: Waker = Arc::new(Mutex::new(None));
+        let counter = woken.clone();
+        *w.lock().unwrap() = Some(Box::new(move || *counter.lock().unwrap() += 1));
+        let link = link_from(std::io::Cursor::new(input.to_string()), Box::new(sink.clone()), w);
+        let mut session = Session::bundled();
+        // The EOF marker is the last thing the reader queues.
+        let mut total = Pumped::default();
+        for _ in 0..400 {
+            let p = link.pump(&mut session);
+            total.handled += p.handled;
+            total.closed |= p.closed;
+            if total.closed {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(total.closed, "the link reports the end of the input");
+        assert_eq!(total.handled, 3, "ping, the notification and the tool call");
+        let out = String::from_utf8(sink.0.lock().unwrap().clone()).unwrap();
+        let replies: Vec<Value> = out.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        assert_eq!(replies.len(), 3, "{out}");
+        assert_eq!(replies[0]["id"], 1);
+        assert_eq!(replies[1]["error"]["code"], -32700);
+        assert_eq!(replies[2]["id"], "two");
+        assert_eq!(replies[2]["result"]["structuredContent"], json!({"result": 1}));
+        assert!(*woken.lock().unwrap() >= 4, "woken after every line and at the end");
+    }
+
+    #[test]
+    fn protocol_errors_and_batches() {
+        let mut s = Session::bundled();
+        let r = handle(&mut s, &json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "nope"}}))
+            .unwrap();
+        assert_eq!(r["error"]["code"], -32602);
+        let r = handle(&mut s, &json!({"jsonrpc": "2.0", "id": 2, "method": "tools/call"})).unwrap();
+        assert_eq!(r["error"]["code"], -32602);
+        let r = handle(&mut s, &json!({"jsonrpc": "2.0", "id": 3, "method": "resources/read", "params": {"uri": "x"}}))
+            .unwrap();
+        assert_eq!(r["error"]["code"], -32002);
+        let r = handle(&mut s, &json!({"jsonrpc": "2.0", "id": 4, "method": "no/such"})).unwrap();
+        assert_eq!(r["error"]["code"], -32601);
+        assert!(handle(&mut s, &json!({"jsonrpc": "2.0", "method": "no/such"})).is_none());
+        let batch = json!([
+            {"jsonrpc": "2.0", "id": 5, "method": "ping"},
+            {"jsonrpc": "2.0", "method": "notifications/initialized"},
+            {"jsonrpc": "2.0", "id": 6, "method": "tools/call",
+             "params": {"name": "newpub_render_page", "arguments": {"page": -1}}}
+        ]);
+        let r = handle(&mut s, &batch).unwrap();
+        let r = r.as_array().unwrap();
+        assert_eq!(r.len(), 2);
+        assert_eq!(r[0]["id"], 5);
+        assert_eq!(r[1]["result"]["isError"], true);
+        assert!(r[1]["result"]["content"][0]["text"].as_str().unwrap().contains("whole number"));
+    }
+
+    #[test]
+    fn batches_keep_the_history_honest() {
+        let mut s = Session::bundled();
+        for bad in ["undo", "redo", "begin_group", "end_group", "new_document"] {
+            let args = json!({"actions": [{"action": bad, "args": {"width": 100, "height": 100}}]});
+            let r = call_tool(&mut s, "newpub_actions", &args).unwrap();
+            assert!(r.is_error, "{bad} inside a grouped batch is refused");
+            assert!(!s.can_undo(), "{bad}: nothing ran");
+        }
+        // Without grouping, a replacing action is fine, and the session is not left inside a group.
+        let args = json!({"undo_group": false, "actions": [
+            {"action": "new_document", "args": {"width": "8.5in", "height": "11in"}},
+            {"action": "set_meta", "args": {"title": "T"}}]});
+        let r = call_tool(&mut s, "newpub_actions", &args).unwrap();
+        assert!(!r.is_error, "{}", r.text_of());
+        assert_eq!(r.structured.unwrap()["ran"], 2);
+        assert!(!call_tool(&mut s, "newpub_action", &json!({"action": "undo"})).unwrap().is_error);
+    }
 }

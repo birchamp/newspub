@@ -81,14 +81,14 @@ fn mcp_over_stdio() {
         "tools/call",
         json!({"name": "newpub_query", "arguments": {"query": "story_text", "args": {"target": frame}}}),
     );
-    assert_eq!(r["structuredContent"], json!("Hello from the agent"), "{r}");
+    assert_eq!(r["structuredContent"], json!({"result": "Hello from the agent"}), "{r}");
     // One undo step for the whole batch.
     call("tools/call", json!({"name": "newpub_action", "arguments": {"action": "undo"}}));
     let r = call(
         "tools/call",
         json!({"name": "newpub_query", "arguments": {"query": "story_text", "args": {"target": frame}}}),
     );
-    assert_eq!(r["structuredContent"], json!(""), "{r}");
+    assert_eq!(r["structuredContent"], json!({"result": ""}), "{r}");
     call("tools/call", json!({"name": "newpub_action", "arguments": {"action": "redo"}}));
 
     let r = call("tools/call", json!({"name": "newpub_render_page", "arguments": {"page": 0, "dpi": 36}}));
