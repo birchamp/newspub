@@ -246,8 +246,8 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 
 | ID | P | Feature | Journeys | Done |
 |----|---|---------|----------|------|
-| AG-01 | P1 | An AI agent can do everything a person can: an MCP server (`newpub-agent`, stdio) and a command line over every engine action and query, with a generated reference, page rendering, status and warnings, batches as one undo step, open/save/export | J-AG-001 | [ ] |
-| AG-02 | P1 | The running app hosts the same MCP server (`newpub --agent`): the agent's changes show in the window, the status bar says what it did, the person's selection and page stay valid and both can keep working | UI-AG-001 | [ ] |
+| AG-01 | P1 | An AI agent can do everything a person can: an MCP server (`newpub-agent`, stdio) and a command line over every engine action and query, with a generated reference, page rendering, status and warnings, batches as one undo step, open/save/export | J-AG-001 | [x] |
+| AG-02 | P1 | The running app hosts the same MCP server (`newpub --agent`): the agent's changes show in the window, the status bar says what it did, the person's selection and page stay valid and both can keep working | UI-AG-001 | [x] |
 
 ## UI: Application shell (real-UI journeys)
 
