@@ -868,12 +868,13 @@ mod tests {
         assert!(total.closed, "the link reports the end of the input");
         assert_eq!(total.handled, 3, "ping, the notification and the tool call");
         let out = String::from_utf8(sink.0.lock().unwrap().clone()).unwrap();
+        // The reader thread answers the parse error itself, so it may land before the ping's reply.
         let replies: Vec<Value> = out.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
         assert_eq!(replies.len(), 3, "{out}");
-        assert_eq!(replies[0]["id"], 1);
-        assert_eq!(replies[1]["error"]["code"], -32700);
-        assert_eq!(replies[2]["id"], "two");
-        assert_eq!(replies[2]["result"]["structuredContent"], json!({"result": 1}));
+        let by = |pred: &dyn Fn(&Value) -> bool| replies.iter().find(|r| pred(r)).unwrap_or_else(|| panic!("{out}"));
+        assert_eq!(by(&|r| r["id"] == 1)["result"], json!({}));
+        assert_eq!(by(&|r| r["id"].is_null())["error"]["code"], -32700);
+        assert_eq!(by(&|r| r["id"] == "two")["result"]["structuredContent"], json!({"result": 1}));
         assert!(*woken.lock().unwrap() >= 4, "woken after every line and at the end");
     }
 

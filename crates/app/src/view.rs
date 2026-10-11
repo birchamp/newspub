@@ -44,6 +44,17 @@ pub struct ViewState {
     other_tex: Option<(TextureHandle, u64, usize, u32)>,
 }
 
+impl ViewState {
+    /// Clears what only makes sense for the publication being shown (text editing, "Link to Next Box", a cell
+    /// selection, a guide drag): called whenever another publication replaces it.
+    pub(crate) fn reset_transient(&mut self) {
+        self.link_from = None;
+        self.editing = None;
+        self.cell_extent = None;
+        self.guide_drag = None;
+    }
+}
+
 impl Default for ViewState {
     fn default() -> Self {
         ViewState {
@@ -169,7 +180,7 @@ impl NewpubApp {
         v["visible_pages"] = serde_json::json!(self.visible_pages());
         v["editing"] = self.editing_frame().is_some().into();
         v["window_closes"] = self.window_closes.into();
-        v["status"] = self.status.clone().into();
+        self.flow_view(v);
         v["preview"] = self.preview.as_ref().map(|p| p.0.clone()).into();
         v["preview_rendered"] =
             self.preview_texture.as_ref().zip(self.preview.as_ref()).is_some_and(|(t, p)| t.1 == p.0).into();
@@ -187,11 +198,10 @@ impl NewpubApp {
         self.view.editing.filter(|id| self.selection.contains(id))
     }
 
-    /// Escape: leaves text editing (keeping the selection), else clears the selection.
+    /// Escape: leaves text editing (keeping the selection), else clears the selection. ("Link to Next Box" takes
+    /// Escape before this, in `shortcuts`.)
     pub(crate) fn escape(&mut self) {
-        if self.view.link_from.take().is_some() {
-            self.status = "Linking cancelled".into();
-        } else if self.editing_frame().is_some() {
+        if self.editing_frame().is_some() {
             self.view.editing = None;
         } else {
             self.selection.clear();

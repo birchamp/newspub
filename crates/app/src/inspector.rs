@@ -557,14 +557,43 @@ impl NewpubApp {
         let chain = doc.story_of(id).ok().and_then(|s| doc.story(s).ok()).map(|s| s.frames.clone()).unwrap_or_default();
         let has_next = chain.last().is_some_and(|l| *l != id);
         let linking = self.view.link_from == Some(id);
+        // Where this box sits in its story, with Previous / Next (also Shift+Tab / Tab on the canvas).
+        if let Some((i, chain)) = self.chain_of(id) {
+            let mut place = format!("Box {} of {} in this story", i + 1, chain.len());
+            if let Some(pg) = chain.get(i + 1).and_then(|f| doc.page_of(*f)).filter(|pg| *pg != self.page) {
+                place.push_str(&format!(", continues on page {}", pg + 1));
+            }
+            widgets::hint(ui, &place);
+            let mut go = None;
+            toggle_row(ui, |ui| {
+                if widgets::small_button(ui, icons::CARET_LEFT, "Previous Text Box", false, i > 0)
+                    .on_hover_text("Select the box before this one (Shift+Tab)")
+                    .clicked()
+                {
+                    go = Some(false);
+                }
+                if widgets::small_button(ui, icons::CARET_RIGHT, "Next Text Box", false, i + 1 < chain.len())
+                    .on_hover_text("Select the box the story continues in (Tab)")
+                    .clicked()
+                {
+                    go = Some(true);
+                }
+            });
+            if let Some(forward) = go {
+                self.go_to_box(id, forward, false);
+            }
+        }
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
-            if widgets::small_button(ui, icons::LINK, "Link to Next Box", linking, true)
-                .on_hover_text("Then click an empty text box: the story continues there")
+            if widgets::small_button(ui, icons::LINK, "Link to Next Box", linking, !has_next)
+                .on_hover_text(
+                    "Then click an empty text box: the story continues there (click again or press Esc to stop)",
+                )
+                .on_disabled_hover_text("This box already continues in another box; break that link first")
                 .clicked()
             {
                 if linking {
-                    self.view.link_from = None;
+                    self.cancel_link();
                 } else {
                     self.start_link(id);
                 }

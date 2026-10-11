@@ -7,6 +7,7 @@ mod checker;
 mod clipboard;
 mod dup;
 mod files;
+mod flow_ui;
 mod freeform;
 mod guard;
 mod guides_ui;
@@ -298,6 +299,7 @@ impl NewpubApp {
         self.page = 0;
         self.selection.clear();
         self.end_text_edit();
+        self.view.reset_transient();
         self.thumbs.clear();
         if matches!(self.dialog, Dialog::Picker(_)) {
             self.dialog = Dialog::None;
@@ -413,6 +415,8 @@ impl NewpubApp {
     pub(crate) fn sync_after_change(&mut self) {
         self.page = self.page.min(self.session.doc().pages.len().saturating_sub(1));
         self.selection.retain(|id| self.session.doc().objects.contains_key(id));
+        // A deleted (or undone) source box ends "Link to Next Box".
+        self.view.link_from = self.view.link_from.filter(|f| self.session.doc().objects.contains_key(f));
     }
 
     /// View state for UI journeys (`{q: view}`): zoom, whether the view is fitted, whether the zoom
@@ -525,6 +529,16 @@ impl NewpubApp {
         let typing_in_widget = ctx.egui_wants_keyboard_input() && !self.canvas_focused(ctx);
         let events = ctx.input(|i| i.events.clone());
         let dialog_open = self.dialog != Dialog::None;
+        // "Link to Next Box" is modal: Escape leaves it from anywhere (a dialog keeps its own Escape), and no
+        // other key reaches the document until it ends.
+        if self.view.link_from.is_some() {
+            if !dialog_open
+                && events.iter().any(|e| matches!(e, egui::Event::Key { key: Key::Escape, pressed: true, .. }))
+            {
+                self.cancel_link();
+            }
+            return;
+        }
         if typing_in_widget {
             return;
         }
@@ -670,20 +684,12 @@ impl NewpubApp {
         self.act(SessionAction::EndGroup);
     }
 
-    /// Tab / Shift+Tab: selects the next / previous frame of the selected text frame's story.
+    /// Tab / Shift+Tab: selects the next / previous frame of the selected text frame's story, wrapping around
+    /// at either end.
     fn cycle_frame(&mut self, forward: bool) {
-        let Some(frame) = self.selected_text_frame() else { return };
-        let doc = self.session.doc();
-        let Some(frames) = doc.story_of(frame).ok().and_then(|s| doc.story(s).ok()).map(|s| s.frames.clone()) else {
-            return;
-        };
-        let Some(i) = frames.iter().position(|f| *f == frame) else { return };
-        let n = frames.len();
-        let next = frames[if forward { (i + 1) % n } else { (i + n - 1) % n }];
-        if let Some(p) = doc.page_of(next) {
-            self.page = p;
+        if let Some(frame) = self.selected_text_frame() {
+            self.go_to_box(frame, forward, true);
         }
-        self.selection = vec![next];
     }
 
     /// Resolution for rendering the current page at this zoom, capped so the image fits in one GPU texture
@@ -736,7 +742,9 @@ impl NewpubApp {
         let full = ui.available_rect_before_wrap();
         self.canvas_rect = full;
         self.canvas_view(ui);
-        self.freeform_overlay(ui, ERect::from_min_max(full.max - self.canvas_size, full.max));
+        let area = ERect::from_min_max(full.max - self.canvas_size, full.max);
+        self.flow_overlay(ui, area);
+        self.freeform_overlay(ui, area);
     }
 
     /// Margin guides, frame boundaries, empty-frame placeholders and overflow badges of the current page.
@@ -888,8 +896,17 @@ impl NewpubApp {
     }
 
     fn handle_canvas_input(&mut self, resp: &egui::Response) {
+        // "Link to Next Box" is modal: the pointer only hovers and clicks the box the story continues in (or
+        // cancels); presses and drags move, resize, edit and create nothing.
         if self.view.link_from.is_some() {
             resp.ctx.set_cursor_icon(egui::CursorIcon::Alias);
+            if resp.clicked()
+                && let Some(p) = resp.interact_pointer_pos()
+            {
+                let (x, y) = self.screen_to_page(p);
+                self.finish_link(self.hit(x, y));
+            }
+            return;
         }
         // Over a guide (and no object), the pointer shows that the guide can be dragged.
         if self.tool == Tool::Select
@@ -1014,10 +1031,6 @@ impl NewpubApp {
             && let Some(p) = resp.interact_pointer_pos()
         {
             let (x, y) = self.screen_to_page(p);
-            if self.tool == Tool::Select && self.view.link_from.is_some() {
-                self.finish_link(self.hit(x, y));
-                return;
-            }
             if self.tool == Tool::Select
                 && let Some(f) = self.overflow_badge_at(p)
             {
@@ -1058,18 +1071,29 @@ impl NewpubApp {
         self.status = "Click an empty text box to continue the story there (Esc cancels)".into();
     }
 
+    /// A click while linking: an empty, unlinked text box continues the story; another text box keeps the
+    /// mode with a hint; anything else cancels.
     fn finish_link(&mut self, target: Option<Id>) {
-        let Some(from) = self.view.link_from.take() else { return };
+        let Some(from) = self.view.link_from else { return };
         let is_text =
             |id: &Id| self.session.doc().objects.get(id).is_some_and(|o| matches!(o.kind, ObjectKind::Text(_)));
-        match target.filter(is_text) {
-            Some(to) if to != from => {
+        match target {
+            Some(to) if to != from && self.is_link_target(to) => {
+                self.view.link_from = None;
                 if self.act(Command::LinkFrames { from, to }).is_some() {
                     self.status = "Text boxes linked".into();
+                    self.selection = vec![to];
                 }
-                self.selection = vec![to];
             }
-            _ => self.status = "Linking cancelled: click an empty text box".into(),
+            Some(to) if to != from && is_text(&to) => {
+                self.status =
+                    "That text box already has text or is linked: click an empty text box, or press Esc to cancel"
+                        .into();
+            }
+            _ => {
+                self.view.link_from = None;
+                self.status = "Linking cancelled: click an empty text box".into();
+            }
         }
     }
 
