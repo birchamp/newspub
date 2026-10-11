@@ -242,6 +242,13 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 |----|---|---------|----------|------|
 | PF-01 | P2 | Editing and exporting a long publication stays responsive (no quadratic slow-downs; edits re-flow only what they change) | J-PF-001, J-PF-002 | [x] |
 
+## AG: Agent access
+
+| ID | P | Feature | Journeys | Done |
+|----|---|---------|----------|------|
+| AG-01 | P1 | An AI agent can do everything a person can: an MCP server (`newpub-agent`, stdio) and a command line over every engine action and query, with a generated reference, page rendering, status and warnings, batches as one undo step, open/save/export | J-AG-001 | [x] |
+| AG-02 | P1 | The running app hosts the same MCP server (`newpub --agent`): the agent's changes show in the window, the status bar says what it did, the person's selection and page stay valid and both can keep working | UI-AG-001 | [x] |
+
 ## UI: Application shell (real-UI journeys)
 
 | ID | P | Feature | Journeys | Done |
@@ -271,3 +278,4 @@ The goal is behavioural parity. We reproduce what Publisher does, never its code
 | UI-23 | P1 | Publication properties, Design Checker (overflow, empty boxes, off-page objects), Save as Template and My Templates | UI-DC-001 | [x] |
 | UI-24 | P2 | Gallery live preview: hovering a colour or font scheme shows it on the page before it is applied; built-in templates follow the schemes | UI-PD-002 | [x] |
 | UI-25 | P1 | Text wrap in the UI: wrap text around any object placed over a text box (none, square, tight, top and bottom, through) with a distance, from the Format panel | UI-WR-001 | [x] |
+| UI-26 | P1 | Text flow feedback in the UI: the boxes of a linked story are numbered on the canvas with Previous / Next buttons (also in the Format panel, with "Box n of m"); Link to Next Box shows a banner, highlights the boxes the story can continue in, keeps the mode on a wrong box and cancels with Esc | UI-TX-003 | [x] |

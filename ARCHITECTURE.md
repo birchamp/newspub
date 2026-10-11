@@ -31,6 +31,7 @@ A fresh session should be able to resume work from this file, PARITY.md, PROGRES
 | `newpub-io-pub` | crates/io-pub | MS Publisher `.pub` import (research track). | core |
 | `newpub-engine` | crates/engine | `Session`: owns the document, history, fonts, and layout cache. Executes `Action`s (commands, undo/redo, save/open, export, autoflow, merge) and answers `Query`s. The app and the journey runner **both** drive the program only through this. | everything except app |
 | `newpub-app` | crates/app | egui/eframe desktop app. A thin view over `Session`: every UI gesture becomes an `Action`. Exposes `NewpubApp` as a lib for UI journeys. | engine, core |
+| `newpub-agent` | crates/agent | Agent access: MCP server (stdio) and command line over `Session` actions and queries; the app hosts the same server with `--agent`. Embeds the generated docs/agent-reference.md. | core, engine |
 | `newpub-journeys` | crates/journeys | Headless runner (`newpub-journeys` binary) and UI-journey harness. Scripts live in `/journeys/scripts`. | engine, app |
 | dashboard | tools/dashboard | Python 3 stdlib script that writes `dashboard/index.html`. | — |
 
@@ -169,6 +170,19 @@ output consistent. Imposition (booklet, n-up) maps pages onto sheets as transfor
 - **Preferences:** the recent-files list and the theme choice live in the OS config dir (`recent.rs`); journeys keep
   both in memory.
 
+## 6b. Agent access (`newpub-agent`)
+
+An AI agent gets the same interface the journeys use (§4): every action and query, as JSON. `newpub-agent` is an
+MCP server over stdio (JSON-RPC 2.0, one message per line) with ten tools: `newpub_reference` (the generated
+docs/agent-reference.md, searchable), `newpub_status`, `newpub_action`, `newpub_actions` (an undo group),
+`newpub_query`, `newpub_render_page` (PNG as image content), `newpub_new`, `newpub_open`, `newpub_save` and
+`newpub_export_pdf`. Tool failures are results with `isError`, so the agent can read and retry. The dispatch is
+generic over a `Host` (a `Session`, or the app): `newpub --agent` runs the same server inside the desktop app,
+where a reader thread queues requests and the UI answers them each frame, keeps its page and selection valid and
+shows "Agent: …" in the status bar (crates/app/src/agent.rs). The command line (`exec`, `query`, `render`,
+`status`, `reference`) wraps the same tools. The runner step `agent: {tool, args, path, check, as}` calls a tool
+in-process in both headless and UI journeys. docs/agent.md is the user guide.
+
 ## 7. Journeys (the only tests)
 
 - Scripts: `journeys/scripts/<ID>.yaml`. Fixtures: `journeys/fixtures/`. Approved goldens: `journeys/goldens/<ID>/<name>.png`.
@@ -235,6 +249,7 @@ file-level copyleft. The format notes are in crates/io-pub/FORMAT-NOTES.md.
 | 2026-10-09 | Query `PageObjectKinds{page}` (kinds of every object on a page, group members included) | .pub import journeys (J-PI-005, J-PI-006) |
 | 2026-10-09 | `Session::render_page_preview(page, dpi, cmd)` (renders a copy with one command applied); colour scheme "Navy"; built-in templates use scheme colours and fonts ("+major"/"+minor") with the Navy and Editorial schemes | Gallery live preview (UI-PD-002); schemes restyle templates |
 | 2026-10-09 | Layout `fonts::substitutes`: missing Windows fonts resolve to bundled stand-ins (Liberation for Times New Roman/Arial, Carlito for Calibri, else by kind) before the generic fallback; `char_box` also reports `page_x`/`page_baseline`; `.pub` import rewritten (v2002 + Publisher 98/2000 readers over one IR) | Real .pub import (PI-01..PI-07) |
+| 2026-10-10 | `newpub-agent` crate: `Host` trait (impl for `Session` and `NewpubApp`), `tools()`, `call_tool`, `handle` (JSON-RPC), `serve_stdio`, `stdio_link`/`Link`, `status`, embedded `REFERENCE`; app `--agent`, `NewpubApp::attach_agent`, `sync_after_change`; runner step `agent`; app `view` query reports `status`; CI checks `tools/agent/reference.py --check` and runs the crate's stdio test | AG-01, AG-02 |
 | 2026-10-09 | App only (no engine changes): `ViewState.link_from`, `cell_extent`, `guide_drag`, `canvas_area`; `Dialog::InsertText`, `Dialog::SaveTemplate`; app `view` query reports `table_cell` and `table_selection`; page renders capped at the GPU's maximum texture side. Runner: widgets are scrolled into view with the mouse wheel before `click`/`fill`, Shift is held for a whole shift-click, a control is preferred over a caption with the same name, `step_dt` 1/30 s | UI-19..UI-23 |
 
 ## 12. Predecessor survey (NewsPub, Electron + React + TS) and what we adopt

@@ -42,6 +42,18 @@ jobs:
       - name: build
         id: build
         run: cargo build --workspace --release
+      - name: agent reference up to date
+        if: runner.os == 'Linux'
+        run: python3 tools/agent/reference.py --check
+      - name: agent MCP server over stdio
+        shell: bash
+        # A failure's output becomes an annotation, so it can be read through the API as well as in the log.
+        run: |
+          set -o pipefail
+          cargo test -p newpub-agent --release 2>&1 | tee agent-test.log || {
+            printf '::error title=newpub-agent tests::%s\n' "$(tail -c 3500 agent-test.log | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit 1
+          }
       - name: journeys
         id: journeys
         continue-on-error: true

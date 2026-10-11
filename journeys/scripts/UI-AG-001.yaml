@@ -1,0 +1,64 @@
+id: UI-AG-001
+title: Agent access in the running app — an agent's actions show up on the canvas, keep the selection and page valid, and a person can keep working
+covers: [AG-02]
+ui: true
+steps:
+  # the person draws a box; the agent fills it
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 1in], to: [4in, 3in]}
+  - expect: {query: {q: page_objects, page: 0}, path: /0, gt: 0, as: a}
+  - type: {text: "Draft"}
+  - expect: {query: {q: view}, path: /editing, equals: true}
+  - agent: {tool: newpub_status, args: {}, path: /pages/0/objects/0/text, check: {equals: "Draft"}}
+  - agent: {tool: newpub_action, args: {action: insert_text, args: {target: $a, text: " by a person, finished by an agent"}}}
+  - expect: {query: {q: story_text, target: $a}, equals: "Draft by a person, finished by an agent"}
+  # an agent change ends text editing, keeps the selection and tells the person what happened
+  - expect: {query: {q: view}, path: /editing, equals: false}
+  - expect: {query: {q: view}, path: /selection, equals: [$a]}
+  - expect: {query: {q: view}, path: /status, equals: "Agent: insert_text"}
+  - expect_ui: {label: "Agent: insert_text"}
+  # the agent adds a page with a box on it; the person turns to it and selects the box
+  - agent:
+      tool: newpub_actions
+      args:
+        actions:
+          - {action: insert_pages, args: {count: 1}}
+          - {action: add_text_frame, args: {page: 1, rect: {x: "1in", y: "1in", w: "3in", h: "2in"}}}
+      path: /results/1/created/0
+      as: b
+  - expect: {query: {q: page_count}, equals: 2}
+  - expect_ui: {label: "Agent: 2 actions"}
+  - click: {label: "Page 2"}
+  - expect: {query: {q: view}, path: /page, equals: 1}
+  - click_at: [2in, 2in]
+  - expect: {query: {q: view}, path: /selection, equals: [$b]}
+  # the agent deletes that page: the view falls back to a page and a selection that exist
+  - agent: {tool: newpub_action, args: {action: delete_page, args: {page: 1}}}
+  - expect: {query: {q: view}, path: /page, equals: 0}
+  - expect: {query: {q: view}, path: /selection, len: 0}
+  # one undo step for the agent's batch; the person's Undo button works on it
+  - click: {label: "Undo"}
+  - expect: {query: {q: page_count}, equals: 2}
+  - click: {label: "Undo"}
+  - expect: {query: {q: page_count}, equals: 1}
+  - click: {label: "Redo"}
+  - expect: {query: {q: page_count}, equals: 2}
+  # the agent looks at the page; it may not replace the person's unsaved work
+  - agent: {tool: newpub_render_page, args: {page: 0}, path: /width, check: {equals: 612}}
+  - expect: {query: {q: session}, path: /dirty, equals: true}
+  - agent: {tool: newpub_new, args: {}, error: true, path: /text, check: {contains: "unsaved changes"}}
+  - agent: {tool: newpub_action, args: {action: new_document, args: {width: "8.5in", height: "11in"}}, error: true, path: /text, check: {contains: "unsaved changes"}}
+  - expect: {query: {q: page_count}, equals: 2}
+  - expect: {query: {q: story_text, target: $a}, equals: "Draft by a person, finished by an agent"}
+  # once saved, a new publication is fine: the view goes back to page 1 with nothing selected
+  - agent: {tool: newpub_save, args: {path: "agent-ui.newspub"}, path: /ok, check: {equals: true}}
+  - expect: {query: {q: session}, path: /dirty, equals: false}
+  - expect_roundtrip: {}
+  - click: {label: "Page 2"}
+  - expect: {query: {q: view}, path: /page, equals: 1}
+  - agent: {tool: newpub_new, args: {template: flyer}, path: /page_count, check: {gt: 0}}
+  - expect: {query: {q: view}, path: /page, equals: 0}
+  - expect: {query: {q: view}, path: /selection, len: 0}
+  - expect_ui: {label: "Agent: new publication"}
+  - agent: {tool: newpub_open, args: {path: "agent-ui.newspub"}, path: /page_count, check: {equals: 2}}
+  - expect: {query: {q: story_text, target: $a}, equals: "Draft by a person, finished by an agent"}

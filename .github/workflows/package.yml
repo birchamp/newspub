@@ -40,9 +40,9 @@ jobs:
       - name: version
         run: echo "VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)" >> "$GITHUB_ENV"
       - name: build
-        run: cargo build --release -p newpub-app
+        run: cargo build --release -p newpub-app -p newpub-agent
       - name: package
-        run: tools/package/linux/build.sh target/release/newpub-app "$VERSION" dist
+        run: tools/package/linux/build.sh target/release/newpub-app "$VERSION" dist target/release/newpub-agent
       - name: install the .deb and start the app
         run: |
           sudo apt-get install -y "./dist/newpub_${VERSION}_amd64.deb"
@@ -75,12 +75,13 @@ jobs:
         env:
           MACOSX_DEPLOYMENT_TARGET: "11.0"
         run: |
-          cargo build --release -p newpub-app --target aarch64-apple-darwin
-          cargo build --release -p newpub-app --target x86_64-apple-darwin
+          cargo build --release -p newpub-app -p newpub-agent --target aarch64-apple-darwin
+          cargo build --release -p newpub-app -p newpub-agent --target x86_64-apple-darwin
       - name: package
         run: |
           tools/package/macos/build.sh target/aarch64-apple-darwin/release/newpub-app \
-            target/x86_64-apple-darwin/release/newpub-app "$VERSION" dist
+            target/x86_64-apple-darwin/release/newpub-app "$VERSION" dist \
+            target/aarch64-apple-darwin/release/newpub-agent target/x86_64-apple-darwin/release/newpub-agent
       - name: install the .pkg and start the app
         run: |
           sudo installer -pkg "dist/newpub-${VERSION}-macos-universal.pkg" -target /
@@ -127,18 +128,19 @@ jobs:
         shell: bash
         run: echo "VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)" >> "$GITHUB_ENV"
       - name: build
-        run: cargo build --release -p newpub-app
+        run: cargo build --release -p newpub-app -p newpub-agent
       - name: package
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force stage, dist | Out-Null
           Copy-Item target/release/newpub-app.exe stage/newpub.exe
+          Copy-Item target/release/newpub-agent.exe stage/newpub-agent.exe
           Copy-Item assets/icon/newpub.ico stage/newpub.ico
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
           & $iscc /Qp "/DAppVersion=$env:VERSION" "/DSourceDir=$PWD\stage" "/O$PWD\dist" tools/package/windows/newpub.iss
           if ($LASTEXITCODE -ne 0) { exit 1 }
-          Compress-Archive -Path stage/newpub.exe, stage/newpub.ico, LICENSE -DestinationPath "dist/newpub-$env:VERSION-windows-x64-portable.zip"
+          Compress-Archive -Path stage/newpub.exe, stage/newpub-agent.exe, stage/newpub.ico, LICENSE -DestinationPath "dist/newpub-$env:VERSION-windows-x64-portable.zip"
           Get-ChildItem dist
       - name: install and start the app
         shell: pwsh

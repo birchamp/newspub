@@ -374,6 +374,7 @@ fn create(app: &mut NewpubApp, st: &PickerState) -> bool {
     app.page = 0;
     app.selection.clear();
     app.end_text_edit();
+    app.view.reset_transient();
     app.fit_page();
     true
 }

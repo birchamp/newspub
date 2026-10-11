@@ -9,8 +9,11 @@ use std::sync::Arc;
 fn main() -> eframe::Result {
     let mut session = Session::new(Arc::new(FontStore::with_system()));
     session.base_dir = std::env::current_dir().unwrap_or_default();
-    // A file passed on the command line (double-click on a .npub file) opens instead of the template picker.
-    let opened = std::env::args().nth(1).is_some_and(|path| {
+    // `--agent` serves MCP on stdin/stdout for an AI agent (docs/agent.md); any other argument is a file to open
+    // (double-click on a .npub file), which then replaces the template picker.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let agent = args.iter().any(|a| a == "--agent");
+    let opened = args.iter().find(|a| !a.starts_with("--")).cloned().is_some_and(|path| {
         // A Publisher file is imported by the app on its first frame, so it reports what it imported.
         if path.to_ascii_lowercase().ends_with(".pub") {
             newpub_app::request_open(session.base_dir.join(&path));
@@ -22,21 +25,24 @@ fn main() -> eframe::Result {
     if let Ok(icon) = eframe::icon_data::from_png_bytes(include_bytes!("../../../assets/icon/newpub-256.png")) {
         viewport = viewport.with_icon(icon);
     }
-    launch(viewport, session, opened)
+    launch(viewport, session, opened, agent)
 }
 
 #[cfg(target_os = "macos")]
-fn launch(viewport: egui::ViewportBuilder, session: Session, opened: bool) -> eframe::Result {
+fn launch(viewport: egui::ViewportBuilder, session: Session, opened: bool, agent: bool) -> eframe::Result {
     let options = eframe::NativeOptions { viewport, ..Default::default() };
     macos::run(options, move || {
         let mut app = with_recovery(NewpubApp::new(session).with_persistent_recent());
-        app.startup_picker = !opened;
+        app.startup_picker = !opened && !agent;
+        if agent {
+            app.attach_agent();
+        }
         app
     })
 }
 
 #[cfg(not(target_os = "macos"))]
-fn launch(viewport: egui::ViewportBuilder, session: Session, opened: bool) -> eframe::Result {
+fn launch(viewport: egui::ViewportBuilder, session: Session, opened: bool, agent: bool) -> eframe::Result {
     // OpenGL first; computers without OpenGL 2 (some virtual machines, old drivers) fall back to wgpu, which uses
     // Direct3D 12 (with its software renderer) on Windows, Metal on macOS and Vulkan on Linux.
     let session = std::cell::RefCell::new(Some(session));
@@ -49,7 +55,10 @@ fn launch(viewport: egui::ViewportBuilder, session: Session, opened: bool) -> ef
             Box::new(|_cc| {
                 let session = session.borrow_mut().take().ok_or("the app was already started")?;
                 let mut app = with_recovery(NewpubApp::new(session).with_persistent_recent());
-                app.startup_picker = !opened;
+                app.startup_picker = !opened && !agent;
+                if agent {
+                    app.attach_agent();
+                }
                 Ok(Box::new(app))
             }),
         );

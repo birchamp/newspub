@@ -1,0 +1,284 @@
+id: UI-TX-003
+title: Text flow feedback — Link to Next Box mode (banner, targets, Escape from a panel and from the canvas, Cancel, invalid target, empty-space cancel, undo of the source box, disabled on a box that already continues), the numbered chain with Previous / Next chips and panel buttons, navigation across flowed pages, undo and redo
+covers: [UI-26]
+ui: true
+steps:
+  # --- setup: a story box A that overflows (fixtures/long-text.txt), two empty boxes B and D, and a box C that already has text
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 1in], to: [3.5in, 3in]}
+  - expect: {query: {q: page_objects, page: 0}, path: /0, gt: 0, as: a}
+  - click: {label: "Insert"}
+  - click: {label: "Text File"}
+  - fill: {label: "Text file", text: "fixtures/long-text.txt"}
+  - click: {label: "Insert Text"}
+  - expect: {query: {q: story_text, target: $a}, starts_with: "New mayor library hall"}
+  - expect: {query: {q: overflow, target: $a}, equals: true}
+  - click: {label: "Home"}
+  - click: {label: "Text Box"}
+  - drag: {from: [4in, 1in], to: [7in, 3in]}
+  - expect: {query: {q: page_objects, page: 0}, path: /1, gt: 0, as: b}
+  - key: {key: "Escape"}
+  - click: {label: "Text Box"}
+  - drag: {from: [4in, 4in], to: [7in, 6in]}
+  - expect: {query: {q: page_objects, page: 0}, path: /2, gt: 0, as: c}
+  - type: {text: "Already full"}
+  - key: {key: "Escape"}
+  - expect: {query: {q: story_text, target: $c}, equals: "Already full"}
+  - click: {label: "Text Box"}
+  - drag: {from: [1in, 4in], to: [3.5in, 6in]}
+  - expect: {query: {q: page_objects, page: 0}, path: /3, gt: 0, as: d}
+  - key: {key: "Escape"}
+  - expect: {query: {q: frame_text, frame: $b}, equals: ""}
+  - expect: {query: {q: frame_text, frame: $d}, equals: ""}
+
+  # --- link mode never outlives its source box: Undo of D's creation while linking from D ends the mode
+  - expect: {query: {q: view}, path: /selection, equals: [$d]}
+  - click: {label: "Link to Next Box"}
+  - expect: {query: {q: view}, path: /link_mode, equals: $d}
+  - expect_ui: {label: "Linking text boxes"}
+  - click: {label: "Undo"}
+  - expect: {query: {q: page_objects, page: 0}, len: {equals: 3}}
+  - expect: {query: {q: view}, path: /link_mode, equals: null}
+  - expect: {query: {q: view}, path: /link_targets, equals: []}
+  - expect_ui: {label: "Linking text boxes", exists: false}
+  - expect_ui: {label: "Cancel linking", exists: false}
+  - click: {label: "Redo"}
+  - expect: {query: {q: page_objects, page: 0}, path: /3, equals: $d}
+  - expect: {query: {q: frame_text, frame: $d}, equals: ""}
+
+  # --- a single-box story shows no chain feedback and no link banner
+  - click_at: [2in, 2in]
+  - expect: {query: {q: view}, path: /selection, equals: [$a]}
+  - expect: {query: {q: view}, path: /story_nav, equals: null}
+  - expect: {query: {q: view}, path: /link_mode, equals: null}
+  - expect: {query: {q: view}, path: /link_targets, equals: []}
+  - expect_ui: {label: "Linking text boxes", exists: false}
+  - expect_ui: {label: "Cancel linking", exists: false}
+  - expect_ui: {label: "Go to next text box", exists: false}
+  - expect_ui: {label: "Go to previous text box", exists: false}
+
+  # --- Link to Next Box: the banner appears, the empty unlinked boxes B and D are the targets (C has text)
+  - click: {label: "Link to Next Box"}
+  - expect: {query: {q: view}, path: /link_mode, equals: $a}
+  - expect: {query: {q: view}, path: /link_targets, equals: [$b, $d]}
+  - expect: {query: {q: view}, path: /status, contains: "Click an empty text box"}
+  - expect_ui: {label: "Linking text boxes"}
+  - expect_ui: {label: "Cancel linking"}
+  # Escape cancels from anywhere; the selection is kept
+  - key: {key: "Escape"}
+  - expect: {query: {q: view}, path: /link_mode, equals: null}
+  - expect: {query: {q: view}, path: /link_targets, equals: []}
+  - expect: {query: {q: view}, path: /status, contains: "Linking cancelled"}
+  - expect: {query: {q: view}, path: /selection, equals: [$a]}
+  - expect_ui: {label: "Linking text boxes", exists: false}
+  - expect_ui: {label: "Cancel linking", exists: false}
+  # Escape with the canvas focused cancels the same way
+  - click: {label: "Link to Next Box"}
+  - expect: {query: {q: view}, path: /link_mode, equals: $a}
+  - focus: {label: "Page canvas"}
+  - key: {key: "Escape"}
+  - expect: {query: {q: view}, path: /link_mode, equals: null}
+  - expect: {query: {q: view}, path: /status, contains: "Linking cancelled"}
+  - expect: {query: {q: view}, path: /selection, equals: [$a]}
+  - expect_ui: {label: "Linking text boxes", exists: false}
+  # the banner's Cancel button cancels too
+  - click: {label: "Link to Next Box"}
+  - expect: {query: {q: view}, path: /link_mode, equals: $a}
+  - click: {label: "Cancel linking"}
+  - expect: {query: {q: view}, path: /link_mode, equals: null}
+  - expect: {query: {q: view}, path: /status, contains: "Linking cancelled"}
+  - expect_ui: {label: "Linking text boxes", exists: false}
+  # the panel button is a toggle: pressing it again while linking leaves the mode
+  - click: {label: "Link to Next Box"}
+  - expect: {query: {q: view}, path: /link_mode, equals: $a}
+  - click: {label: "Link to Next Box"}
+  - expect: {query: {q: view}, path: /link_mode, equals: null}
+  # clicking empty page space cancels
+  - click: {label: "Link to Next Box"}
+  - expect: {query: {q: view}, path: /link_mode, equals: $a}
+  - click_at: [4in, 9in]
+  - expect: {query: {q: view}, path: /link_mode, equals: null}
+  - expect: {query: {q: view}, path: /status, contains: "Linking cancelled"}
+  - expect: {query: {q: story_frames, target: $a}, equals: [$a]}
+
+  # --- an invalid target: clicking box C (already has text) keeps the mode, the selection and the targets, with a hint
+  - click_at: [2in, 2in]
+  - expect: {query: {q: view}, path: /selection, equals: [$a]}
+  - click: {label: "Link to Next Box"}
+  - click_at: [5.5in, 5in]
+  - expect: {query: {q: view}, path: /link_mode, equals: $a}
+  - expect: {query: {q: view}, path: /selection, equals: [$a]}
+  - expect: {query: {q: view}, path: /link_targets, equals: [$b, $d]}
+  - expect: {query: {q: view}, path: /status, contains: "already has text"}
+  - expect_ui: {label: "Linking text boxes"}
+  - expect: {query: {q: story_frames, target: $a}, equals: [$a]}
+  - expect: {query: {q: story_frames, target: $c}, equals: [$c]}
+
+  # --- a valid target: clicking box B links it, leaves the mode and selects B; the text continues in B
+  - click_at: [5.5in, 2in]
+  - expect: {query: {q: view}, path: /link_mode, equals: null}
+  - expect: {query: {q: view}, path: /link_targets, equals: []}
+  - expect: {query: {q: view}, path: /status, equals: "Text boxes linked"}
+  - expect_ui: {label: "Linking text boxes", exists: false}
+  - expect: {query: {q: story_frames, target: $a}, equals: [$a, $b]}
+  - expect: {query: {q: view}, path: /selection, equals: [$b]}
+  - expect: {query: {q: frame_text, frame: $b}, len: {gt: 100}}
+  - dump: {query: {q: frame_lines, frame: $b}, file: linked-b.json}
+  - expect: {query: {q: frame_lines, frame: $b}, len: {gt: 5}}
+  - expect: {query: {q: frame_lines, frame: $b}, path: /0/x, approx: [5.76, 0.01]}
+  - expect: {query: {q: frame_lines, frame: $b}, path: /0/column, equals: 0}
+  # still too much text for two small boxes
+  - expect: {query: {q: overflow, target: $a}, equals: true}
+  - expect: {query: {q: overflow, target: $b}, equals: true}
+
+  # --- chain feedback on the last box: "2 of 2", a Previous chip but no Next chip
+  - expect: {query: {q: view}, path: /story_nav/index, equals: 1}
+  - expect: {query: {q: view}, path: /story_nav/count, equals: 2}
+  - expect: {query: {q: view}, path: /story_nav/frames, equals: [$a, $b]}
+  - expect_ui: {label: "Box 2 of 2 in this story"}
+  - expect_ui: {label: "Go to previous text box"}
+  - expect_ui: {label: "Go to next text box", exists: false}
+  - expect_ui: {label: "Previous Text Box"}
+  - expect_ui: {label: "Next Text Box"}
+  # the canvas chip goes back to A: "1 of 2", a Next chip but no Previous chip
+  - click: {label: "Go to previous text box"}
+  - expect: {query: {q: view}, path: /selection, equals: [$a]}
+  - expect: {query: {q: view}, path: /story_nav/index, equals: 0}
+  - expect: {query: {q: view}, path: /story_nav/count, equals: 2}
+  - expect: {query: {q: view}, path: /status, contains: "box 1 of 2"}
+  - expect_ui: {label: "Box 1 of 2 in this story"}
+  - expect_ui: {label: "Go to next text box"}
+  - expect_ui: {label: "Go to previous text box", exists: false}
+  # the Format panel buttons navigate too
+  - click: {label: "Next Text Box"}
+  - expect: {query: {q: view}, path: /selection, equals: [$b]}
+  - expect: {query: {q: view}, path: /story_nav/index, equals: 1}
+  - expect: {query: {q: view}, path: /status, contains: "box 2 of 2"}
+  - click: {label: "Previous Text Box"}
+  - expect: {query: {q: view}, path: /selection, equals: [$a]}
+  - expect: {query: {q: view}, path: /story_nav/index, equals: 0}
+  # the Next chip on the canvas
+  - click: {label: "Go to next text box"}
+  - expect: {query: {q: view}, path: /selection, equals: [$b]}
+  - expect: {query: {q: view}, path: /story_nav/index, equals: 1}
+
+  # --- linking is one undo step: Undo empties B and removes the chain; Redo brings it back
+  - click: {label: "Undo"}
+  - expect: {query: {q: story_frames, target: $a}, equals: [$a]}
+  - expect: {query: {q: frame_text, frame: $b}, equals: ""}
+  - expect: {query: {q: view}, path: /story_nav, equals: null}
+  - expect_ui: {label: "Go to previous text box", exists: false}
+  - expect_ui: {label: "Go to next text box", exists: false}
+  - click: {label: "Redo"}
+  - expect: {query: {q: story_frames, target: $a}, equals: [$a, $b]}
+  - expect: {query: {q: frame_text, frame: $b}, len: {gt: 100}}
+  - click_at: [5.5in, 2in]
+  - expect: {query: {q: view}, path: /selection, equals: [$b]}
+  - expect: {query: {q: view}, path: /story_nav/index, equals: 1}
+  - expect: {query: {q: view}, path: /story_nav/count, equals: 2}
+
+  # --- a third box: from B only D is a target now (A and C have text, B is the source); linking makes B the middle of the chain
+  - click: {label: "Link to Next Box"}
+  - expect: {query: {q: view}, path: /link_mode, equals: $b}
+  - expect: {query: {q: view}, path: /link_targets, equals: [$d]}
+  - click_at: [2.25in, 5in]
+  - expect: {query: {q: view}, path: /link_mode, equals: null}
+  - expect: {query: {q: story_frames, target: $a}, equals: [$a, $b, $d]}
+  - expect: {query: {q: view}, path: /selection, equals: [$d]}
+  - expect: {query: {q: view}, path: /story_nav/index, equals: 2}
+  - expect: {query: {q: view}, path: /story_nav/count, equals: 3}
+  - expect: {query: {q: frame_text, frame: $d}, len: {gt: 100}}
+  - expect: {query: {q: frame_lines, frame: $d}, path: /0/x, approx: [5.76, 0.01]}
+  - expect_ui: {label: "Box 3 of 3 in this story"}
+  - expect_ui: {label: "Go to previous text box"}
+  - expect_ui: {label: "Go to next text box", exists: false}
+  # the middle box has both chips
+  - click: {label: "Go to previous text box"}
+  - expect: {query: {q: view}, path: /selection, equals: [$b]}
+  - expect: {query: {q: view}, path: /story_nav/index, equals: 1}
+  - expect: {query: {q: view}, path: /story_nav/count, equals: 3}
+  - expect_ui: {label: "Box 2 of 3 in this story"}
+  - expect_ui: {label: "Go to previous text box"}
+  - expect_ui: {label: "Go to next text box"}
+  - expect: {query: {q: overflow, target: $a}, equals: true}
+  # "Link to Next Box" is disabled on a box that already continues in another: clicking it does nothing
+  - expect_ui: {label: "Link to Next Box"}
+  - click: {label: "Link to Next Box"}
+  - expect: {query: {q: view}, path: /link_mode, equals: null}
+  - expect_ui: {label: "Linking text boxes", exists: false}
+  - expect: {query: {q: view}, path: /selection, equals: [$b]}
+
+  # --- Flow onto New Pages: the chain grows across pages; the hint on the last box of page 1 says where the story continues
+  - click: {label: "Flow onto New Pages"}
+  - expect: {query: {q: overflow, target: $a}, equals: false}
+  - expect: {query: {q: page_count}, gt: 1, as: pages}
+  - expect: {query: {q: story_frames, target: $a}, len: {gt: 3}}
+  - dump: {query: {q: story_frames, target: $a}, file: flowed-frames.json}
+  - expect: {query: {q: view}, path: /page, equals: 0}
+  - expect: {query: {q: view}, path: /selection, equals: [$b]}
+  - expect: {query: {q: view}, path: /story_nav/index, equals: 1}
+  # autoflow adds one box per new page, so the chain has (pages - 1) + 3 boxes
+  - expect: {query: {q: view}, path: /story_nav/count, equals: $pages+2}
+  - click: {label: "Go to next text box"}
+  - expect: {query: {q: view}, path: /selection, equals: [$d]}
+  - expect: {query: {q: view}, path: /page, equals: 0}
+  - expect: {query: {q: view}, path: /story_nav/index, equals: 2}
+  # the next box is on page 2: the chip turns the page and selects it
+  - expect: {query: {q: view}, path: /story_nav/frames/3, gt: 0, as: e}
+  - click: {label: "Go to next text box"}
+  - expect: {query: {q: view}, path: /page, equals: 1}
+  - expect: {query: {q: view}, path: /selection, equals: [$e]}
+  - expect: {query: {q: view}, path: /story_nav/index, equals: 3}
+  - expect: {query: {q: frame_text, frame: $e}, len: {gt: 100}}
+  - expect: {query: {q: frame_lines, frame: $e}, path: /0/x, approx: [5.76, 0.01]}
+  - expect_ui: {label: "Go to previous text box"}
+  - expect_ui: {label: "Go to next text box"}
+  # back and forth across the page break with the panel buttons
+  - click: {label: "Previous Text Box"}
+  - expect: {query: {q: view}, path: /page, equals: 0}
+  - expect: {query: {q: view}, path: /selection, equals: [$d]}
+  - expect: {query: {q: view}, path: /story_nav/index, equals: 2}
+  - click: {label: "Next Text Box"}
+  - expect: {query: {q: view}, path: /page, equals: 1}
+  - expect: {query: {q: view}, path: /selection, equals: [$e]}
+
+  # --- undo the flow, both links, then redo all three; the chain and the page count follow each step
+  - click: {label: "Undo"}
+  - expect: {query: {q: page_count}, equals: 1}
+  - expect: {query: {q: story_frames, target: $a}, equals: [$a, $b, $d]}
+  - expect: {query: {q: overflow, target: $a}, equals: true}
+  - click_at: [2.25in, 5in]
+  - expect: {query: {q: view}, path: /page, equals: 0}
+  - expect: {query: {q: view}, path: /selection, equals: [$d]}
+  - expect: {query: {q: view}, path: /story_nav/index, equals: 2}
+  - expect: {query: {q: view}, path: /story_nav/count, equals: 3}
+  - click: {label: "Undo"}
+  - expect: {query: {q: story_frames, target: $a}, equals: [$a, $b]}
+  - expect: {query: {q: frame_text, frame: $d}, equals: ""}
+  - expect: {query: {q: view}, path: /story_nav, equals: null}
+  - click_at: [5.5in, 2in]
+  - expect: {query: {q: view}, path: /selection, equals: [$b]}
+  - expect: {query: {q: view}, path: /story_nav/index, equals: 1}
+  - expect: {query: {q: view}, path: /story_nav/count, equals: 2}
+  - click: {label: "Undo"}
+  - expect: {query: {q: story_frames, target: $a}, equals: [$a]}
+  - expect: {query: {q: frame_text, frame: $b}, equals: ""}
+  - expect: {query: {q: view}, path: /story_nav, equals: null}
+  - expect: {query: {q: overflow, target: $a}, equals: true}
+  - click: {label: "Redo"}
+  - expect: {query: {q: story_frames, target: $a}, equals: [$a, $b]}
+  - click: {label: "Redo"}
+  - expect: {query: {q: story_frames, target: $a}, equals: [$a, $b, $d]}
+  - expect: {query: {q: frame_text, frame: $d}, len: {gt: 100}}
+  - click: {label: "Redo"}
+  - expect: {query: {q: page_count}, equals: $pages}
+  - expect: {query: {q: story_frames, target: $a}, len: {gt: 3}}
+  - expect: {query: {q: story_frames, target: $a}, path: /3, equals: $e}
+  - expect: {query: {q: overflow, target: $a}, equals: false}
+  - click_at: [2in, 2in]
+  - expect: {query: {q: view}, path: /selection, equals: [$a]}
+  - expect: {query: {q: view}, path: /story_nav/index, equals: 0}
+  - expect: {query: {q: view}, path: /story_nav/count, gt: 3}
+  - expect_ui: {label: "Go to next text box"}
+  - expect_ui: {label: "Go to previous text box", exists: false}
+  - expect_roundtrip: {}
